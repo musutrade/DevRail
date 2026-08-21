@@ -1,0 +1,233 @@
+<div class="login-page">
+  <main class="login-card">
+    <div class="login-header">
+      <div class="logo-badge"><mat-icon class="filled">shield</mat-icon></div>
+      <h1>
+        @switch (step()) {
+          @case ('password') {
+            欢迎回来
+          }
+          @case ('totp') {
+            安全验证
+          }
+          @case ('recovery') {
+            使用恢复码
+          }
+          @case ('recoveryCodes') {
+            保存恢复码
+          }
+        }
+      </h1>
+      <p>
+        @if (step() === 'password') {
+          登录 {{ appConfig.appName }}
+        } @else if (step() === 'recoveryCodes') {
+          恢复码只显示一次
+        } @else {
+          完成二次验证后继续
+        }
+      </p>
+    </div>
+
+    <div class="login-panel">
+      @switch (step()) {
+        @case ('password') {
+          <form (submit)="onPasswordSubmit(); $event.preventDefault()" class="login-form">
+            <div class="field">
+              <label for="username">用户名</label>
+              <div
+                class="input-wrap"
+                [class.input-error]="
+                  loginForm.username().touched() && loginForm.username().invalid()
+                "
+              >
+                <mat-icon>person</mat-icon>
+                <input
+                  id="username"
+                  type="text"
+                  [formField]="loginForm.username"
+                  placeholder="请输入用户名"
+                  autocomplete="username"
+                />
+              </div>
+              @if (loginForm.username().touched() && loginForm.username().invalid()) {
+                <p class="field-error">{{ loginForm.username().errors()[0].message }}</p>
+              }
+            </div>
+
+            <div class="field">
+              <label for="password">密码</label>
+              <div
+                class="input-wrap"
+                [class.input-error]="
+                  loginForm.password().touched() && loginForm.password().invalid()
+                "
+              >
+                <mat-icon>lock</mat-icon>
+                <input
+                  id="password"
+                  [type]="hidePassword() ? 'password' : 'text'"
+                  [formField]="loginForm.password"
+                  placeholder="请输入密码"
+                  autocomplete="current-password"
+                />
+                <button
+                  type="button"
+                  class="eye-btn"
+                  (click)="togglePassword()"
+                  [attr.aria-label]="hidePassword() ? '显示密码' : '隐藏密码'"
+                >
+                  <mat-icon>{{ hidePassword() ? 'visibility' : 'visibility_off' }}</mat-icon>
+                </button>
+              </div>
+              @if (loginForm.password().touched() && loginForm.password().invalid()) {
+                <p class="field-error">{{ loginForm.password().errors()[0].message }}</p>
+              }
+            </div>
+
+            <label class="remember-option">
+              <input type="checkbox" [formField]="loginForm.remember" />
+              <span>记住登录状态</span>
+            </label>
+
+            @if (error()) {
+              <div class="login-error">
+                <mat-icon>error</mat-icon><span>{{ error() }}</span>
+              </div>
+            }
+
+            <button type="submit" class="submit-btn" [disabled]="loading()">
+              @if (loading()) {
+                <mat-progress-spinner diameter="18" mode="indeterminate" />
+                <span>正在登录...</span>
+              } @else {
+                <span>登录</span><mat-icon>arrow_forward</mat-icon>
+              }
+            </button>
+          </form>
+        }
+
+        @case ('totp') {
+          <form (submit)="onTotpSubmit(); $event.preventDefault()" class="login-form">
+            @if (enrollmentSecret()) {
+              <div class="enrollment-block">
+                @if (enrollmentQrCode()) {
+                  <img
+                    class="totp-qr"
+                    [src]="'data:image/png;base64,' + enrollmentQrCode()"
+                    alt="身份验证器二维码"
+                  />
+                }
+                <div class="secret-value">
+                  <span>设置密钥</span>
+                  <code>{{ enrollmentSecret() }}</code>
+                </div>
+              </div>
+            }
+
+            <app-authenticator-code-field
+              class="login-code-field"
+              controlId="totp-code"
+              appearance="login"
+              [formField]="totpForm.code"
+            />
+
+            @if (error()) {
+              <div class="login-error">
+                <mat-icon>error</mat-icon><span>{{ error() }}</span>
+              </div>
+            }
+
+            <button type="submit" class="submit-btn" [disabled]="loading()">
+              @if (loading()) {
+                <mat-progress-spinner diameter="18" mode="indeterminate" />
+                <span>正在验证...</span>
+              } @else {
+                <span>验证</span><mat-icon>arrow_forward</mat-icon>
+              }
+            </button>
+
+            @if (!enrollmentSecret()) {
+              <div class="alternative-actions">
+                @if (methods().includes('passkey')) {
+                  <button
+                    type="button"
+                    class="secondary-btn"
+                    (click)="usePasskey()"
+                    [disabled]="loading() || !auth.supportsPasskeys()"
+                  >
+                    <mat-icon>passkey</mat-icon><span>使用通行密钥</span>
+                  </button>
+                }
+                @if (methods().includes('recoveryCode')) {
+                  <button type="button" class="text-btn" (click)="chooseRecovery()">
+                    使用恢复码
+                  </button>
+                }
+              </div>
+            }
+            <button type="button" class="text-btn" (click)="restart()">返回账号登录</button>
+          </form>
+        }
+
+        @case ('recovery') {
+          <form (submit)="onRecoverySubmit(); $event.preventDefault()" class="login-form">
+            <div class="field">
+              <label for="recovery-code">恢复码</label>
+              <div
+                class="input-wrap"
+                [class.input-error]="recoveryForm.code().touched() && recoveryForm.code().invalid()"
+              >
+                <mat-icon>key</mat-icon>
+                <input
+                  id="recovery-code"
+                  type="text"
+                  [formField]="recoveryForm.code"
+                  placeholder="XXXX-XXXX-XXXX-XXXX-XXXX"
+                  autocomplete="off"
+                />
+              </div>
+              @if (recoveryForm.code().touched() && recoveryForm.code().invalid()) {
+                <p class="field-error">{{ recoveryForm.code().errors()[0].message }}</p>
+              }
+            </div>
+            @if (error()) {
+              <div class="login-error">
+                <mat-icon>error</mat-icon><span>{{ error() }}</span>
+              </div>
+            }
+            <button type="submit" class="submit-btn" [disabled]="loading()">
+              @if (loading()) {
+                <mat-progress-spinner diameter="18" mode="indeterminate" />
+                <span>正在验证...</span>
+              } @else {
+                <span>验证恢复码</span><mat-icon>arrow_forward</mat-icon>
+              }
+            </button>
+            <button type="button" class="text-btn" (click)="chooseTotp()">使用验证码</button>
+          </form>
+        }
+
+        @case ('recoveryCodes') {
+          <div class="recovery-codes-panel">
+            <div class="recovery-warning">
+              <mat-icon>warning</mat-icon>
+              <span>请存放在密码管理器等安全位置，遗失后无法再次查看。</span>
+            </div>
+            <div class="recovery-code-grid">
+              @for (code of recoveryCodes(); track code) {
+                <code>{{ code }}</code>
+              }
+            </div>
+            <button type="button" class="secondary-btn" (click)="downloadRecoveryCodes()">
+              <mat-icon>download</mat-icon><span>下载恢复码</span>
+            </button>
+            <button type="button" class="submit-btn" (click)="enterApplication()">
+              <span>进入系统</span><mat-icon>arrow_forward</mat-icon>
+            </button>
+          </div>
+        }
+      }
+    </div>
+  </main>
+</div>

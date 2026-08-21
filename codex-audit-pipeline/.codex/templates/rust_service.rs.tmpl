@@ -1,0 +1,71 @@
+// 使用前替换: {{ENTITY_NAME}}（模块名用 {{entity_name}} 小写形式）
+// 注意: Service 层禁止 SQL（audit 拦截），只允许调用 repositories；错误统一为 ApiError
+// 风格与 backend/src/services/*.rs 一致：自由函数 + &PgPool，参数校验放在本层
+// 参考实现: backend/src/services/users.rs
+use crate::access::ActorContext;
+use crate::error::{db_error, ApiError};
+use crate::models::{
+    {{ENTITY_NAME}}CreateRequest, {{ENTITY_NAME}}Response, Page{{ENTITY_NAME}}, PageQuery,
+};
+use crate::repositories;
+use sqlx::PgPool;
+
+pub async fn list(
+    pool: &PgPool,
+    actor: &ActorContext,
+    query: &PageQuery,
+) -> Result<Page{{ENTITY_NAME}}, ApiError> {
+    let page = query.page.unwrap_or(1).max(1);
+    let page_size = query.page_size.unwrap_or(20).clamp(1, 100);
+    let rows = repositories::{{entity_name}}::list(pool, actor, page, page_size)
+        .await
+        .map_err(db_error)?;
+    let total = repositories::{{entity_name}}::count(pool, actor)
+        .await
+        .map_err(db_error)?;
+    Ok(Page{{ENTITY_NAME}} {
+        items: rows.into_iter().map(Into::into).collect(),
+        total,
+        page,
+        page_size,
+    })
+}
+
+pub async fn get(
+    pool: &PgPool,
+    actor: &ActorContext,
+    id: i64,
+) -> Result<{{ENTITY_NAME}}Response, ApiError> {
+    let row = repositories::{{entity_name}}::find_by_id(pool, actor, id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("{{ENTITY_NAME}} 不存在"))?;
+    Ok(row.into())
+}
+
+pub async fn create(
+    pool: &PgPool,
+    actor: &ActorContext,
+    req: &{{ENTITY_NAME}}CreateRequest,
+) -> Result<{{ENTITY_NAME}}Response, ApiError> {
+    // 校验规则写在这里（与 users::create / roles::create 的模式一致）
+    // if req.name.trim().is_empty() { return Err(ApiError::validation("name 不能为空")); }
+    let mut transaction = pool.begin().await.map_err(db_error)?;
+    let row = repositories::{{entity_name}}::create(&mut transaction, actor, req)
+        .await
+        .map_err(db_error)?;
+    transaction.commit().await.map_err(db_error)?;
+    Ok(row.into())
+}
+
+pub async fn delete(pool: &PgPool, actor: &ActorContext, id: i64) -> Result<(), ApiError> {
+    let mut transaction = pool.begin().await.map_err(db_error)?;
+    let deleted = repositories::{{entity_name}}::soft_delete(&mut transaction, actor, id)
+        .await
+        .map_err(db_error)?;
+    if !deleted {
+        return Err(ApiError::not_found("{{ENTITY_NAME}} 不存在"));
+    }
+    transaction.commit().await.map_err(db_error)?;
+    Ok(())
+}

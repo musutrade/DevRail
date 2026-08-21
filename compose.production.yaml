@@ -1,0 +1,189 @@
+name: ${COMPOSE_PROJECT_NAME:-arc-admin}
+
+x-backend-environment: &backend-environment
+  DATABASE_URL: ${DATABASE_URL:?请在 deployment/.env.production 中设置 DATABASE_URL}
+  APP_ENV: production
+  AUTO_MIGRATE: "false"
+  PORT: "8080"
+  CORS_ALLOWED_ORIGINS: https://${APP_HOST:?请设置 APP_HOST}
+  TRUSTED_PROXY_CIDRS: 172.30.0.0/24
+  LOG_FORMAT: json
+  RUST_LOG: info,tower_http=info,sqlx=warn
+  SERVICE_NAME: ${SERVICE_NAME:-arc-admin-backend}
+  MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?请由密钥系统注入 MFA_ENCRYPTION_KEY}
+  WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-${APP_HOST}}
+  WEBAUTHN_RP_ORIGIN: ${WEBAUTHN_RP_ORIGIN:-https://${APP_HOST}}
+  WEBAUTHN_RP_NAME: ${WEBAUTHN_RP_NAME:-Arc Admin}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+  OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+  OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-parentbased_traceidratio}
+  OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-0.10}
+  DB_MAX_CONNECTIONS: ${DB_MAX_CONNECTIONS:-20}
+  DB_MIN_CONNECTIONS: ${DB_MIN_CONNECTIONS:-2}
+  DB_ACQUIRE_TIMEOUT_SECS: ${DB_ACQUIRE_TIMEOUT_SECS:-5}
+  DB_CONNECT_TIMEOUT_SECS: ${DB_CONNECT_TIMEOUT_SECS:-10}
+  DB_IDLE_TIMEOUT_SECS: ${DB_IDLE_TIMEOUT_SECS:-600}
+  DB_MAX_LIFETIME_SECS: ${DB_MAX_LIFETIME_SECS:-1800}
+  DB_STATEMENT_TIMEOUT_MS: ${DB_STATEMENT_TIMEOUT_MS:-30000}
+
+services:
+  database:
+    image: postgres:17.10-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-arc_admin}
+      POSTGRES_USER: ${POSTGRES_USER:-arc_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请设置 POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: --data-checksums
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_timeout=300s
+      - -c
+      - archive_command=test ! -f /var/lib/postgresql/wal-archive/%f && cp %p /var/lib/postgresql/wal-archive/%f
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - postgres-wal-archive:/var/lib/postgresql/wal-archive
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    shm_size: 256mb
+    cpus: 2.0
+    mem_limit: 2g
+    pids_limit: 256
+    networks:
+      - data
+
+  migrate:
+    image: ${BACKEND_IMAGE:-arc-admin-backend:v2.3.0}
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["/app/migrate"]
+    restart: "no"
+    environment: *backend-environment
+    depends_on:
+      database:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    cpus: 0.5
+    mem_limit: 256m
+    pids_limit: 64
+    networks:
+      - data
+
+  audit-archive:
+    profiles: [maintenance]
+    image: ${BACKEND_IMAGE:-arc-admin-backend:v2.3.0}
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["/app/archive_audit_logs"]
+    restart: "no"
+    environment:
+      <<: *backend-environment
+      AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-365}
+      AUDIT_ARCHIVE_BATCH_SIZE: ${AUDIT_ARCHIVE_BATCH_SIZE:-10000}
+      AUDIT_ARCHIVE_DIR: /archives
+    depends_on:
+      database:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    read_only: true
+    volumes:
+      - ${AUDIT_ARCHIVE_HOST_DIR:-./deployment/audit-archives}:/archives
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    cpus: 0.5
+    mem_limit: 256m
+    pids_limit: 64
+    networks:
+      - data
+
+  backend:
+    image: ${BACKEND_IMAGE:-arc-admin-backend:v2.3.0}
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment: *backend-environment
+    depends_on:
+      database:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    cpus: 1.0
+    mem_limit: 512m
+    pids_limit: 128
+    networks:
+      - app
+      - data
+      - monitoring
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-arc-admin-frontend:v2.3.0}
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "80:8080"
+      - "443:8443"
+    secrets:
+      - tls_cert
+      - tls_key
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    cpus: 0.5
+    mem_limit: 128m
+    pids_limit: 64
+    networks:
+      - app
+      - monitoring
+
+networks:
+  app:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+  data:
+    internal: true
+  monitoring:
+    name: ${MONITORING_NETWORK:-arc-admin-monitoring}
+
+volumes:
+  postgres-data:
+  postgres-wal-archive:
+
+secrets:
+  tls_cert:
+    file: ./deployment/tls/tls.crt
+  tls_key:
+    file: ./deployment/tls/tls.key

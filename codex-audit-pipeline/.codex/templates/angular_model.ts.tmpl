@@ -1,0 +1,17 @@
+// 使用前替换: {{ENTITY_NAME}}
+export interface {{ENTITY_NAME}} {
+  id: number;
+  name: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+}
+
+/** 契约统一分页包装（见 docs/openapi.yaml PageUser） */
+export interface Page<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+}

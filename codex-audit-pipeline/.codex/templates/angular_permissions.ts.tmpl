@@ -1,0 +1,12 @@
+// 放置于 frontend/src/app/features/<domain>/{{RESOURCE_NAME}}.permissions.ts
+// 替换: {{PERMISSION_CONST}}, {{ROUTE_ACCESS_CONST}},
+//       {{PERMISSION_PREFIX}}, {{RESOURCE_NAME}}
+
+export const {{PERMISSION_CONST}} = {
+  read: '{{PERMISSION_PREFIX}}:{{RESOURCE_NAME}}:read',
+  write: '{{PERMISSION_PREFIX}}:{{RESOURCE_NAME}}:write',
+} as const;
+
+export const {{ROUTE_ACCESS_CONST}} = [
+  {{PERMISSION_CONST}}.read,
+] as const satisfies readonly string[];

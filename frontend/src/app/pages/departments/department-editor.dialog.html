@@ -1,0 +1,59 @@
+<form class="editor-dialog" [formGroup]="form" (ngSubmit)="submit()">
+  <div class="dialog-title-row">
+    <mat-icon>{{ data.department ? 'edit' : 'account_tree' }}</mat-icon>
+    <h2>{{ data.department ? '编辑部门' : '新建部门' }}</h2>
+  </div>
+
+  <div class="form-grid">
+    <div class="form-field full-width">
+      <label for="department-parent">上级部门</label>
+      @if (canChangeParent) {
+        <select id="department-parent" formControlName="parentId">
+          @for (department of parentOptions(); track department.id) {
+            <option [ngValue]="department.id">
+              {{ '　'.repeat(department.depth) }}{{ department.name }}
+              @if (department.status === 'inactive') {
+                （当前已停用）
+              }
+            </option>
+          }
+        </select>
+        @if (form.controls.parentId.touched && form.controls.parentId.invalid) {
+          <small>请选择有效的上级部门。</small>
+        }
+      } @else {
+        <input id="department-parent" value="当前上级不在可管理范围内" readonly />
+        <small>保存时将保持现有上级部门不变。</small>
+      }
+    </div>
+
+    <div class="form-field">
+      <label for="department-code">部门编码</label>
+      <input id="department-code" formControlName="code" autocomplete="off" />
+      @if (form.controls.code.touched && form.controls.code.invalid) {
+        <small>请输入 2-64 位小写字母、数字、下划线或连字符。</small>
+      }
+    </div>
+
+    <div class="form-field">
+      <label for="department-name">部门名称</label>
+      <input id="department-name" formControlName="name" />
+      @if (form.controls.name.touched && form.controls.name.invalid) {
+        <small>请输入不超过 128 个字符的部门名称。</small>
+      }
+    </div>
+
+    <div class="form-field">
+      <label for="department-status">状态</label>
+      <select id="department-status" formControlName="status">
+        <option value="active">启用</option>
+        <option value="inactive">停用</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="dialog-actions">
+    <button type="button" class="btn-outline" mat-dialog-close>取消</button>
+    <button type="submit" class="btn-primary">保存部门</button>
+  </div>
+</form>

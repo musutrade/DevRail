@@ -1,0 +1,2 @@
+[alias]
+flow = "run --quiet --locked --manifest-path codex-audit-pipeline/tools/arc-flow/Cargo.toml --"

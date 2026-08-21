@@ -1,0 +1,21 @@
+// 放置于 backend/src/permissions/{{PERMISSION_MODULE}}.rs
+// 替换: {{READ_PERMISSION_TYPE}}, {{WRITE_PERMISSION_TYPE}},
+//       {{PERMISSION_PREFIX}}, {{RESOURCE_NAME}}
+// 并在 backend/src/permissions.rs 增加: pub mod {{PERMISSION_MODULE}};
+
+use crate::auth::PermissionRequirement;
+
+pub const READ_PERMISSION_CODE: &str = "{{PERMISSION_PREFIX}}:{{RESOURCE_NAME}}:read";
+pub const WRITE_PERMISSION_CODE: &str = "{{PERMISSION_PREFIX}}:{{RESOURCE_NAME}}:write";
+
+pub struct {{READ_PERMISSION_TYPE}};
+
+impl PermissionRequirement for {{READ_PERMISSION_TYPE}} {
+    const CODE: &'static str = READ_PERMISSION_CODE;
+}
+
+pub struct {{WRITE_PERMISSION_TYPE}};
+
+impl PermissionRequirement for {{WRITE_PERMISSION_TYPE}} {
+    const CODE: &'static str = WRITE_PERMISSION_CODE;
+}

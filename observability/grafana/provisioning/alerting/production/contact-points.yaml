@@ -1,0 +1,11 @@
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: arc-admin-production-alerts
+    receivers:
+      - uid: arc-admin-production-alerts
+        type: $GRAFANA_ALERT_CONTACT_TYPE
+        disableResolveMessage: false
+        settings:
+          url: $GRAFANA_ALERT_WEBHOOK_URL

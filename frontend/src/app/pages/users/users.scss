@@ -1,0 +1,203 @@
+/* ============ 用户管理 ============ */
+.reset-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: var(--ui-radius-lg);
+  background: transparent;
+  color: var(--mat-sys-primary);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--ui-duration-fast) var(--ui-ease-standard);
+
+  mat-icon {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+  }
+  &:hover {
+    background: var(--mat-sys-surface-container);
+  }
+}
+
+.users-table {
+  .th-check {
+    width: 48px;
+  }
+  .th-actions {
+    text-align: right;
+  }
+
+  .user-cell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    .avatar {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--ui-color-on-solid);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .user-name {
+      font-weight: 500;
+      white-space: nowrap;
+    }
+  }
+
+  .cell-secondary {
+    color: var(--ui-color-text-secondary);
+  }
+  .cell-tertiary {
+    color: var(--ui-color-text-tertiary);
+    font-size: 13px;
+  }
+
+  .role-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .role-tag {
+    padding: 2px 8px;
+    border-radius: var(--ui-radius-sm);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0;
+    background: var(--mat-sys-surface-container-highest);
+    color: var(--ui-color-text-secondary);
+    white-space: nowrap;
+
+    &-accent {
+      background: var(--ui-color-primary-soft);
+      color: var(--mat-sys-primary);
+    }
+  }
+
+  .td-actions {
+    text-align: right;
+    white-space: nowrap;
+  }
+}
+
+/* 批量操作 */
+.table-footer {
+  &.batch-active {
+    background: var(--ui-color-selected);
+  }
+}
+
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.batch-count {
+  font-size: 13px;
+  color: var(--ui-color-text-secondary);
+  b {
+    color: var(--mat-sys-primary);
+  }
+}
+
+.batch-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--ui-color-border);
+}
+
+.batch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: none;
+  border-radius: var(--ui-radius-lg);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--ui-duration-fast) var(--ui-ease-standard);
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+
+  &.danger {
+    color: var(--mat-sys-error);
+    background: transparent;
+    &:hover {
+      background: var(--ui-color-error-soft);
+    }
+  }
+  &.primary {
+    color: var(--mat-sys-primary);
+    background: transparent;
+    &:hover {
+      background: var(--ui-color-primary-soft);
+    }
+  }
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+
+  .page-btns {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .users-table {
+    min-width: 760px;
+
+    .th-actions,
+    .td-actions {
+      position: sticky;
+      right: 0;
+      background: var(--ui-color-surface-panel);
+      box-shadow: -1px 0 0 var(--ui-color-border);
+    }
+
+    .th-actions {
+      background: var(--ui-color-surface-subtle);
+    }
+
+    tbody tr:hover .td-actions {
+      background: var(--ui-color-hover);
+    }
+
+    tbody tr.selected .td-actions {
+      background: var(--ui-color-selected);
+    }
+  }
+
+  .table-footer {
+    padding: var(--ui-space-4);
+  }
+
+  .pagination {
+    width: 100%;
+    justify-content: space-between;
+  }
+}

@@ -1,0 +1,527 @@
+<!DOCTYPE html><html class="light" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>User Management - RBAC Control Center</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "outline": "#737688",
+                    "secondary-container": "#dee0e2",
+                    "inverse-primary": "#b6c4ff",
+                    "error-container": "#ffdad6",
+                    "surface-container-low": "#eff4ff",
+                    "link": "#165DFF",
+                    "on-secondary-fixed": "#191c1e",
+                    "on-primary-container": "#eeefff",
+                    "bg-white": "#FFFFFF",
+                    "on-background": "#111c2a",
+                    "background": "#f8f9ff",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-fixed": "#e1e2e4",
+                    "error": "#ba1a1a",
+                    "on-tertiary": "#ffffff",
+                    "text-secondary": "#4E5969",
+                    "on-tertiary-fixed": "#390c00",
+                    "primary-container": "#165dff",
+                    "primary": "#0047cf",
+                    "on-secondary-fixed-variant": "#444749",
+                    "surface-container": "#e5eeff",
+                    "success": "#00B42A",
+                    "surface-container-high": "#dee9fc",
+                    "danger": "#F53F3F",
+                    "on-surface": "#111c2a",
+                    "fill-hover": "#F2F3F5",
+                    "on-secondary": "#ffffff",
+                    "tertiary-fixed-dim": "#ffb59d",
+                    "on-secondary-container": "#606365",
+                    "text-primary": "#1D2129",
+                    "on-primary-fixed": "#00164f",
+                    "tertiary-container": "#c43e00",
+                    "surface-tint": "#004fe5",
+                    "on-error-container": "#93000a",
+                    "primary-fixed-dim": "#b6c4ff",
+                    "on-surface-variant": "#434656",
+                    "on-tertiary-fixed-variant": "#832700",
+                    "warning": "#FF7D00",
+                    "border": "#E5E6EB",
+                    "inverse-surface": "#263140",
+                    "surface-variant": "#d8e3f7",
+                    "tertiary": "#9a2f00",
+                    "surface-bright": "#f8f9ff",
+                    "on-error": "#ffffff",
+                    "tertiary-fixed": "#ffdbd0",
+                    "primary-fixed": "#dce1ff",
+                    "on-primary-fixed-variant": "#003bb0",
+                    "on-tertiary-container": "#ffece6",
+                    "text-tertiary": "#86909C",
+                    "surface-dim": "#cfdbee",
+                    "on-primary": "#ffffff",
+                    "secondary-fixed-dim": "#c5c6c8",
+                    "outline-variant": "#c3c5d9",
+                    "inverse-on-surface": "#eaf1ff",
+                    "surface": "#f8f9ff",
+                    "secondary": "#5c5f60",
+                    "surface-container-highest": "#d8e3f7"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "xl": "32px",
+                    "gutter": "16px",
+                    "sm": "8px",
+                    "xs": "4px",
+                    "lg": "24px",
+                    "md": "16px",
+                    "2xl": "48px",
+                    "container-max": "1200px"
+            },
+            "fontFamily": {
+                    "label-md": ["Inter"],
+                    "h1-mobile": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "h4": ["Inter"],
+                    "h3": ["Inter"],
+                    "h1": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "h2": ["Inter"],
+                    "body-md": ["Inter"]
+            },
+            "fontSize": {
+                    "label-md": ["14px", {"lineHeight": "22px", "fontWeight": "500"}],
+                    "h1-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                    "label-sm": ["12px", {"lineHeight": "20px", "fontWeight": "500"}],
+                    "h4": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "h3": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "h1": ["36px", {"lineHeight": "44px", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "body-sm": ["12px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "h2": ["30px", {"lineHeight": "38px", "fontWeight": "600"}],
+                    "body-md": ["14px", {"lineHeight": "22px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #E5E6EB; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-background text-on-surface">
+<!-- TopNavBar -->
+<header class="fixed top-0 left-64 right-0 z-30 flex justify-between items-center px-lg h-14 bg-white border-b border-border">
+<div class="flex items-center gap-xl">
+<span class="text-h4 font-h4 font-bold text-primary">RBAC Control Center</span>
+<nav class="hidden md:flex items-center gap-md ml-xl">
+<a class="text-text-secondary hover:text-primary transition-colors text-label-md font-label-md" href="#">Dashboard</a>
+<a class="text-text-secondary hover:text-primary transition-colors text-label-md font-label-md" href="#">Audit Logs</a>
+<a class="text-text-secondary hover:text-primary transition-colors text-label-md font-label-md" href="#">Security Settings</a>
+</nav>
+</div>
+<div class="flex items-center gap-md">
+<div class="relative flex items-center bg-surface-container-low rounded-lg px-sm h-9 w-64">
+<span class="material-symbols-outlined text-text-tertiary text-[20px]">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-body-sm w-full placeholder:text-text-tertiary" placeholder="Search resources..." type="text">
+</div>
+<button class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-fill-hover text-text-secondary transition-all">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-fill-hover text-text-secondary transition-all" id="theme-toggle">
+<span class="material-symbols-outlined">contrast</span>
+</button>
+<button class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-fill-hover text-text-secondary transition-all">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="h-8 w-[1px] bg-border mx-xs"></div>
+<div class="flex items-center gap-sm cursor-pointer group">
+<img class="w-8 h-8 rounded-full border border-border group-hover:border-primary transition-colors" data-alt="A high-quality studio portrait of a professional male administrator in his 40s. He has a neutral, confident expression, wearing a crisp white shirt and a dark navy blazer. The background is a clean, blurred office environment with soft morning light filtering through windows, matching the modern enterprise aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAxGxfHbHa_JiAAD6LRW05-0kxmS_HF7YPGw0MN-jL1UJlSEaT05co7G1yn06YCbNIsv3_58lGCgKuTeH-OC9QaQAN6beoD1jXlqCxh9dh1f-t7qSnKLujALAOzAL6BGD_3tKo_p37rrkzsAZboEijNThcLbtTfhUHZ1ihchtUdx90tPt9pWLBGVcoC6HgIp47-WpAxBipjwZnwMZ-dsAKuZxcB76f8gZzWGzk1gaWnVK3ujo77UWNc">
+<div class="hidden lg:block">
+<p class="text-label-sm font-label-sm text-text-primary">Admin_User</p>
+<p class="text-[10px] text-text-tertiary uppercase tracking-wider">Super Admin</p>
+</div>
+</div>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 bottom-0 w-64 flex flex-col py-md z-40 bg-surface-container-lowest border-r border-border">
+<div class="px-md mb-lg">
+<div class="flex items-center gap-sm p-sm rounded-xl bg-surface-container-low mb-lg">
+<div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-[20px]">security</span>
+</div>
+<div>
+<h2 class="text-label-md font-h4 text-primary leading-tight">RBAC Admin</h2>
+<p class="text-[11px] text-text-tertiary">Enterprise Tier</p>
+</div>
+</div>
+<button class="w-full flex items-center justify-center gap-sm bg-primary hover:bg-primary-container text-white py-2 rounded-lg transition-all shadow-sm active:scale-95">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span class="text-label-md">Create New Policy</span>
+</button>
+</div>
+<nav class="flex-1 px-sm space-y-1 custom-scrollbar overflow-y-auto">
+<div class="space-y-1">
+  <button class="w-full flex items-center justify-between px-md py-2.5 rounded-lg text-primary bg-surface-container font-bold transition-all">
+    <div class="flex items-center gap-md">
+      <span class="material-symbols-outlined">group</span>
+      <span class="text-label-md">User Management</span>
+    </div>
+    <span class="material-symbols-outlined text-[18px]">expand_more</span>
+  </button>
+  <div class="pl-10 space-y-1">
+    <a href="#" class="flex items-center px-md py-2 rounded-lg text-text-secondary hover:bg-fill-hover transition-all text-label-sm bg-fill-hover">Active Users</a>
+    <a href="#" class="flex items-center px-md py-2 rounded-lg text-text-secondary hover:bg-fill-hover transition-all text-label-sm">Pending Invites</a>
+    <a href="#" class="flex items-center px-md py-2 rounded-lg text-text-secondary hover:bg-fill-hover transition-all text-label-sm">Access Groups</a>
+  </div>
+</div>
+<a class="flex items-center gap-md px-md py-2.5 rounded-lg text-text-secondary hover:bg-fill-hover transition-all" href="#">
+<span class="material-symbols-outlined">badge</span>
+<span class="text-label-md">Role Permissions</span>
+</a>
+<a class="flex items-center gap-md px-md py-2.5 rounded-lg text-text-secondary hover:bg-fill-hover transition-all" href="#">
+<span class="material-symbols-outlined">lock_person</span>
+<span class="text-label-md">Resource Access</span>
+</a>
+<div class="space-y-1">
+  <button class="w-full flex items-center justify-between px-md py-2.5 rounded-lg text-text-secondary hover:bg-fill-hover transition-all">
+    <div class="flex items-center gap-md">
+      <span class="material-symbols-outlined">policy</span>
+      <span class="text-label-md">System Policies</span>
+    </div>
+    <span class="material-symbols-outlined text-[18px]">expand_more</span>
+  </button>
+  <div class="pl-10 space-y-1 hidden">
+    <a href="#" class="flex items-center px-md py-2 rounded-lg text-text-secondary hover:bg-fill-hover transition-all text-label-sm">Global Rules</a>
+    <a href="#" class="flex items-center px-md py-2 rounded-lg text-text-secondary hover:bg-fill-hover transition-all text-label-sm">Compliance</a>
+  </div>
+</div>
+<a class="flex items-center gap-md px-md py-2.5 rounded-lg text-text-secondary hover:bg-fill-hover transition-all" href="#">
+<span class="material-symbols-outlined">shield</span>
+<span class="text-label-md">Security Center</span>
+</a>
+</nav>
+<div class="px-sm pt-md mt-md border-t border-border">
+<a class="flex items-center gap-md px-md py-2 rounded-lg text-text-secondary hover:bg-fill-hover transition-all" href="#">
+<span class="material-symbols-outlined">help</span>
+<span class="text-label-md">Support</span>
+</a>
+<a class="flex items-center gap-md px-md py-2 rounded-lg text-text-secondary hover:bg-fill-hover transition-all" href="#">
+<span class="material-symbols-outlined">description</span>
+<span class="text-label-md">Documentation</span>
+</a>
+</div>
+<button class="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white border border-border rounded-full flex items-center justify-center text-text-secondary hover:text-primary hover:border-primary shadow-sm transition-all z-50" id="sidebar-toggle">
+  <span class="material-symbols-outlined text-[16px]">chevron_left</span>
+</button></aside>
+<!-- Main Content -->
+<main class="ml-64 pt-14 min-h-screen bg-background">
+<div class="p-xl max-w-container-max mx-auto">
+<!-- Page Header -->
+<div class="flex justify-between items-end mb-lg">
+<div>
+<h1 class="text-h3 font-h3 text-text-primary">User Management</h1>
+<p class="text-body-md text-text-secondary mt-1">Manage system access levels, account statuses, and assigned security roles.</p>
+</div>
+<button class="flex items-center gap-sm bg-primary text-white px-lg py-2.5 rounded-lg hover:bg-primary-container transition-all shadow-md">
+<span class="material-symbols-outlined">person_add</span>
+<span class="font-medium">Add User</span>
+</button>
+</div>
+<!-- Filter Bar -->
+<div class="bg-white border border-border p-md rounded-xl flex flex-wrap items-center gap-md shadow-sm mb-lg">
+<div class="flex-1 min-w-[240px] relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary">search</span>
+<input class="w-full pl-10 pr-md py-2 bg-background border border-border focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-lg text-body-md" placeholder="Search by username or email..." type="text">
+</div>
+<div class="flex items-center gap-sm">
+<span class="text-label-sm text-text-tertiary">Role:</span>
+<select class="bg-background border border-border rounded-lg px-md py-2 text-body-md focus:ring-1 focus:ring-primary/20 min-w-[140px]">
+<option>All Roles</option>
+<option>Super Admin</option>
+<option>Security Lead</option>
+<option>Standard User</option>
+<option>Guest</option>
+</select>
+</div>
+<div class="flex items-center gap-sm">
+<span class="text-label-sm text-text-tertiary">Status:</span>
+<select class="bg-background border border-border rounded-lg px-md py-2 text-body-md focus:ring-1 focus:ring-primary/20 min-w-[120px]">
+<option>All Status</option>
+<option>Active</option>
+<option>Inactive</option>
+<option>Suspended</option>
+</select>
+</div>
+<button class="flex items-center gap-xs px-md py-2 text-primary hover:bg-surface-container rounded-lg transition-colors">
+<span class="material-symbols-outlined text-[20px]">filter_list</span>
+<span class="text-label-md">Reset Filters</span>
+</button>
+</div>
+<!-- Data Table -->
+<div class="bg-white border border-border rounded-xl shadow-sm overflow-hidden flex flex-col">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low border-b border-border">
+<th class="p-md w-12">
+<input class="rounded border-border text-primary focus:ring-primary/20 cursor-pointer" type="checkbox">
+</th>
+<th class="p-md text-label-sm text-text-secondary font-semibold uppercase tracking-wider">User</th>
+<th class="p-md text-label-sm text-text-secondary font-semibold uppercase tracking-wider">Email Address</th>
+<th class="p-md text-label-sm text-text-secondary font-semibold uppercase tracking-wider">Roles</th>
+<th class="p-md text-label-sm text-text-secondary font-semibold uppercase tracking-wider">Status</th>
+<th class="p-md text-label-sm text-text-secondary font-semibold uppercase tracking-wider">Last Login</th>
+<th class="p-md text-label-sm text-text-secondary font-semibold uppercase tracking-wider text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border">
+<!-- Row 1 -->
+<tr class="hover:bg-fill-hover transition-colors">
+<td class="p-md"><input class="rounded border-border text-primary cursor-pointer" type="checkbox"></td>
+<td class="p-md">
+<div class="flex items-center gap-md">
+<img class="w-9 h-9 rounded-full bg-surface-container" data-alt="A professional headshot of a middle-aged woman with glasses and short brown hair, wearing a corporate grey suit. She has a pleasant, approachable smile. The image is rendered in a bright, clean style with a soft-focus background of a modern enterprise office hallway." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC3psN_95NGLYEcHbcUcbC1gA-dfbrRAKVA6-OMQfOFu-tI9CC4cJ7oU34D0gF6Fp-vPo-PaIBeIDocgo7ljXrH35yqqGAyALPHX3-my_WH0YyFebOgiPhQDzppd9qbDJlXZfDPZMUHcqO1nMuVs8N9VFUiGbNuAX-xecbnXP9AKGqwT0PVj6XbZt1G3EJlZB5xgg1QQsbiMbEJhLKF4R6tjQlU8e342LdNz47vPFndKwmV4S8fxST3">
+<span class="font-medium text-text-primary">Sarah Jenkins</span>
+</div>
+</td>
+<td class="p-md text-body-md text-text-secondary">s.jenkins@enterprise.com</td>
+<td class="p-md">
+<div class="flex flex-wrap gap-xs">
+<span class="px-2 py-0.5 bg-primary/10 text-primary text-[11px] font-semibold rounded uppercase">Security Lead</span>
+<span class="px-2 py-0.5 bg-surface-container-highest text-text-secondary text-[11px] font-semibold rounded uppercase">Auditor</span>
+</div>
+</td>
+<td class="p-md">
+<div class="flex items-center gap-xs px-2 py-1 bg-success/10 text-success rounded-full w-fit">
+<span class="w-1.5 h-1.5 rounded-full bg-success"></span>
+<span class="text-label-sm">Active</span>
+</div>
+</td>
+<td class="p-md text-body-sm text-text-tertiary">2 mins ago</td>
+<td class="p-md text-right">
+<div class="flex justify-end gap-1">
+<button class="p-1.5 hover:bg-surface-container rounded-lg text-text-secondary transition-colors" title="Edit"><span class="material-symbols-outlined text-[20px]">edit</span></button>
+<button class="p-1.5 hover:bg-surface-container rounded-lg text-text-secondary transition-colors" title="Reset Password"><span class="material-symbols-outlined text-[20px]">lock_reset</span></button>
+<button class="p-1.5 hover:bg-surface-container rounded-lg text-text-secondary transition-colors"><span class="material-symbols-outlined text-[20px]">more_vert</span></button>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-fill-hover transition-colors">
+<td class="p-md"><input class="rounded border-border text-primary cursor-pointer" type="checkbox"></td>
+<td class="p-md">
+<div class="flex items-center gap-md">
+<img class="w-9 h-9 rounded-full bg-surface-container" data-alt="A realistic profile photo of a young adult male designer with a short beard and stylish glasses. He is wearing a minimalist black turtleneck against a light grey professional studio backdrop. The lighting is soft and directional, emphasizing his thoughtful expression." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAxqLxtRnNZXz4jnWBMulJwk0ZJzTF8jWrYJ36kD5s0g7V2PHl4gBfpkPVrnlcb4a47sDActiRgN-1wCkrxxXK0Pje9Umj0JnsB3iQGlvSJhLcsJBCe0jkj7xgAlC0lFOOMY1bsX63EzZWqzwdjAoR8KsOf1bGNFjeGjw-eMZ_dNq9a50rAMrVjwmgIaE4SS21LUV48NgQ0BlJGdyjNWOrle7c-4IBCMoBsnXlRLZPSGEfvxHrKsqoy">
+<span class="font-medium text-text-primary">Marcus Thorne</span>
+</div>
+</td>
+<td class="p-md text-body-md text-text-secondary">m.thorne@enterprise.com</td>
+<td class="p-md">
+<div class="flex flex-wrap gap-xs">
+<span class="px-2 py-0.5 bg-surface-container-highest text-text-secondary text-[11px] font-semibold rounded uppercase">Standard User</span>
+</div>
+</td>
+<td class="p-md">
+<div class="flex items-center gap-xs px-2 py-1 bg-success/10 text-success rounded-full w-fit">
+<span class="w-1.5 h-1.5 rounded-full bg-success"></span>
+<span class="text-label-sm">Active</span>
+</div>
+</td>
+<td class="p-md text-body-sm text-text-tertiary">1 hour ago</td>
+<td class="p-md text-right">
+<div class="flex justify-end gap-1">
+<button class="p-1.5 hover:bg-surface-container rounded-lg text-text-secondary transition-colors" title="Edit"><span class="material-symbols-outlined text-[20px]">edit</span></button>
+<button class="p-1.5 hover:bg-surface-container rounded-lg text-text-secondary transition-colors" title="Reset Password"><span class="material-symbols-outlined text-[20px]">lock_reset</span></button>
+<button class="p-1.5 hover:bg-surface-container rounded-lg text-text-secondary transition-colors"><span class="material-symbols-outlined text-[20px]">more_vert</span></button>
+</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-fill-hover transition-colors bg-surface-container-low/30">
+<td class="p-md"><input class="rounded border-border text-primary cursor-pointer" type="checkbox"></td>
+<td class="p-md">
+<div class="flex items-center gap-md">
+<img class="w-9 h-9 rounded-full bg-surface-container" data-alt="A portrait of a senior executive woman with silver hair pulled back, wearing a navy blue blazer and a silk blouse. She has a friendly yet professional demeanor. The setting is a bright, high-end corporate office with minimalist glass partitions in the background, keeping with a modern enterprise visual style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDZzppRUeHrneTYbNrYqQA-QJV8D294WMmnAVTDT3B43K6zyY3R6J7akXc2mMymFFpnbnhmU3oqCcdLTq4clXorMg5ZoK24XZ2Y5k9ozZKNaiquYbEvnFvNN7VVDqgs9d4iLZjPSIosVbB1fBaaMNq_Cbtrh64sJ3b7sHr4QkD2SPDKzfAty_SPupOAqaPryx-JHPsEb7kTG_8Q4Ps87xo_wuWVvUKPn63jdbUvl59mAnfKK17QXXAf">
+<span class="font-medium text-text-primary">Elena Rodriguez</span>
+</div>
+</td>
+<td class="p-md text-body-md text-text-secondary">e.rodriguez@enterprise.com</td>
+<td class="p-md">
+<div class="flex flex-wrap gap-xs">
+<span class="px-2 py-0.5 bg-danger/10 text-danger text-[11px] font-semibold rounded uppercase">Global Admin</span>
+</div>
+</td>
+<td class="p-md">
+<div class="flex items-center gap-xs px-2 py-1 bg-outline/10 text-outline rounded-full w-fit">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
+<span class="text-label-sm">Inactive</span>
+</div>
+</td>
+<td class="p-md text-body-sm text-text-tertiary">3 days ago</td>
+<td class="p-md text-right">
+<div class="flex justify-end gap-1">
+<button class="p-1.5 hover:bg-surface-container rounded-lg text-text-secondary transition-colors" title="Edit"><span class="material-symbols-outlined text-[20px]">edit</span></button>
+<button class="p-1.5 hover:bg-surface-container rounded-lg text-text-secondary transition-colors" title="Reset Password"><span class="material-symbols-outlined text-[20px]">lock_reset</span></button>
+<button class="p-1.5 hover:bg-surface-container rounded-lg text-text-secondary transition-colors"><span class="material-symbols-outlined text-[20px]">more_vert</span></button>
+</div>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-fill-hover transition-colors">
+<td class="p-md"><input class="rounded border-border text-primary cursor-pointer" type="checkbox"></td>
+<td class="p-md">
+<div class="flex items-center gap-md">
+<img class="w-9 h-9 rounded-full bg-surface-container" data-alt="A close-up shot of a young professional man of South Asian descent, smiling warmly. He's wearing a casual but neat light blue button-up shirt. The lighting is soft and natural, coming from a side window, highlighting a bright and professional atmosphere in a contemporary office." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDhQTPGUDJKyehR5Xis5O4LGbDzTy7OAbjgXyI_1oStIGp7z_JPyIZlkIxiCyV8Ph99INvD4Lqeb4AahDzLgb1odZ4FInR4kVEr03-pZ0WiZRPvsCiJV5FtLiQGQTWCo18GntqNjKmxXRtMtYdqirg_yIvmIH96sp2HnxcJQVrOqK3NrFh-lkd9xwNg7Bkoi0Vbm3gRM6ov21Miwlpg1JQ7JY86t0aC0UQockwIZuuDihmWdQjboXTX">
+<span class="font-medium text-text-primary">Amit Patel</span>
+</div>
+</td>
+<td class="p-md text-body-md text-text-secondary">a.patel@enterprise.com</td>
+<td class="p-md">
+<div class="flex flex-wrap gap-xs">
+<span class="px-2 py-0.5 bg-surface-container-highest text-text-secondary text-[11px] font-semibold rounded uppercase">Billing Mgr</span>
+</div>
+</td>
+<td class="p-md">
+<div class="flex items-center gap-xs px-2 py-1 bg-success/10 text-success rounded-full w-fit">
+<span class="w-1.5 h-1.5 rounded-full bg-success"></span>
+<span class="text-label-sm">Active</span>
+</div>
+</td>
+<td class="p-md text-body-sm text-text-tertiary">14 mins ago</td>
+<td class="p-md text-right">
+<div class="flex justify-end gap-1">
+<button class="p-1.5 hover:bg-surface-container rounded-lg text-text-secondary transition-colors" title="Edit"><span class="material-symbols-outlined text-[20px]">edit</span></button>
+<button class="p-1.5 hover:bg-surface-container rounded-lg text-text-secondary transition-colors" title="Reset Password"><span class="material-symbols-outlined text-[20px]">lock_reset</span></button>
+<button class="p-1.5 hover:bg-surface-container rounded-lg text-text-secondary transition-colors"><span class="material-symbols-outlined text-[20px]">more_vert</span></button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Batch Actions Footer -->
+<div class="p-md bg-surface-container-low border-t border-border flex items-center justify-between" id="batch-actions">
+<div class="flex items-center gap-md">
+<span class="text-body-sm text-text-secondary"><span class="font-bold text-primary">2</span> users selected</span>
+<div class="h-4 w-[1px] bg-border"></div>
+<button class="flex items-center gap-xs text-danger hover:bg-danger/10 px-md py-1.5 rounded-lg transition-colors">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+<span class="text-label-md">Delete Selected</span>
+</button>
+<button class="flex items-center gap-xs text-primary hover:bg-primary/10 px-md py-1.5 rounded-lg transition-colors">
+<span class="material-symbols-outlined text-[18px]">rule</span>
+<span class="text-label-md">Change Role</span>
+</button>
+</div>
+<!-- Pagination -->
+<div class="flex items-center gap-sm">
+<span class="text-body-sm text-text-tertiary">Showing 1-10 of 248 entries</span>
+<div class="flex items-center gap-xs ml-md">
+<button class="w-8 h-8 flex items-center justify-center rounded-lg border border-border bg-white text-text-secondary hover:bg-fill-hover disabled:opacity-40" disabled="">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="w-8 h-8 flex items-center justify-center rounded-lg bg-primary text-white font-bold text-body-sm">1</button>
+<button class="w-8 h-8 flex items-center justify-center rounded-lg border border-border bg-white text-text-secondary hover:bg-fill-hover text-body-sm">2</button>
+<button class="w-8 h-8 flex items-center justify-center rounded-lg border border-border bg-white text-text-secondary hover:bg-fill-hover text-body-sm">3</button>
+<span class="px-1 text-text-tertiary">...</span>
+<button class="w-8 h-8 flex items-center justify-center rounded-lg border border-border bg-white text-text-secondary hover:bg-fill-hover text-body-sm">25</button>
+<button class="w-8 h-8 flex items-center justify-center rounded-lg border border-border bg-white text-text-secondary hover:bg-fill-hover">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Dashboard Stats Summary (Bento Grid Style) -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-md mt-xl">
+<div class="bg-white border border-border p-lg rounded-xl shadow-sm">
+<p class="text-text-tertiary text-label-sm uppercase font-semibold">Total Users</p>
+<div class="flex items-end justify-between mt-xs">
+<h3 class="text-h2 font-h2 text-text-primary">1,284</h3>
+<span class="text-success text-body-sm font-bold flex items-center">+4.2%</span>
+</div>
+</div>
+<div class="bg-white border border-border p-lg rounded-xl shadow-sm">
+<p class="text-text-tertiary text-label-sm uppercase font-semibold">Active Now</p>
+<div class="flex items-end justify-between mt-xs">
+<h3 class="text-h2 font-h2 text-text-primary">342</h3>
+<div class="h-2 w-2 rounded-full bg-success animate-pulse mb-2"></div>
+</div>
+</div>
+<div class="bg-white border border-border p-lg rounded-xl shadow-sm">
+<p class="text-text-tertiary text-label-sm uppercase font-semibold">Pending Requests</p>
+<div class="flex items-end justify-between mt-xs">
+<h3 class="text-h2 font-h2 text-text-primary">12</h3>
+<span class="text-warning text-body-sm font-bold">Review</span>
+</div>
+</div>
+<div class="bg-white border border-border p-lg rounded-xl shadow-sm">
+<p class="text-text-tertiary text-label-sm uppercase font-semibold">Login Failures</p>
+<div class="flex items-end justify-between mt-xs">
+<h3 class="text-h2 font-h2 text-text-primary">5</h3>
+<span class="text-danger text-body-sm font-bold">-12%</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<script>
+        // Micro-interactions and simple state management
+        document.addEventListener('DOMContentLoaded', () => {
+            const themeToggle = document.getElementById('theme-toggle');
+            const html = document.documentElement;
+            
+            themeToggle.addEventListener('click', () => {
+                html.classList.toggle('dark');
+            });
+
+            // Handle row selection for batch actions
+            const checkboxes = document.querySelectorAll('tbody input[type="checkbox"]');
+            const batchActions = document.getElementById('batch-actions');
+            
+            checkboxes.forEach(cb => {
+                cb.addEventListener('change', () => {
+                    const checkedCount = document.querySelectorAll('tbody input[type="checkbox"]:checked').length;
+                    const countDisplay = batchActions.querySelector('span.font-bold');
+                    if (countDisplay) countDisplay.textContent = checkedCount;
+                    
+                    if (checkedCount > 0) {
+                        batchActions.classList.add('bg-primary/5');
+                        batchActions.classList.remove('bg-surface-container-low');
+                    } else {
+                        batchActions.classList.remove('bg-primary/5');
+                        batchActions.classList.add('bg-surface-container-low');
+                    }
+                });
+            });
+
+            // Table row click simulation
+            const rows = document.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                row.addEventListener('click', (e) => {
+                    if (e.target.type !== 'checkbox' && !e.target.closest('button')) {
+                        // In a real app, this would navigate to user detail
+                        row.classList.toggle('bg-primary/5');
+                    }
+                });
+            });
+        });
+    </script>
+
+
+</body></html>

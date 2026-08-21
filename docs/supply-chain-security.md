@@ -1,0 +1,23 @@
+# 供应链安全
+
+项目将依赖、源码和容器镜像安全检查放在 GitHub Actions 中执行，不要求开发机长期安装扫描器。
+
+## 自动检查
+
+- `security.yml` 每次 PR、`main` 分支推送及每周定时执行 RustSec `cargo audit`、`cargo deny`、Trivy 镜像扫描。
+- `cargo deny` 根据根目录 `deny.toml` 检查漏洞公告、许可证、重复依赖和依赖来源。新增许可证例外时必须注明业务理由并接受评审。
+- 后端、前端生产镜像均阻断已修复的高危或严重漏洞；未修复漏洞保留在报告中，但不阻断，以免项目因上游尚无补丁而永久失效。
+- 两个生产镜像分别生成 SPDX JSON SBOM，并作为 Actions 产物保留 30 天。
+- `codeql.yml` 对 Rust 与 TypeScript 执行扩展安全查询。公开仓库直接生效；私有仓库需要 GitHub Code Security，启用后移除工作流中的公开仓库条件。
+
+## 本地核验
+
+已安装工具时可从仓库根执行：
+
+```bash
+cargo audit --file backend/Cargo.lock
+cargo deny --manifest-path backend/Cargo.toml check advisories bans licenses sources
+node scripts/check-supply-chain.mjs
+```
+
+`cargo flow verify --components workflow` 会执行最后一项静态配置门禁。漏洞库依赖网络且会随时间变化，因此在线漏洞结果由定时 Actions 负责，提交前全量门禁不伪造离线安全结论。

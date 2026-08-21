@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>403 Forbidden - AccessManager Pro</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary-fixed": "#191c1e",
+                    "surface-variant": "#d8e3f7",
+                    "surface-container-low": "#eff4ff",
+                    "link": "#165DFF",
+                    "on-surface": "#111c2a",
+                    "tertiary-container": "#c43e00",
+                    "on-secondary-container": "#606365",
+                    "success": "#00B42A",
+                    "on-tertiary-fixed-variant": "#832700",
+                    "text-tertiary": "#86909C",
+                    "surface-tint": "#004fe5",
+                    "background": "#f8f9ff",
+                    "on-error-container": "#93000a",
+                    "on-tertiary": "#ffffff",
+                    "secondary-fixed": "#e1e2e4",
+                    "on-background": "#111c2a",
+                    "outline": "#737688",
+                    "bg-white": "#FFFFFF",
+                    "on-primary-fixed-variant": "#003bb0",
+                    "tertiary-fixed": "#ffdbd0",
+                    "on-primary-fixed": "#00164f",
+                    "primary-container": "#165dff",
+                    "on-secondary-fixed-variant": "#444749",
+                    "danger": "#F53F3F",
+                    "primary": "#0047cf",
+                    "surface-dim": "#cfdbee",
+                    "secondary-fixed-dim": "#c5c6c8",
+                    "surface-container-high": "#dee9fc",
+                    "warning": "#FF7D00",
+                    "secondary-container": "#dee0e2",
+                    "error-container": "#ffdad6",
+                    "surface-container-lowest": "#ffffff",
+                    "inverse-primary": "#b6c4ff",
+                    "surface": "#f8f9ff",
+                    "tertiary-fixed-dim": "#ffb59d",
+                    "on-tertiary-fixed": "#390c00",
+                    "on-primary-container": "#eeefff",
+                    "inverse-on-surface": "#eaf1ff",
+                    "primary-fixed": "#dce1ff",
+                    "on-error": "#ffffff",
+                    "secondary": "#5c5f60",
+                    "text-secondary": "#4E5969",
+                    "surface-container-highest": "#d8e3f7",
+                    "error": "#ba1a1a",
+                    "text-primary": "#1D2129",
+                    "on-surface-variant": "#434656",
+                    "fill-hover": "#F2F3F5",
+                    "inverse-surface": "#263140",
+                    "on-tertiary-container": "#ffece6",
+                    "surface-container": "#e5eeff",
+                    "tertiary": "#9a2f00",
+                    "on-primary": "#ffffff",
+                    "outline-variant": "#c3c5d9",
+                    "primary-fixed-dim": "#b6c4ff",
+                    "border": "#E5E6EB",
+                    "on-secondary": "#ffffff",
+                    "surface-bright": "#f8f9ff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "gutter": "16px",
+                    "xs": "4px",
+                    "md": "16px",
+                    "container-max": "1200px",
+                    "lg": "24px",
+                    "sm": "8px",
+                    "xl": "32px",
+                    "2xl": "48px"
+            },
+            "fontFamily": {
+                    "h4": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "body-md": ["Inter"],
+                    "h1": ["Inter"],
+                    "label-md": ["Inter"],
+                    "h3": ["Inter"],
+                    "h1-mobile": ["Inter"],
+                    "h2": ["Inter"]
+            },
+            "fontSize": {
+                    "h4": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "label-sm": ["12px", {"lineHeight": "20px", "fontWeight": "500"}],
+                    "body-sm": ["12px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "body-md": ["14px", {"lineHeight": "22px", "fontWeight": "400"}],
+                    "h1": ["36px", {"lineHeight": "44px", "fontWeight": "600"}],
+                    "label-md": ["14px", {"lineHeight": "22px", "fontWeight": "500"}],
+                    "h3": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "h1-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                    "h2": ["30px", {"lineHeight": "38px", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e5e6eb; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-background text-on-surface antialiased overflow-hidden">
+<!-- SideNavBar Shell -->
+<aside class="fixed left-0 top-0 h-full w-64 flex flex-col bg-surface-container-lowest border-r border-border z-50">
+<div class="px-md mt-md mb-lg">
+<div class="flex items-center gap-sm p-sm rounded-xl bg-surface-container-low border border-border/40">
+<div class="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-white">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">shield</span>
+</div>
+<div>
+<h2 class="text-label-md font-h4 text-primary leading-tight">RBAC Admin</h2>
+<p class="text-[10px] text-text-tertiary uppercase tracking-wider font-bold">Enterprise Tier</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 flex flex-col gap-1 px-sm overflow-y-auto custom-scrollbar">
+<!-- User Management Hierarchical -->
+<div class="flex flex-col">
+<a class="flex items-center justify-between px-md py-3 rounded-lg text-text-secondary hover:bg-fill-hover transition-all" href="#">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined">group</span>
+<span class="text-label-md font-label-md">User Management</span>
+</div>
+<span class="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
+</a>
+<div class="flex flex-col gap-1 ml-xl mt-1">
+<a class="flex items-center px-md py-2 rounded-lg text-text-secondary hover:bg-fill-hover transition-all text-body-sm" href="#">All Users</a>
+<a class="flex items-center px-md py-2 rounded-lg text-text-secondary hover:bg-fill-hover transition-all text-body-sm" href="#">Groups &amp; Teams</a>
+<a class="flex items-center px-md py-2 rounded-lg text-text-secondary hover:bg-fill-hover transition-all text-body-sm" href="#">Invitations</a>
+</div>
+</div>
+<!-- Role Definitions -->
+<a class="flex items-center gap-md px-md py-3 rounded-lg text-text-secondary hover:bg-fill-hover transition-all" href="#">
+<span class="material-symbols-outlined">badge</span>
+<span class="text-label-md font-label-md">Role Definitions</span>
+</a>
+<!-- Permissions -->
+<a class="flex items-center gap-md px-md py-3 rounded-lg text-text-secondary hover:bg-fill-hover transition-all" href="#">
+<span class="material-symbols-outlined">lock_person</span>
+<span class="text-label-md font-label-md">Permissions</span>
+</a>
+<!-- Audit Logs -->
+<a class="flex items-center gap-md px-md py-3 rounded-lg text-text-secondary hover:bg-fill-hover transition-all" href="#">
+<span class="material-symbols-outlined">history</span>
+<span class="text-label-md font-label-md">Audit Logs</span>
+</a>
+</nav>
+<div class="px-md mt-auto pt-md border-t border-border/50 pb-md">
+<button class="w-full flex items-center justify-center gap-sm bg-primary text-white py-2.5 rounded-lg text-label-md font-label-md shadow-sm hover:brightness-110 transition-all mb-md">
+<span class="material-symbols-outlined text-[18px]">add</span>
+            Create New Role
+        </button>
+<div class="flex flex-col gap-1">
+<a class="flex items-center gap-md px-md py-2 rounded-lg text-text-tertiary hover:text-text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">help_outline</span>
+<span class="text-label-sm font-label-sm">Support</span>
+</a>
+<a class="flex items-center gap-md px-md py-2 rounded-lg text-text-tertiary hover:text-text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">description</span>
+<span class="text-label-sm font-label-sm">Documentation</span>
+</a>
+</div>
+<!-- User Context in Sidebar -->
+<div class="mt-sm p-sm bg-surface-container-low rounded-lg flex items-center gap-md">
+<div class="w-8 h-8 rounded-full overflow-hidden bg-primary-fixed flex items-center justify-center border border-border">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a corporate system administrator" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAApMd4MZXye7su0EcpOdH1uYYUVoCbE-Luo1a6d2W38UvwPhxwQ9oKBqIz0qQjpic8M_cQ4bBvUEItaD6UuQD1INNvmPsfJ2QLOLhMXRR7TLU6LcccBBr89FgzktGneLg75gQO1ixoSNsbxUIhi7P9RKMOP4kH_bA9bWh8GN5Kl0h5dZAkAFUFmkRHSAqNwLa6JS7YKCprhoyBz4swWT3sBxuMLFPLDgsLCcIMAeJlmKBcs9pMvSQw"/>
+</div>
+<div class="flex flex-col overflow-hidden">
+<span class="text-label-sm font-label-sm text-on-surface truncate">Admin Avatar</span>
+<span class="text-[10px] text-text-tertiary">Superuser</span>
+</div>
+</div>
+</div>
+<!-- Collapsible Handle Button -->
+<button class="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white border border-border rounded-full flex items-center justify-center shadow-sm cursor-pointer hover:text-primary transition-colors z-50">
+<span class="material-symbols-outlined text-[16px]">chevron_left</span>
+</button>
+</aside>
+<!-- TopNavBar Shell -->
+<header class="fixed top-0 left-64 right-0 h-14 flex justify-between items-center px-lg bg-white border-b border-border z-40">
+<div class="flex items-center gap-md">
+<span class="text-h4 font-h4 font-bold text-primary">AccessManager Pro</span>
+<nav class="hidden md:flex items-center gap-lg ml-xl">
+<a class="text-text-secondary hover:text-primary transition-colors text-label-md font-label-md" href="#">Docs</a>
+<a class="text-text-secondary hover:text-primary transition-colors text-label-md font-label-md" href="#">API</a>
+<a class="text-text-secondary hover:text-primary transition-colors text-label-md font-label-md" href="#">Help</a>
+</nav>
+</div>
+<div class="flex items-center gap-md">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary text-[18px]">search</span>
+<input class="w-64 pl-10 pr-4 py-1.5 bg-fill-hover border-none rounded-lg text-body-sm focus:ring-2 focus:ring-primary/20 outline-none" placeholder="Search resources or users..." type="text"/>
+</div>
+<div class="flex items-center gap-sm border-l border-border pl-md ml-sm">
+<button class="p-2 hover:bg-fill-hover rounded-lg transition-colors">
+<span class="material-symbols-outlined text-text-secondary">contrast</span>
+</button>
+<button class="p-2 hover:bg-fill-hover rounded-lg transition-colors relative">
+<span class="material-symbols-outlined text-text-secondary">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<button class="p-2 hover:bg-fill-hover rounded-lg transition-colors">
+<span class="material-symbols-outlined text-text-secondary">account_circle</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas (The Error State) -->
+<main class="ml-64 pt-14 h-screen overflow-y-auto bg-background flex items-center justify-center relative">
+<!-- Atmospheric Grid Background -->
+<div class="absolute inset-0 opacity-[0.03] pointer-events-none" style="background-image: radial-gradient(circle at 2px 2px, #0047cf 1px, transparent 0); background-size: 32px 32px;"></div>
+<div class="max-w-xl w-full px-lg py-xl text-center z-10">
+<!-- Asymmetric Error Card -->
+<div class="bg-white rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border p-2xl relative overflow-hidden group">
+<!-- Visual Token Accent -->
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary-fixed opacity-10 rounded-bl-full -mr-16 -mt-16 transition-transform group-hover:scale-110 duration-500"></div>
+<div class="flex flex-col items-center">
+<!-- Access Denied Illustration Area -->
+<div class="w-48 h-48 mb-xl relative">
+<div class="absolute inset-0 bg-primary-fixed rounded-full animate-pulse opacity-40 blur-2xl"></div>
+<div class="relative w-full h-full flex items-center justify-center">
+<span class="material-symbols-outlined text-[120px] text-primary" style="font-variation-settings: 'wght' 200;">lock_reset</span>
+<div class="absolute bottom-4 right-4 bg-error text-on-error w-12 h-12 rounded-full flex items-center justify-center border-4 border-white shadow-lg">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">block</span>
+</div>
+</div>
+</div>
+<!-- Typography Hierarchy -->
+<h1 class="font-h1 text-h1 text-on-surface mb-xs">403</h1>
+<h2 class="font-h3 text-h3 text-text-primary mb-md">Access Forbidden</h2>
+<p class="font-body-lg text-body-lg text-text-secondary max-w-sm mx-auto mb-2xl">
+                    Sorry, you do not have permission to access this page. This resource is restricted to specific administrative roles.
+                </p>
+<!-- Action Set -->
+<div class="flex flex-col sm:flex-row gap-md w-full justify-center">
+<button class="px-xl py-3 bg-primary text-on-primary font-label-md text-label-md rounded-lg flex items-center justify-center gap-sm hover:shadow-lg hover:shadow-primary/20 transition-all duration-300">
+<span class="material-symbols-outlined text-[20px]">arrow_back</span>
+                        Back to Home
+                    </button>
+<button class="px-xl py-3 bg-white border border-border text-primary font-label-md text-label-md rounded-lg flex items-center justify-center gap-sm hover:bg-surface-container-low transition-all duration-300">
+<span class="material-symbols-outlined text-[20px]">request_quote</span>
+                        Apply for Access
+                    </button>
+</div>
+</div>
+<!-- Subtle Decorative Elements -->
+<div class="mt-2xl pt-xl border-t border-border flex items-center justify-between text-text-tertiary">
+<div class="flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px]">info</span>
+<span class="text-label-sm font-label-sm">Request ID: ERR-403-9921-X</span>
+</div>
+<a class="text-label-sm font-label-sm text-link hover:underline" href="#">Contact System Admin</a>
+</div>
+</div>
+<!-- Secondary Contextual Help -->
+<div class="mt-lg grid grid-cols-2 gap-md opacity-70">
+<div class="p-md bg-surface-container-lowest border border-border rounded-lg text-left flex items-start gap-md">
+<span class="material-symbols-outlined text-primary">account_tree</span>
+<div>
+<p class="font-label-md text-label-md text-on-surface">Need a higher role?</p>
+<p class="font-body-sm text-body-sm text-text-secondary">Check role hierarchies in documentation.</p>
+</div>
+</div>
+<div class="p-md bg-surface-container-lowest border border-border rounded-lg text-left flex items-start gap-md">
+<span class="material-symbols-outlined text-primary">history_edu</span>
+<div>
+<p class="font-label-md text-label-md text-on-surface">Recent Activity</p>
+<p class="font-body-sm text-body-sm text-text-secondary">View your past permission requests.</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // Simple micro-interactions for buttons
+        const primaryBtn = document.querySelector('button.bg-primary');
+        if (primaryBtn) {
+            primaryBtn.addEventListener('mouseenter', () => {
+                primaryBtn.style.transform = 'translateY(-2px)';
+            });
+            primaryBtn.addEventListener('mouseleave', () => {
+                primaryBtn.style.transform = 'translateY(0)';
+            });
+        }
+
+        // Toggle Expand/Collapse animation for hierarchical nav (simulation)
+        document.querySelectorAll('aside nav div > a').forEach(icon => {
+            icon.addEventListener('click', function(e) {
+                const subMenu = this.nextElementSibling;
+                if (subMenu && subMenu.classList.contains('flex-col')) {
+                    e.preventDefault();
+                    const arrow = this.querySelector('.material-symbols-outlined:last-child');
+                    if (subMenu.classList.contains('hidden')) {
+                        subMenu.classList.remove('hidden');
+                        if(arrow) arrow.style.transform = 'rotate(0deg)';
+                    } else {
+                        subMenu.classList.add('hidden');
+                        if(arrow) arrow.style.transform = 'rotate(-90deg)';
+                    }
+                }
+            });
+        });
+    });
+</script>
+</body></html>

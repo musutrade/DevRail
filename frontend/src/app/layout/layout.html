@@ -1,0 +1,179 @@
+<a
+  class="skip-link"
+  href="#main-content"
+  [attr.inert]="sidebarOpen() ? '' : null"
+  (click)="focusMainContent($event)"
+  >跳到主要内容</a
+>
+<!-- 主布局:左侧固定侧边栏 + 顶部导航栏 + 内容区 -->
+<div class="app-shell">
+  <!-- ============ 侧边栏 ============ -->
+  <aside
+    #sidebarPanel
+    id="app-sidebar"
+    class="sidebar"
+    [class.collapsed]="collapsed()"
+    [class.open]="sidebarOpen()"
+    aria-label="主导航"
+    tabindex="-1"
+  >
+    <!-- Logo -->
+    <div class="sidebar-logo">
+      <div class="brand-card">
+        <div class="brand-icon">
+          <mat-icon fontSet="material-symbols-outlined" class="filled">shield</mat-icon>
+        </div>
+        <div class="brand-text" [class.hidden]="collapsed()">
+          <h2 [attr.title]="appConfig.appName">{{ appConfig.appName }}</h2>
+          <p>{{ appConfig.appShortName }}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 导航 -->
+    <nav class="sidebar-nav custom-scrollbar">
+      @for (item of navigationItems; track item.id) {
+        @if (canAccess(item)) {
+          @if (item.kind === 'group') {
+            <div class="nav-group">
+              <button
+                type="button"
+                class="nav-item"
+                [class.justify-center]="collapsed()"
+                [class.active]="isNavigationActive(item)"
+                [attr.aria-expanded]="isGroupExpanded(item.id)"
+                [attr.aria-controls]="'nav-group-' + item.id"
+                (click)="toggleNavigationGroup(item)"
+                [attr.title]="collapsed() ? item.label : null"
+              >
+                <mat-icon fontSet="material-symbols-outlined">{{ item.icon }}</mat-icon>
+                <span class="nav-label" [class.hidden]="collapsed()">{{ item.label }}</span>
+                <mat-icon
+                  class="nav-caret"
+                  [class.hidden]="collapsed()"
+                  [class.rotated]="isGroupExpanded(item.id)"
+                  >expand_more</mat-icon
+                >
+              </button>
+              <div
+                class="nav-sub"
+                [id]="'nav-group-' + item.id"
+                [class.hidden]="collapsed() || !isGroupExpanded(item.id)"
+              >
+                @for (child of item.children; track child.id) {
+                  @if (canAccess(child)) {
+                    <a
+                      [routerLink]="child.route"
+                      routerLinkActive="sub-active"
+                      ariaCurrentWhenActive="page"
+                      class="nav-sub-item"
+                      (click)="closeMobileNavigation()"
+                    >
+                      <span>{{ child.label }}</span>
+                    </a>
+                  }
+                }
+              </div>
+            </div>
+          } @else {
+            <a
+              [routerLink]="item.route"
+              routerLinkActive="nav-active"
+              ariaCurrentWhenActive="page"
+              class="nav-item"
+              [class.justify-center]="collapsed()"
+              (click)="closeMobileNavigation()"
+              [attr.title]="collapsed() ? item.label : null"
+            >
+              <mat-icon fontSet="material-symbols-outlined">{{ item.icon }}</mat-icon>
+              <span class="nav-label" [class.hidden]="collapsed()">{{ item.label }}</span>
+            </a>
+          }
+        }
+      }
+    </nav>
+
+    <!-- 折叠按钮 -->
+    <button
+      type="button"
+      class="sidebar-toggle"
+      (click)="$event.stopPropagation(); toggleSidebar()"
+      [attr.aria-label]="collapsed() ? '展开侧边栏' : '收起侧边栏'"
+    >
+      <mat-icon>{{ collapsed() ? 'chevron_right' : 'chevron_left' }}</mat-icon>
+    </button>
+  </aside>
+  @if (sidebarOpen()) {
+    <button
+      type="button"
+      class="sidebar-backdrop"
+      aria-label="关闭菜单"
+      (click)="closeMobileNavigation(true)"
+    ></button>
+  }
+
+  <!-- ============ 顶栏 ============ -->
+  <header class="topbar" [attr.inert]="sidebarOpen() ? '' : null">
+    <div class="topbar-left">
+      <button
+        #mobileMenuButton
+        type="button"
+        class="icon-btn mobile-menu-btn"
+        (click)="toggleMobileNavigation()"
+        [attr.aria-expanded]="sidebarOpen()"
+        aria-controls="app-sidebar"
+        [attr.aria-label]="sidebarOpen() ? '关闭菜单' : '打开菜单'"
+      >
+        <mat-icon>menu</mat-icon>
+      </button>
+      <span class="topbar-title" [attr.title]="appConfig.appName">{{ appConfig.appName }}</span>
+    </div>
+
+    <div class="topbar-right">
+      <button
+        type="button"
+        class="icon-btn"
+        (click)="toggleTheme()"
+        [attr.aria-label]="isDark() ? '切换到亮色模式' : '切换到暗色模式'"
+      >
+        <mat-icon>{{ isDark() ? 'light_mode' : 'contrast' }}</mat-icon>
+      </button>
+      <div class="topbar-divider"></div>
+      <button
+        type="button"
+        mat-icon-button
+        [matMenuTriggerFor]="userMenu"
+        class="user-chip"
+        aria-label="账户菜单"
+      >
+        <span class="avatar">{{ auth.currentUser()?.displayName?.charAt(0) ?? 'A' }}</span>
+        <span class="user-meta hide-sm">
+          <span class="user-name">{{ auth.currentUser()?.displayName ?? '账户' }}</span>
+          <span class="user-role">{{ auth.currentUser()?.roles?.[0] ?? '用户' }}</span>
+        </span>
+      </button>
+      <mat-menu #userMenu="matMenu" xPosition="before" class="user-menu">
+        <button type="button" mat-menu-item [routerLink]="['/security']">
+          <mat-icon>security</mat-icon><span>账号安全</span>
+        </button>
+        <button type="button" mat-menu-item (click)="openChangePassword()">
+          <mat-icon>password</mat-icon><span>修改密码</span>
+        </button>
+        <button type="button" mat-menu-item (click)="logout()">
+          <mat-icon>logout</mat-icon><span>退出登录</span>
+        </button>
+      </mat-menu>
+    </div>
+  </header>
+
+  <!-- ============ 内容区 ============ -->
+  <main
+    #mainContent
+    id="main-content"
+    class="content"
+    tabindex="-1"
+    [attr.inert]="sidebarOpen() ? '' : null"
+  >
+    <router-outlet />
+  </main>
+</div>

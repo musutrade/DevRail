@@ -1,0 +1,123 @@
+logging {
+  level  = "info"
+  format = "json"
+}
+
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "5s"
+}
+
+discovery.relabel "application_logs" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_label_observability_logs"]
+    regex         = "enabled"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_observability_service"]
+    target_label  = "service_name"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_observability_environment"]
+    target_label  = "environment"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    replacement   = "$1"
+    target_label  = "container"
+  }
+
+  rule {
+    replacement  = "docker"
+    target_label = "source"
+  }
+}
+
+loki.source.docker "application_logs" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.application_logs.output
+  forward_to = [loki.process.application_json.receiver]
+}
+
+local.file_match "application_json" {
+  path_targets = [{
+    __path__ = "/var/log/application/*.jsonl",
+    source   = "file",
+  }]
+}
+
+loki.source.file "application_json" {
+  targets       = local.file_match.application_json.targets
+  forward_to    = [loki.process.application_json.receiver]
+  tail_from_end = true
+}
+
+loki.process "application_json" {
+  forward_to = [loki.write.local.receiver]
+
+  stage.json {
+    expressions = {
+      timestamp    = "timestamp",
+      level        = "level",
+      service_name = "span.service",
+      environment  = "span.environment",
+      version      = "span.version",
+      trace_id     = "fields.trace_id",
+      user_id      = "span.user_id",
+      event         = "fields.event",
+      method        = "span.method",
+      route         = "span.route",
+      status_code   = "fields.status_code",
+      latency_ms    = "fields.latency_ms",
+      error_code    = "fields.error_code",
+    }
+  }
+
+  stage.timestamp {
+    source = "timestamp"
+    format = "RFC3339Nano"
+  }
+
+  stage.labels {
+    values = {
+      service_name = "",
+      environment  = "",
+      level        = "",
+    }
+  }
+
+  stage.structured_metadata {
+    values = {
+      version     = "",
+      trace_id    = "",
+      user_id     = "",
+      event       = "",
+      method      = "",
+      route       = "",
+      status_code = "",
+      latency_ms  = "",
+      error_code  = "",
+    }
+  }
+
+  stage.truncate {
+    rule {
+      limit       = "256KiB"
+      suffix      = "...[日志已截断]"
+      source_type = "line"
+    }
+  }
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

@@ -1,0 +1,114 @@
+.department-table {
+  min-width: 820px;
+
+  th:first-child {
+    width: 42%;
+  }
+
+  code {
+    padding: 3px 6px;
+    border-radius: var(--ui-radius-sm);
+    background: var(--ui-color-surface-muted);
+    color: var(--ui-color-text-secondary);
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .department-table {
+    .th-actions,
+    .td-actions {
+      position: sticky;
+      z-index: 1;
+      right: 0;
+      background: var(--ui-color-surface-panel);
+      box-shadow: -1px 0 0 var(--ui-color-border);
+    }
+
+    .th-actions {
+      background: var(--ui-color-surface-subtle);
+    }
+
+    tbody tr:hover .td-actions {
+      background: var(--ui-color-hover);
+    }
+  }
+}
+
+.department-name-cell {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tree-toggle,
+.tree-spacer {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+}
+
+.tree-toggle {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-color-text-tertiary);
+  cursor: pointer;
+
+  mat-icon {
+    width: 20px;
+    height: 20px;
+    font-size: 20px;
+  }
+}
+
+.department-icon {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-color-success-soft);
+  color: var(--mat-sys-success);
+
+  &.root {
+    background: var(--ui-color-primary-soft);
+    color: var(--mat-sys-primary);
+  }
+
+  mat-icon {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+  }
+}
+
+.department-identity {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+
+  strong {
+    overflow: hidden;
+    color: var(--ui-color-text-primary);
+    font-size: 14px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  small {
+    color: var(--ui-color-text-tertiary);
+    font-size: 11px;
+  }
+}
+
+.table-empty {
+  height: 160px;
+  text-align: center;
+  color: var(--ui-color-text-tertiary);
+}

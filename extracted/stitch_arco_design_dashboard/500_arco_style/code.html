@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>500 Internal Server Error - RBAC Admin</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary-fixed": "#191c1e",
+                    "surface-variant": "#d8e3f7",
+                    "surface-container-low": "#eff4ff",
+                    "link": "#165DFF",
+                    "on-surface": "#111c2a",
+                    "tertiary-container": "#c43e00",
+                    "on-secondary-container": "#606365",
+                    "success": "#00B42A",
+                    "on-tertiary-fixed-variant": "#832700",
+                    "text-tertiary": "#86909C",
+                    "surface-tint": "#004fe5",
+                    "background": "#f8f9ff",
+                    "on-error-container": "#93000a",
+                    "on-tertiary": "#ffffff",
+                    "secondary-fixed": "#e1e2e4",
+                    "on-background": "#111c2a",
+                    "outline": "#737688",
+                    "bg-white": "#FFFFFF",
+                    "on-primary-fixed-variant": "#003bb0",
+                    "tertiary-fixed": "#ffdbd0",
+                    "on-primary-fixed": "#00164f",
+                    "primary-container": "#165dff",
+                    "on-secondary-fixed-variant": "#444749",
+                    "danger": "#F53F3F",
+                    "primary": "#0047cf",
+                    "surface-dim": "#cfdbee",
+                    "secondary-fixed-dim": "#c5c6c8",
+                    "surface-container-high": "#dee9fc",
+                    "warning": "#FF7D00",
+                    "secondary-container": "#dee0e2",
+                    "error-container": "#ffdad6",
+                    "surface-container-lowest": "#ffffff",
+                    "inverse-primary": "#b6c4ff",
+                    "surface": "#f8f9ff",
+                    "tertiary-fixed-dim": "#ffb59d",
+                    "on-tertiary-fixed": "#390c00",
+                    "on-primary-container": "#eeefff",
+                    "inverse-on-surface": "#eaf1ff",
+                    "primary-fixed": "#dce1ff",
+                    "on-error": "#ffffff",
+                    "secondary": "#5c5f60",
+                    "text-secondary": "#4E5969",
+                    "surface-container-highest": "#d8e3f7",
+                    "error": "#ba1a1a",
+                    "text-primary": "#1D2129",
+                    "on-surface-variant": "#434656",
+                    "fill-hover": "#F2F3F5",
+                    "inverse-surface": "#263140",
+                    "on-tertiary-container": "#ffece6",
+                    "surface-container": "#e5eeff",
+                    "tertiary": "#9a2f00",
+                    "on-primary": "#ffffff",
+                    "outline-variant": "#c3c5d9",
+                    "primary-fixed-dim": "#b6c4ff",
+                    "border": "#E5E6EB",
+                    "on-secondary": "#ffffff",
+                    "surface-bright": "#f8f9ff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "gutter": "16px",
+                    "xs": "4px",
+                    "md": "16px",
+                    "container-max": "1200px",
+                    "lg": "24px",
+                    "sm": "8px",
+                    "xl": "32px",
+                    "2xl": "48px"
+            },
+            "fontFamily": {
+                    "h4": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "body-md": ["Inter"],
+                    "h1": ["Inter"],
+                    "label-md": ["Inter"],
+                    "h3": ["Inter"],
+                    "h1-mobile": ["Inter"],
+                    "h2": ["Inter"]
+            },
+            "fontSize": {
+                    "h4": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "label-sm": ["12px", {"lineHeight": "20px", "fontWeight": "500"}],
+                    "body-sm": ["12px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "body-md": ["14px", {"lineHeight": "22px", "fontWeight": "400"}],
+                    "h1": ["36px", {"lineHeight": "44px", "fontWeight": "600"}],
+                    "label-md": ["14px", {"lineHeight": "22px", "fontWeight": "500"}],
+                    "h3": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "h1-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                    "h2": ["30px", {"lineHeight": "38px", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .error-ghost {
+            animation: float 6s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e5e6eb; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-background text-on-background">
+<!-- SideNavBar Shell (Updated to match SCREEN_14) -->
+<aside class="fixed left-0 top-0 bottom-0 w-64 flex flex-col py-md z-30 bg-surface-container-lowest border-r border-border">
+<div class="px-md mb-lg">
+<div class="flex items-center gap-sm p-sm rounded-xl bg-surface-container-low border border-border/40">
+<div class="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-white">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">shield</span>
+</div>
+<div>
+<h2 class="text-label-md font-h4 text-primary leading-tight">RBAC Admin</h2>
+<p class="text-[10px] text-text-tertiary uppercase tracking-wider font-bold">Enterprise Tier</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 flex flex-col gap-1 px-sm overflow-y-auto custom-scrollbar">
+<!-- User Management -->
+<div class="flex flex-col">
+<a class="flex items-center justify-between px-md py-3 rounded-lg text-text-secondary hover:bg-fill-hover transition-all" href="#">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined">group</span>
+<span class="text-label-md font-label-md">User Management</span>
+</div>
+<span class="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
+</a>
+<div class="flex flex-col gap-1 ml-xl mt-1">
+<a class="flex items-center px-md py-2 rounded-lg text-text-secondary hover:bg-fill-hover transition-all text-body-sm" href="#">All Users</a>
+<a class="flex items-center px-md py-2 rounded-lg text-text-secondary hover:bg-fill-hover transition-all text-body-sm" href="#">Groups &amp; Teams</a>
+</div>
+</div>
+<!-- Role Definitions -->
+<a class="flex items-center gap-md px-md py-3 rounded-lg text-text-secondary hover:bg-fill-hover transition-all" href="#">
+<span class="material-symbols-outlined">badge</span>
+<span class="text-label-md font-label-md">Role Definitions</span>
+</a>
+<!-- Permissions -->
+<a class="flex items-center gap-md px-md py-3 rounded-lg text-text-secondary hover:bg-fill-hover transition-all" href="#">
+<span class="material-symbols-outlined">rule</span>
+<span class="text-label-md font-label-md">Permissions</span>
+</a>
+<!-- Audit Logs -->
+<a class="flex items-center gap-md px-md py-3 rounded-lg text-text-secondary hover:bg-fill-hover transition-all" href="#">
+<span class="material-symbols-outlined">history</span>
+<span class="text-label-md font-label-md">Audit Logs</span>
+</a>
+</nav>
+<div class="px-md mt-auto pt-md border-t border-border/50">
+<div class="flex flex-col gap-1">
+<a class="flex items-center gap-md px-md py-2 rounded-lg text-text-tertiary hover:text-text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span class="text-label-sm font-label-sm">Settings</span>
+</a>
+<a class="flex items-center gap-md px-md py-2 rounded-lg text-text-tertiary hover:text-text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">help_outline</span>
+<span class="text-label-sm font-label-sm">Support</span>
+</a>
+</div>
+</div>
+<!-- Collapsible Handle Button -->
+<button class="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white border border-border rounded-full flex items-center justify-center shadow-sm cursor-pointer hover:text-primary transition-colors z-40">
+<span class="material-symbols-outlined text-[16px]">chevron_left</span>
+</button>
+</aside>
+<!-- TopNavBar Shell (Updated to match SCREEN_14) -->
+<header class="fixed top-0 left-64 right-0 h-14 flex justify-between items-center px-lg bg-white border-b border-border z-40">
+<div class="flex items-center gap-md flex-1">
+<div class="relative w-full max-w-sm">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary text-[20px]">search</span>
+<input class="w-full pl-10 pr-4 py-1.5 bg-fill-hover border-none rounded-lg text-body-sm focus:ring-2 focus:ring-primary/20 outline-none" placeholder="Global Search..." type="text"/>
+</div>
+<nav class="hidden md:flex items-center gap-lg ml-xl">
+<a class="text-text-secondary hover:text-primary transition-colors text-label-md font-label-md" href="#">Docs</a>
+<a class="text-text-secondary hover:text-primary transition-colors text-label-md font-label-md" href="#">API</a>
+<a class="text-text-secondary hover:text-primary transition-colors text-label-md font-label-md" href="#">Help</a>
+</nav>
+</div>
+<div class="flex items-center gap-md">
+<button class="p-2 rounded-lg hover:bg-fill-hover transition-colors">
+<span class="material-symbols-outlined text-text-secondary">contrast</span>
+</button>
+<button class="p-2 rounded-lg hover:bg-fill-hover transition-colors relative">
+<span class="material-symbols-outlined text-text-secondary">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-danger rounded-full border-2 border-white"></span>
+</button>
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center overflow-hidden border border-border cursor-pointer">
+<img class="w-full h-full object-cover" data-alt="Admin avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBl_YQf03KFVLHr3Dfd_EdbS9DO79w9RCDpGovnWXywHe9ysh8H0RO16c81yzMMmDQMyqp8HWDnuKk3tcmtAz0o-Im_sHLop2Fv895knbEJ6YtBeqV4ojuyOu-h55yUUJhRIY4Hv00t8ft2Go1u1bUFpXKtRZ1fvazulz75pQntU6GRYt5-OZZR8wmqUytO8lBhBNbby-b4nVM5xdOj7nY5S_vRijSdEpsKKRtDCW6ABIbiMQlrBdc6"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-64 pt-14 min-h-screen flex items-center justify-center p-8 bg-surface">
+<div class="max-w-3xl w-full flex flex-col items-center text-center">
+<!-- Error Illustration -->
+<div class="relative w-80 h-80 mb-8 error-ghost">
+<div class="absolute inset-0 bg-primary/5 rounded-full blur-3xl"></div>
+<img class="w-full h-full object-contain relative z-10" data-alt="Critical system failure illustration" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAyfxwF4buXDeW4dt3lL---xvnLF3lUPDjLeoquU0d0V3xjZe4Zc1g489q-Hl3FOpJFqEH0PuDYWlG3Dknddd654OKv7Pcqosa6sGa_bf2FB6B8--a6AxHeaHRBLSQ3EpDf4cMCeHScb0yoLZuhVsydVsfZ0JPjmm7XFuC0vbSsYn-lyEcdrjV9yKaH6H8LHWT_VCSQmZc__zwLaqZLegVDFh0Qsd-b1-eLuEk6LSh7pIfbHDPBLyvW"/>
+</div>
+<!-- Error Content -->
+<h2 class="font-h1 text-h1 text-on-surface mb-4 tracking-tight">500</h2>
+<h3 class="font-h3 text-h3 text-on-surface mb-4">Internal Server Error</h3>
+<p class="font-body-lg text-body-lg text-text-secondary max-w-lg mb-10">
+                Something went wrong on our side. Please try again later or contact support if the issue persists. Our engineering team has been notified.
+            </p>
+<!-- Action Buttons -->
+<div class="flex flex-col sm:flex-row items-center gap-4">
+<button class="px-8 py-2.5 bg-primary text-on-primary font-label-md text-label-md rounded-lg hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center gap-2" onclick="window.location.reload()">
+<span class="material-symbols-outlined text-[18px]">refresh</span>
+                    Refresh Page
+                </button>
+<button class="px-8 py-2.5 bg-white border border-border text-on-surface font-label-md text-label-md rounded-lg hover:bg-fill-hover hover:border-outline transition-all duration-200 flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">support_agent</span>
+                    Contact Support
+                </button>
+</div>
+<!-- Detailed Status Footer -->
+<div class="mt-16 pt-8 border-t border-border w-full">
+<div class="flex flex-col sm:flex-row justify-between items-center gap-4 text-label-sm font-label-sm text-text-tertiary">
+<div class="flex items-center gap-4">
+<span>Status: <span class="text-danger font-semibold">Critical</span></span>
+<span>Incident ID: <code class="bg-surface-container px-2 py-0.5 rounded cursor-pointer hover:bg-surface-container-high transition-colors" id="incidentId">ERR-X92-RBAC</code></span>
+</div>
+<a class="hover:text-primary underline transition-colors" href="#">System Status Page</a>
+</div>
+</div>
+</div>
+</main>
+<!-- Micro-interaction Script -->
+<script>
+        // Copy incident ID to clipboard
+        document.getElementById('incidentId').addEventListener('click', function() {
+            const text = this.innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = this.innerText;
+                this.innerText = 'Copied!';
+                this.classList.add('text-success');
+                setTimeout(() => {
+                    this.innerText = originalText;
+                    this.classList.remove('text-success');
+                }, 2000);
+            });
+        });
+    </script>
+</body></html>

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 2,
+  "framework": {
+    "name": "arc-admin",
+    "version": "v2.3.0",
+    "initializedVersion": "v2.3.0"
+  },
+  "project": {
+    "slug": "devrail",
+    "title": "DevRail",
+    "shortName": "DevRail",
+    "database": "devrail",
+    "permissionPrefix": "devrail",
+    "apiBaseUrl": "/api/v1"
+  }
+}

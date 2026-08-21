@@ -1,0 +1,8 @@
+services:
+  grafana:
+    environment:
+      GRAFANA_ALERT_CONTACT_TYPE: ${GRAFANA_ALERT_CONTACT_TYPE:?请设置 GRAFANA_ALERT_CONTACT_TYPE}
+      GRAFANA_ALERT_WEBHOOK_URL: ${GRAFANA_ALERT_WEBHOOK_URL:?请设置 GRAFANA_ALERT_WEBHOOK_URL}
+    volumes:
+      - ./grafana/provisioning/alerting/production/contact-points.yaml:/etc/grafana/provisioning/alerting/production-contact-points.yaml:ro
+      - ./grafana/provisioning/alerting/production/notification-policy.yaml:/etc/grafana/provisioning/alerting/production-notification-policy.yaml:ro
