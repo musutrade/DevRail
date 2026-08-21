@@ -1,0 +1,90 @@
+name: Supply chain security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 2 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-dependencies:
+    name: Rust dependency policy
+    runs-on: self-hosted
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Audit RustSec advisories
+        uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: backend
+          # SQLx keeps its inactive MySQL driver in Cargo.lock; the backend only enables PostgreSQL.
+          ignore: RUSTSEC-2023-0071
+      - name: Check licenses, sources, duplicates, and advisories
+        if: always()
+        uses: EmbarkStudios/cargo-deny-action@v2.1.1
+        env:
+          # The action runs in Alpine with this musl toolchain preinstalled.
+          RUSTUP_TOOLCHAIN: 1.85.0-x86_64-unknown-linux-musl
+        with:
+          manifest-path: backend/Cargo.toml
+          command: check
+          command-arguments: advisories bans licenses sources
+
+  container-images:
+    name: Container scan and SBOM
+    runs-on: self-hosted
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: arc-admin-backend:ci
+            dockerfile: backend/Dockerfile
+            artifact: arc-admin-backend.spdx.json
+          - image: arc-admin-frontend:ci
+            dockerfile: frontend/Dockerfile
+            artifact: arc-admin-frontend.spdx.json
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build production image
+        id: build-image
+        run: docker build --file "${{ matrix.dockerfile }}" --tag "${{ matrix.image }}" .
+      - name: Scan high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+      - name: Generate SPDX JSON SBOM
+        if: ${{ always() && steps.build-image.outcome == 'success' }}
+        uses: anchore/sbom-action@v0.24.0
+        with:
+          image: ${{ matrix.image }}
+          format: spdx-json
+          output-file: ${{ matrix.artifact }}
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Upload SBOM
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: warn
+          retention-days: 30

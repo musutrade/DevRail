@@ -1,0 +1,207 @@
+# ============================================================
+# auditor 审计规则配置
+# 路径均相对于项目根目录；可用环境变量 BACKEND_DIR / FRONTEND_DIR 覆盖
+# ============================================================
+version = 2
+
+[engine]
+ignore_filename = ".auditignore"
+json_report_filename = "review_context.json"
+markdown_report_filename = "review_context.md"
+markdown_max_bytes = 4096
+markdown_occurrences_per_rule = 3
+
+[engine.comment_syntax.rs]
+line = ["//"]
+block = [{ start = "/*", end = "*/", nested = true }]
+strings = [
+  { start = 'r###"', end = '"###' },
+  { start = 'r##"', end = '"##' },
+  { start = 'r#"', end = '"#' },
+  { start = 'r"', end = '"' },
+  { start = '"', end = '"', escape = '\' },
+]
+
+[engine.comment_syntax.sql]
+line = ["--"]
+block = [{ start = "/*", end = "*/" }]
+strings = [
+  { start = "'", end = "'" },
+  { start = '"', end = '"' },
+]
+
+[engine.comment_syntax.ts]
+line = ["//"]
+block = [{ start = "/*", end = "*/" }]
+strings = [
+  { start = "'", end = "'", escape = '\' },
+  { start = '"', end = '"', escape = '\' },
+  { start = "`", end = "`", escape = '\' },
+]
+
+[engine.comment_syntax.tmpl]
+line = ["//"]
+block = [{ start = "/*", end = "*/", nested = true }]
+strings = [
+  { start = 'r#"', end = '"#' },
+  { start = '"', end = '"', escape = '\' },
+]
+
+[paths]
+backend = "backend"
+frontend = "frontend"
+
+exclude = ["target", "node_modules", "dist", ".git", "tools"]
+
+# ============================================================
+# 硬性约束：SQL 写操作只允许出现在 Repository / 迁移 / 测试层
+# 这是与"模板生成代码"兼容的关键：Repository 模板里本来就有
+# INSERT / UPDATE / .execute()，所以这里用 allowlist 放行写操作的家。
+# ============================================================
+[[hard_rules]]
+name = "SQL 写操作仅允许出现在 Repository/迁移/测试层"
+severity = "blocker"
+paths = ["backend"]
+extensions = ["rs", "sql"]
+patterns = [
+  '(?i)INSERT\s+INTO',
+  '(?i)UPDATE\s+(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_.]*)\s+SET',
+  '(?i)DELETE\s+FROM',
+  '(?i)DROP\s+TABLE',
+  '(?i)ALTER\s+TABLE',
+  '(?i)TRUNCATE',
+  '(?:sqlx\s*::\s*)?raw_sql\s*\(',
+  '(?:sqlx\s*::\s*)?QueryBuilder(?:\s*::<[^>]+>)?\s*::\s*new\s*\(',
+  '\.execute\s*\(',
+  '\.exec\s*\(',
+]
+allowlist = [
+  { kind = "path-prefix", path = "backend/src/repositories" },
+  { kind = "path-prefix", path = "backend/src/db.rs" },
+  { kind = "path-prefix", path = "backend/migrations" },
+  { kind = "path-prefix", path = "backend/tests" },
+  { kind = "path-prefix", path = "backend/src/seed" },
+]
+exclude_patterns = []
+
+# ============================================================
+# 架构分层审计
+# ============================================================
+[[arch_rules]]
+name = "Service 层不应包含 SQL 查询"
+layer = "service"
+paths = ["backend/src/services"]
+extensions = ["rs"]
+forbidden_patterns = [
+  'sqlx\s*::\s*(?:query|query_as|query_scalar|query_file|query_file_as|raw_sql)!?\s*\(',
+  '(?:sqlx\s*::\s*)?QueryBuilder(?:\s*::<[^>]+>)?\s*::\s*new\s*\(',
+]
+allowed_patterns = []
+suggestion = "请将 SQL 逻辑移至 Repository 层"
+allowlist = []
+exclude_patterns = []
+
+[[arch_rules]]
+name = "Handler 层不应包含 SQL 查询"
+layer = "handler"
+paths = ["backend/src/handlers"]
+extensions = ["rs"]
+forbidden_patterns = [
+  'sqlx\s*::\s*(?:query|query_as|query_scalar|query_file|query_file_as|raw_sql)!?\s*\(',
+  '(?:sqlx\s*::\s*)?QueryBuilder(?:\s*::<[^>]+>)?\s*::\s*new\s*\(',
+]
+allowed_patterns = []
+suggestion = "请将 SQL 逻辑移至 Repository 层"
+allowlist = []
+exclude_patterns = []
+
+[[arch_rules]]
+name = "Model 层不应包含业务逻辑（允许常见 trait impl）"
+layer = "model"
+paths = ["backend/src/models.rs"]
+extensions = ["rs"]
+forbidden_patterns = ['^impl\s+']
+allowed_patterns = ['^impl(?:<[^>]+>)?\s+(?:std::fmt::)?(?:Display|Debug|Clone|Copy|Default|PartialEq|Eq|PartialOrd|Ord|Hash|Serialize|Deserialize|From|Into|TryFrom|TryInto|Error|Deref|AsRef|AsMut|Drop|Send|Sync)\b']
+suggestion = "Model 应仅为纯数据结构，业务逻辑应放在 Service 层"
+allowlist = []
+exclude_patterns = []
+
+[[arch_rules]]
+name = "Component 不应直接注入 HttpClient"
+layer = "component"
+paths = ["frontend/src/app/pages", "frontend/src/app/layout"]
+extensions = ["ts"]
+forbidden_patterns = ['HttpClient']
+allowed_patterns = []
+suggestion = "请通过 Service 层调用 API"
+allowlist = []
+exclude_patterns = []
+
+[[arch_rules]]
+name = "Service 层不应操作 DOM"
+layer = "service"
+paths = ["frontend/src/app/core"]
+extensions = ["ts"]
+forbidden_patterns = ['@ViewChild', '@ViewChildren', 'ElementRef']
+allowed_patterns = []
+suggestion = "请将 DOM 操作逻辑移到 Component 层"
+allowlist = []
+exclude_patterns = []
+
+[[arch_rules]]
+name = "前端 Core 不应依赖业务 Feature"
+layer = "frontend-core"
+paths = ["frontend/src/app/core"]
+extensions = ["ts"]
+forbidden_patterns = [
+  '''from\s+['"][^'"]*features(?:/|['"])''',
+  '''import\s*\(\s*['"][^'"]*features(?:/|['"])''',
+]
+allowed_patterns = []
+suggestion = "请将业务组合放在 app.routes.ts、app.navigation.ts 或对应 features/<domain> 内，Core 只能提供基础能力"
+allowlist = []
+exclude_patterns = []
+
+[[arch_rules]]
+name = "Handler 层不应直接依赖 Repository"
+layer = "handler"
+paths = ["backend/src/handlers"]
+extensions = ["rs"]
+forbidden_patterns = ['crate::repositories(?:\b|::)']
+allowed_patterns = []
+suggestion = "请由 Handler 调用 Service，再由 Service 调用 Repository"
+allowlist = []
+exclude_patterns = []
+
+[[arch_rules]]
+name = "Repository 层不应依赖上层"
+layer = "repository"
+paths = ["backend/src/repositories"]
+extensions = ["rs"]
+forbidden_patterns = ['crate::(?:handlers|services)(?:\b|::)']
+allowed_patterns = []
+suggestion = "Repository 只负责持久化，不得依赖 Handler 或 Service"
+allowlist = []
+exclude_patterns = []
+
+[[hard_rules]]
+name = "代码模板不得引用过时框架"
+severity = "error"
+paths = ["codex-audit-pipeline/.codex/templates"]
+extensions = ["tmpl"]
+patterns = ['actix_web', 'actix-web', 'HttpResponse']
+allowlist = []
+exclude_patterns = []
+
+[[hard_rules]]
+name = "日志不得记录完整请求头或显式敏感字段"
+severity = "blocker"
+paths = ["backend/src"]
+extensions = ["rs"]
+patterns = [
+  'include_headers\s*\(\s*true\s*\)',
+  '(?is)(?:tracing\s*::\s*)?(?:trace|debug|info|warn|error)!\s*\([^;]*?\b(?:authorization|cookie|password|(?:access_|refresh_)?token|database_url)\s*=',
+  '(?is)(?:tracing\s*::\s*)?(?:trace|debug|info|warn|error)!\s*\([^;]*?[?%]\s*(?:authorization|cookie|password|(?:access_|refresh_)?token|database_url)\b',
+]
+allowlist = []
+exclude_patterns = []

@@ -1,0 +1,17 @@
+# 根级忽略（供未来 git init 使用）
+node_modules/
+dist/
+target/
+.env
+/deployment/.env.production
+/deployment/tls/
+/deployment/audit-archives/
+
+# 运行时产物
+codex-audit-pipeline/.codex/reports/
+/observability/logs/*.jsonl
+
+# 本地设计参考（不纳入版本控制）
+/QQ20260803-155453.png
+/QQ20260803-155605.png
+/stitch_arco_design_dashboard (1).zip

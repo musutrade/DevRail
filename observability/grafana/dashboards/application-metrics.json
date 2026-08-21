@@ -1,0 +1,90 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 0 },
+      "id": 1,
+      "targets": [
+        {
+          "expr": "sum(rate(arc_admin_http_requests_total[5m]))",
+          "legendFormat": "请求速率",
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP 请求速率",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 0 },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(arc_admin_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "P95",
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP P95 耗时",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "max": 1, "min": 0, "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 0 },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "arc_admin_db_pool_acquired / clamp_min(arc_admin_db_pool_size, 1)",
+          "legendFormat": "连接池占用率",
+          "refId": "A"
+        }
+      ],
+      "title": "PostgreSQL 连接池",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "mappings": [], "max": 1, "min": 0 }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 7 },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "min(probe_success{job=\"arc-admin-entry-probe\"})",
+          "legendFormat": "入口可用",
+          "refId": "A"
+        }
+      ],
+      "title": "内部入口探测",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 16, "x": 8, "y": 7 },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "sum(rate(arc_admin_http_requests_total{status=~\"5..\"}[5m])) / clamp_min(sum(rate(arc_admin_http_requests_total[5m])), 0.001)",
+          "legendFormat": "5xx 比例",
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP 5xx 比例",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 41,
+  "tags": ["arc-admin", "prometheus"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "应用运行指标",
+  "uid": "application-metrics",
+  "version": 1
+}

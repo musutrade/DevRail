@@ -1,0 +1,42 @@
+-- 放置于 backend/migrations/<UTC_TIMESTAMP>_add_{{PERMISSION_PREFIX}}_{{RESOURCE_NAME}}_permissions.sql
+-- 替换: {{PERMISSION_PREFIX}}, {{GROUP_NAME}}, {{GROUP_ICON}},
+--       {{RESOURCE_NAME}}, {{RESOURCE_LABEL}}
+-- 权限码固定使用 <业务前缀>:<资源>:<动作>，禁止通配符权限。
+
+INSERT INTO permission_groups (code, name, icon, sort_order)
+VALUES ('{{PERMISSION_PREFIX}}', '{{GROUP_NAME}}', '{{GROUP_ICON}}', 100)
+ON CONFLICT (code) DO UPDATE
+SET name = EXCLUDED.name,
+    icon = EXCLUDED.icon;
+
+INSERT INTO permissions (group_id, code, name, type, description, sort_order)
+VALUES
+    ((SELECT id FROM permission_groups WHERE code = '{{PERMISSION_PREFIX}}'),
+     '{{PERMISSION_PREFIX}}:{{RESOURCE_NAME}}:read',
+     '查看{{RESOURCE_LABEL}}',
+     'menu',
+     '允许查看{{RESOURCE_LABEL}}页面和详情。',
+     10),
+    ((SELECT id FROM permission_groups WHERE code = '{{PERMISSION_PREFIX}}'),
+     '{{PERMISSION_PREFIX}}:{{RESOURCE_NAME}}:write',
+     '管理{{RESOURCE_LABEL}}',
+     'api',
+     '允许创建、修改和删除{{RESOURCE_LABEL}}。',
+     20)
+ON CONFLICT (code) DO UPDATE
+SET group_id = EXCLUDED.group_id,
+    name = EXCLUDED.name,
+    type = EXCLUDED.type,
+    description = EXCLUDED.description,
+    sort_order = EXCLUDED.sort_order;
+
+-- 新权限只默认授予超级管理员。其他角色应由管理员显式授权。
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM roles r
+JOIN permissions p ON p.code IN (
+    '{{PERMISSION_PREFIX}}:{{RESOURCE_NAME}}:read',
+    '{{PERMISSION_PREFIX}}:{{RESOURCE_NAME}}:write'
+)
+WHERE r.code = 'super_admin'
+ON CONFLICT DO NOTHING;

@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "forbiddenPatterns": [
+    "\\bTODO\\b",
+    "\\bFIXME\\b",
+    "data\\.field1\\b",
+    "\\.unwrap\\s*\\("
+  ],
+  "templates": [
+    {
+      "file": "angular_model.ts.tmpl",
+      "language": "typescript",
+      "outputFile": "example-entity.model.ts",
+      "values": {
+        "ENTITY_NAME": "ExampleEntity"
+      }
+    },
+    {
+      "file": "angular_service.ts.tmpl",
+      "language": "typescript",
+      "outputFile": "example-entity-api.service.ts",
+      "requiredPatterns": ["API_BASE_URL"],
+      "values": {
+        "ENTITY_NAME": "ExampleEntity",
+        "FILE_NAME": "example-entity",
+        "ROUTE_PATH": "example-entities"
+      }
+    },
+    {
+      "file": "angular_permissions.ts.tmpl",
+      "language": "typescript",
+      "outputFile": "example-entity.permissions.ts",
+      "values": {
+        "PERMISSION_CONST": "EXAMPLE_ENTITY_PERMISSIONS",
+        "ROUTE_ACCESS_CONST": "EXAMPLE_ENTITY_ROUTE_ACCESS",
+        "PERMISSION_PREFIX": "stock",
+        "RESOURCE_NAME": "quote"
+      }
+    },
+    {
+      "file": "rust_handler.rs.tmpl",
+      "language": "rust",
+      "outputFile": "example_entity_handler.rs",
+      "requiredPatterns": ["RequirePermission<"],
+      "values": {
+        "ENTITY_NAME": "ExampleEntity",
+        "entity_name": "example_entity",
+        "PERMISSION_MODULE": "example_entity",
+        "READ_PERMISSION_TYPE": "ExampleEntityRead",
+        "WRITE_PERMISSION_TYPE": "ExampleEntityWrite"
+      }
+    },
+    {
+      "file": "rust_service.rs.tmpl",
+      "language": "rust",
+      "outputFile": "example_entity_service.rs",
+      "requiredPatterns": ["ActorContext"],
+      "values": {
+        "ENTITY_NAME": "ExampleEntity",
+        "entity_name": "example_entity"
+      }
+    },
+    {
+      "file": "rust_repository.rs.tmpl",
+      "language": "rust",
+      "outputFile": "example_entity_repository.rs",
+      "requiredPatterns": ["ActorContext", "organization_id", "owner_user_id"],
+      "values": {
+        "ENTITY_NAME": "ExampleEntity",
+        "TABLE_NAME": "example_entities",
+        "COLUMN_LIST": "name, description",
+        "VALUE_PLACEHOLDER": "$4, $5",
+        "BIND_FIELDS": ".bind(&data.name)\n    .bind(&data.description)"
+      }
+    },
+    {
+      "file": "rust_permissions.rs.tmpl",
+      "language": "rust",
+      "outputFile": "example_entity_permissions.rs",
+      "values": {
+        "PERMISSION_MODULE": "example_entity",
+        "READ_PERMISSION_TYPE": "ExampleEntityRead",
+        "WRITE_PERMISSION_TYPE": "ExampleEntityWrite",
+        "PERMISSION_PREFIX": "stock",
+        "RESOURCE_NAME": "quote"
+      }
+    },
+    {
+      "file": "business_permissions.sql.tmpl",
+      "language": "sql",
+      "outputFile": "20260808000100_add_stock_quote_permissions.sql",
+      "requiredPatterns": [
+        "WHERE r\\.code = 'super_admin'",
+        "ON CONFLICT DO NOTHING"
+      ],
+      "values": {
+        "PERMISSION_PREFIX": "stock",
+        "GROUP_NAME": "股票分析",
+        "GROUP_ICON": "monitoring",
+        "RESOURCE_NAME": "quote",
+        "RESOURCE_LABEL": "股票行情"
+      }
+    }
+  ]
+}

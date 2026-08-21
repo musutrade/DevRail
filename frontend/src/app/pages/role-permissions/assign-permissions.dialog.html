@@ -1,0 +1,81 @@
+<div class="assign-dialog">
+  <!-- Header -->
+  <div class="dialog-header">
+    <div>
+      <h2>分配权限 - {{ data.role.roleName }}</h2>
+      <p>为当前角色配置功能访问权限。</p>
+    </div>
+    <button type="button" class="close-btn" (click)="onCancel()" aria-label="关闭">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <!-- Search & Actions -->
+  <div class="dialog-toolbar">
+    <div class="toolbar-search">
+      <mat-icon>search</mat-icon>
+      <input
+        type="text"
+        placeholder="搜索权限名称或编码，例如 audit、user..."
+        aria-label="搜索权限名称或编码"
+        [value]="search()"
+        (input)="searchPermissions($any($event.target).value)"
+      />
+    </div>
+    <div class="toolbar-actions">
+      <button type="button" class="toolbar-link" (click)="selectAll()">
+        <mat-icon>done_all</mat-icon>
+        全选
+      </button>
+      <span class="toolbar-divider"></span>
+      <button type="button" class="toolbar-link" (click)="invertSelection()">
+        <mat-icon>swap_horiz</mat-icon>
+        反选
+      </button>
+    </div>
+  </div>
+
+  <!-- Scrollable Content -->
+  <div class="dialog-body custom-scrollbar">
+    @for (group of filteredGroups(); track group.id) {
+      <div class="perm-group">
+        <div class="group-title">
+          <mat-icon class="filled">{{ group.icon }}</mat-icon>
+          <h3>{{ group.name }}</h3>
+        </div>
+        <div class="perm-grid">
+          @for (p of group.permissions; track p.id) {
+            <label class="perm-item" [class.checked]="isAssigned(p)" [for]="'perm-' + p.id">
+              <mat-checkbox
+                [id]="'perm-' + p.id"
+                [checked]="isAssigned(p)"
+                (change)="togglePermission(p.id, $event.checked)"
+                color="primary"
+              />
+              <div class="perm-text">
+                <div class="perm-name">{{ p.name }}</div>
+                <div class="perm-desc">{{ p.description }}</div>
+              </div>
+            </label>
+          }
+        </div>
+      </div>
+    } @empty {
+      <div class="empty-state">
+        <mat-icon>search_off</mat-icon>
+        <p>没有匹配的权限</p>
+      </div>
+    }
+  </div>
+
+  <!-- Footer -->
+  <div class="dialog-footer">
+    <span class="footer-count">
+      已选择 <b>{{ selectedCount() }}</b> / {{ visibleCount() }} 个可见权限
+    </span>
+    <div class="footer-actions">
+      <button type="button" class="btn-outline" (click)="onCancel()">取消</button>
+      <button type="button" class="btn-primary" (click)="onSave()">保存修改</button>
+    </div>
+  </div>
+</div>

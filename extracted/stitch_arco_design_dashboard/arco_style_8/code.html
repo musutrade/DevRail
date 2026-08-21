@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en" style=""><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>RBAC Control Center - Role Management</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "outline": "#737688",
+                    "secondary-container": "#dee0e2",
+                    "inverse-primary": "#b6c4ff",
+                    "error-container": "#ffdad6",
+                    "surface-container-low": "#eff4ff",
+                    "link": "#165DFF",
+                    "on-secondary-fixed": "#191c1e",
+                    "on-primary-container": "#eeefff",
+                    "bg-white": "#FFFFFF",
+                    "on-background": "#111c2a",
+                    "background": "#f8f9ff",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-fixed": "#e1e2e4",
+                    "error": "#ba1a1a",
+                    "on-tertiary": "#ffffff",
+                    "text-secondary": "#4E5969",
+                    "on-tertiary-fixed": "#390c00",
+                    "primary-container": "#165dff",
+                    "primary": "#0047cf",
+                    "on-secondary-fixed-variant": "#444749",
+                    "surface-container": "#e5eeff",
+                    "success": "#00B42A",
+                    "surface-container-high": "#dee9fc",
+                    "danger": "#F53F3F",
+                    "on-surface": "#111c2a",
+                    "fill-hover": "#F2F3F5",
+                    "on-secondary": "#ffffff",
+                    "tertiary-fixed-dim": "#ffb59d",
+                    "on-secondary-container": "#606365",
+                    "text-primary": "#1D2129",
+                    "on-primary-fixed": "#00164f",
+                    "tertiary-container": "#c43e00",
+                    "surface-tint": "#004fe5",
+                    "on-error-container": "#93000a",
+                    "primary-fixed-dim": "#b6c4ff",
+                    "on-surface-variant": "#434656",
+                    "on-tertiary-fixed-variant": "#832700",
+                    "warning": "#FF7D00",
+                    "border": "#E5E6EB",
+                    "inverse-surface": "#263140",
+                    "surface-variant": "#d8e3f7",
+                    "tertiary": "#9a2f00",
+                    "surface-bright": "#f8f9ff",
+                    "on-error": "#ffffff",
+                    "tertiary-fixed": "#ffdbd0",
+                    "primary-fixed": "#dce1ff",
+                    "on-primary-fixed-variant": "#003bb0",
+                    "on-tertiary-container": "#ffece6",
+                    "text-tertiary": "#86909C",
+                    "surface-dim": "#cfdbee",
+                    "on-primary": "#ffffff",
+                    "secondary-fixed-dim": "#c5c6c8",
+                    "outline-variant": "#c3c5d9",
+                    "inverse-on-surface": "#eaf1ff",
+                    "surface": "#f8f9ff",
+                    "secondary": "#5c5f60",
+                    "surface-container-highest": "#d8e3f7"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "xl": "32px",
+                    "gutter": "16px",
+                    "sm": "8px",
+                    "xs": "4px",
+                    "lg": "24px",
+                    "md": "16px",
+                    "2xl": "48px",
+                    "container-max": "1200px"
+            },
+            "fontFamily": {
+                    "label-md": ["Inter"],
+                    "h1-mobile": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "h4": ["Inter"],
+                    "h3": ["Inter"],
+                    "h1": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "h2": ["Inter"],
+                    "body-md": ["Inter"]
+            },
+            "fontSize": {
+                    "label-md": ["14px", {"lineHeight": "22px", "fontWeight": "500"}],
+                    "h1-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                    "label-sm": ["12px", {"lineHeight": "20px", "fontWeight": "500"}],
+                    "h4": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "h3": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "h1": ["36px", {"lineHeight": "44px", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "body-sm": ["12px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "h2": ["30px", {"lineHeight": "38px", "fontWeight": "600"}],
+                    "body-md": ["14px", {"lineHeight": "22px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8f9ff; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .active-nav-link { color: #0047cf; border-bottom: 2px solid #0047cf; padding-bottom: 4px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #E5E6EB; border-radius: 10px; }
+    </style>
+</head>
+<body class="text-on-background bg-background overflow-hidden"><div class="fixed top-4 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in duration-300">
+<div class="flex items-center gap-2 px-4 py-2.5 bg-white border border-border rounded shadow-lg">
+<span class="material-symbols-outlined text-danger text-[20px]" data-icon="error">error</span>
+<span class="text-body-md text-text-primary">Update Failed: System error, please try again later</span>
+</div>
+</div>
+<!-- TopNavBar -->
+<header class="fixed top-0 left-0 right-0 ml-64 z-30 flex justify-between items-center px-lg h-14 bg-white border-b border-border">
+<div class="flex items-center gap-md">
+<div class="hidden md:flex gap-lg">
+<a class="text-label-md font-label-md text-text-secondary hover:text-primary transition-colors" href="#">Dashboard</a>
+<a class="text-label-md font-label-md text-text-secondary hover:text-primary transition-colors" href="#">Audit Logs</a>
+<a class="text-label-md font-label-md text-text-secondary hover:text-primary transition-colors" href="#">Security Settings</a>
+</div>
+</div>
+<div class="flex items-center gap-md">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary">search</span>
+<input class="pl-10 pr-4 py-1.5 bg-fill-hover border-none rounded-lg text-body-sm w-64 focus:ring-1 focus:ring-primary" placeholder="Search resources..." type="text"/>
+</div>
+<button class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-fill-hover transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="notifications">notifications</span>
+</button>
+<button class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-fill-hover transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="contrast">contrast</span>
+</button>
+<div class="h-8 w-8 rounded-full bg-surface-container overflow-hidden border border-border">
+<img class="w-full h-full object-cover" data-alt="Professional headshot of a system administrator in a corporate office environment, soft daylight lighting, high-end professional digital photography style, clean and modern aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBMXD-uYHdtpBrrh7xVlygODZ5PkKFWNB39Li6Vo48_JpSqh1yo-HeqNxWzstB8SWlC3bHBZYD9x9mwbOYaPsqnppnoGc1LAp3vHorTABUxRMZzyxq0tPrUC67JRVBvCjgMUv7TSq4wXedHsVNNCRweazesUb1aR2-BY0A2cWdgVFH9qvyawHWoyd-udPgNYDySEiPGfYIikv2ylt_iv2pRuwlktoWyFVwwaPPVmPEaDnoGFyAFYiik"/>
+</div>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 bottom-0 w-64 flex flex-col py-md z-40 bg-surface-container-lowest border-r border-border">
+<div class="px-lg py-lg mb-md">
+<span class="text-h4 font-h4 font-bold text-primary">RBAC Control Center</span>
+</div>
+<div class="px-md mb-lg">
+<div class="flex items-center gap-sm p-sm rounded-xl bg-surface-container-low">
+<div class="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-white" data-icon="admin_panel_settings">admin_panel_settings</span>
+</div>
+<div>
+<p class="text-label-md font-h4 text-primary leading-tight">RBAC Admin</p>
+<p class="text-body-sm text-text-tertiary">Enterprise Tier</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 px-sm space-y-1 custom-scrollbar overflow-y-auto">
+<div class="space-y-1">
+<button class="w-full flex items-center justify-between px-md py-sm rounded-lg text-text-secondary hover:bg-fill-hover transition-all group">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary" data-icon="group">group</span>
+<span class="text-label-md font-label-md">User Management</span>
+</div>
+<span class="material-symbols-outlined text-[18px] transition-transform" data-icon="expand_more">expand_more</span>
+</button>
+<div class="ml-10 space-y-1">
+<a class="block px-md py-1.5 rounded-lg text-body-sm text-text-secondary hover:bg-fill-hover transition-colors" href="#">All Users</a>
+<a class="block px-md py-1.5 rounded-lg bg-fill-hover text-body-sm text-primary font-medium transition-colors" href="#">Active Sessions</a>
+<a class="block px-md py-1.5 rounded-lg text-body-sm text-text-secondary hover:bg-fill-hover transition-colors" href="#">Invitations</a>
+</div>
+</div>
+<a class="flex items-center gap-md px-md py-sm rounded-lg bg-surface-container text-primary font-bold transition-all scale-95 shadow-sm" href="#">
+<span class="material-symbols-outlined" data-icon="badge">badge</span>
+<span class="text-label-md font-label-md">Role Permissions</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-fill-hover transition-all group" href="#">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary" data-icon="lock_person">lock_person</span>
+<span class="text-label-md font-label-md">Resource Access</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-fill-hover transition-all group" href="#">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary" data-icon="policy">policy</span>
+<span class="text-label-md font-label-md">System Policies</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-fill-hover transition-all group" href="#">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary" data-icon="shield">shield</span>
+<span class="text-label-md font-label-md">Security Center</span>
+</a>
+</nav>
+<div class="mt-auto px-md space-y-4">
+<button class="w-full flex items-center justify-center gap-sm bg-primary-container text-white py-2.5 rounded-lg text-label-md font-label-md hover:bg-primary transition-all active:scale-95">
+<span class="material-symbols-outlined text-[20px]" data-icon="add">add</span>
+                Create New Policy
+            </button>
+<div class="pt-md border-t border-border">
+<a class="flex items-center gap-md px-md py-2 rounded-lg text-text-secondary hover:bg-fill-hover transition-all group" href="#">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary" data-icon="help">help</span>
+<span class="text-label-md font-label-md">Support</span>
+</a>
+<a class="flex items-center gap-md px-md py-2 rounded-lg text-text-secondary hover:bg-fill-hover transition-all group" href="#">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary" data-icon="description">description</span>
+<span class="text-label-md font-label-md">Documentation</span>
+</a>
+</div>
+</div>
+<button class="absolute -right-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-white border border-border rounded-full flex items-center justify-center shadow-sm hover:bg-fill-hover transition-all z-50">
+<span class="material-symbols-outlined text-[20px] text-on-surface-variant" data-icon="chevron_left">chevron_left</span>
+</button></aside>
+<!-- Main Content Area -->
+<main class="ml-64 pt-14 h-screen overflow-y-auto custom-scrollbar">
+<div class="max-w-container-max mx-auto p-xl">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row md:items-center justify-between mb-xl gap-md">
+<div>
+<h1 class="text-h2 font-h2 text-text-primary">Role Management</h1>
+<p class="text-body-md text-text-secondary">Define, organize, and assign granular permissions to organizational roles.</p>
+</div>
+<div class="flex items-center gap-md">
+<div class="flex bg-white rounded-lg border border-border p-1">
+<button class="p-1.5 rounded-md bg-surface-container text-primary transition-all" id="grid-view-btn">
+<span class="material-symbols-outlined" data-icon="grid_view">grid_view</span>
+</button>
+<button class="p-1.5 rounded-md text-text-tertiary hover:bg-fill-hover transition-all" id="list-view-btn">
+<span class="material-symbols-outlined" data-icon="table_rows">table_rows</span>
+</button>
+</div>
+<button class="px-lg py-2.5 bg-primary text-white rounded-lg flex items-center gap-2 text-label-md font-label-md hover:shadow-lg transition-all active:scale-95">
+<span class="material-symbols-outlined text-[18px]" data-icon="add_circle">add_circle</span>
+                        Create Role
+                    </button>
+</div>
+</div>
+<!-- Bento Grid Role Cards (Default View) -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-lg" id="grid-view-container">
+<!-- Super Admin Card -->
+<div class="bg-white p-lg rounded-xl border border-border hover:border-primary/40 hover:shadow-xl transition-all group relative overflow-hidden">
+<div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 bg-primary/5 rounded-full blur-2xl"></div>
+<div class="flex justify-between items-start mb-md">
+<div class="w-12 h-12 rounded-xl bg-primary-container/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-[28px]" data-icon="rocket_launch">rocket_launch</span>
+</div>
+<span class="bg-primary/10 text-primary text-label-sm font-label-sm px-2 py-0.5 rounded">System Core</span>
+</div>
+<h3 class="text-h4 font-h4 text-text-primary mb-xs">Super Admin</h3>
+<p class="text-body-sm text-text-secondary mb-lg line-clamp-2">Full access to all modules, including billing, user management, and global security settings.</p>
+<div class="flex items-center justify-between py-md border-t border-border mt-auto">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-text-tertiary text-[20px]" data-icon="group">group</span>
+<span class="text-label-md font-label-md text-text-primary">4 Members</span>
+</div>
+<a class="text-link text-label-md font-label-md flex items-center gap-1 hover:underline" href="#">
+                            Edit Permissions
+                            <span class="material-symbols-outlined text-[16px]" data-icon="arrow_forward">arrow_forward</span>
+</a>
+</div>
+</div>
+<!-- Editor Card -->
+<div class="bg-white p-lg rounded-xl border border-border hover:border-primary/40 hover:shadow-xl transition-all group relative overflow-hidden">
+<div class="flex justify-between items-start mb-md">
+<div class="w-12 h-12 rounded-xl bg-warning/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-warning text-[28px]" data-icon="edit_note">edit_note</span>
+</div>
+<span class="bg-surface-container text-text-secondary text-label-sm font-label-sm px-2 py-0.5 rounded">Content</span>
+</div>
+<h3 class="text-h4 font-h4 text-text-primary mb-xs">Editor</h3>
+<p class="text-body-sm text-text-secondary mb-lg line-clamp-2">Can create, edit, and publish content. No access to financial or security settings.</p>
+<div class="flex items-center justify-between py-md border-t border-border mt-auto">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-text-tertiary text-[20px]" data-icon="group">group</span>
+<span class="text-label-md font-label-md text-text-primary">12 Members</span>
+</div>
+<a class="text-link text-label-md font-label-md flex items-center gap-1 hover:underline" href="#">
+                            Edit Permissions
+                            <span class="material-symbols-outlined text-[16px]" data-icon="arrow_forward">arrow_forward</span>
+</a>
+</div>
+</div>
+<!-- Viewer Card -->
+<div class="bg-white p-lg rounded-xl border border-border hover:border-primary/40 hover:shadow-xl transition-all group relative overflow-hidden">
+<div class="flex justify-between items-start mb-md">
+<div class="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-success text-[28px]" data-icon="visibility">visibility</span>
+</div>
+<span class="bg-surface-container text-text-secondary text-label-sm font-label-sm px-2 py-0.5 rounded">Read Only</span>
+</div>
+<h3 class="text-h4 font-h4 text-text-primary mb-xs">Viewer</h3>
+<p class="text-body-sm text-text-secondary mb-lg line-clamp-2">Can view data, reports, and dashboards. No modification rights across the system.</p>
+<div class="flex items-center justify-between py-md border-t border-border mt-auto">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-text-tertiary text-[20px]" data-icon="group">group</span>
+<span class="text-label-md font-label-md text-text-primary">84 Members</span>
+</div>
+<a class="text-link text-label-md font-label-md flex items-center gap-1 hover:underline" href="#">
+                            Edit Permissions
+                            <span class="material-symbols-outlined text-[16px]" data-icon="arrow_forward">arrow_forward</span>
+</a>
+</div>
+</div>
+<!-- Auditor Card -->
+<div class="bg-white p-lg rounded-xl border border-border hover:border-primary/40 hover:shadow-xl transition-all group relative overflow-hidden">
+<div class="flex justify-between items-start mb-md">
+<div class="w-12 h-12 rounded-xl bg-danger/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-danger text-[28px]" data-icon="fact_check">fact_check</span>
+</div>
+<span class="bg-surface-container text-text-secondary text-label-sm font-label-sm px-2 py-0.5 rounded">Compliance</span>
+</div>
+<h3 class="text-h4 font-h4 text-text-primary mb-xs">Compliance Auditor</h3>
+<p class="text-body-sm text-text-secondary mb-lg line-clamp-2">Special access to audit logs and security reporting for quarterly reviews.</p>
+<div class="flex items-center justify-between py-md border-t border-border mt-auto">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-text-tertiary text-[20px]" data-icon="group">group</span>
+<span class="text-label-md font-label-md text-text-primary">2 Members</span>
+</div>
+<a class="text-link text-label-md font-label-md flex items-center gap-1 hover:underline" href="#">
+                            Edit Permissions
+                            <span class="material-symbols-outlined text-[16px]" data-icon="arrow_forward">arrow_forward</span>
+</a>
+</div>
+</div>
+<!-- Support Card -->
+<div class="bg-white p-lg rounded-xl border border-border hover:border-primary/40 hover:shadow-xl transition-all group relative overflow-hidden">
+<div class="flex justify-between items-start mb-md">
+<div class="w-12 h-12 rounded-xl bg-inverse-surface/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-inverse-surface text-[28px]" data-icon="support_agent">support_agent</span>
+</div>
+<span class="bg-surface-container text-text-secondary text-label-sm font-label-sm px-2 py-0.5 rounded">Service</span>
+</div>
+<h3 class="text-h4 font-h4 text-text-primary mb-xs">Support Tier 2</h3>
+<p class="text-body-sm text-text-secondary mb-lg line-clamp-2">Helpdesk troubleshooting rights including user password resets and ticket escalation.</p>
+<div class="flex items-center justify-between py-md border-t border-border mt-auto">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-text-tertiary text-[20px]" data-icon="group">group</span>
+<span class="text-label-md font-label-md text-text-primary">15 Members</span>
+</div>
+<a class="text-link text-label-md font-label-md flex items-center gap-1 hover:underline" href="#">
+                            Edit Permissions
+                            <span class="material-symbols-outlined text-[16px]" data-icon="arrow_forward">arrow_forward</span>
+</a>
+</div>
+</div>
+<!-- Empty State/New Role -->
+<button class="bg-white p-lg rounded-xl border-2 border-dashed border-border hover:border-primary/40 hover:bg-fill-hover transition-all flex flex-col items-center justify-center text-center group">
+<div class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center mb-md group-hover:bg-primary/10 transition-colors">
+<span class="material-symbols-outlined text-text-tertiary group-hover:text-primary" data-icon="add">add</span>
+</div>
+<span class="text-label-md font-label-md text-text-primary">Add New Role</span>
+<span class="text-body-sm text-text-tertiary">Quick setup for new permission sets</span>
+</button>
+</div>
+<!-- List/Table View (Hidden by Default) -->
+<div class="hidden animate-in fade-in duration-300" id="list-view-container">
+<div class="bg-white rounded-xl border border-border overflow-hidden shadow-sm">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-low border-b border-border">
+<tr>
+<th class="px-lg py-md text-label-md font-label-md text-text-primary">Role Name</th>
+<th class="px-lg py-md text-label-md font-label-md text-text-primary">Key</th>
+<th class="px-lg py-md text-label-md font-label-md text-text-primary">Description</th>
+<th class="px-lg py-md text-label-md font-label-md text-text-primary">Create Time</th>
+<th class="px-lg py-md text-label-md font-label-md text-text-primary text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border">
+<tr class="hover:bg-fill-hover transition-colors">
+<td class="px-lg py-md">
+<div class="flex items-center gap-md">
+<div class="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-[18px]" data-icon="rocket_launch">rocket_launch</span>
+</div>
+<span class="text-label-md font-label-md text-text-primary">Super Admin</span>
+</div>
+</td>
+<td class="px-lg py-md text-body-sm font-mono text-text-secondary">SYSTEM_ADMIN</td>
+<td class="px-lg py-md text-body-sm text-text-secondary max-w-xs truncate">Global system-wide control...</td>
+<td class="px-lg py-md text-body-sm text-text-secondary">2023-10-12</td>
+<td class="px-lg py-md text-right">
+<div class="flex items-center justify-end gap-sm">
+<button class="p-1.5 rounded hover:bg-surface-container-high text-link" title="Assign Permissions">
+<span class="material-symbols-outlined" data-icon="rule">rule</span>
+</button>
+<button class="p-1.5 rounded hover:bg-surface-container-high text-on-surface-variant" title="Members">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+</button>
+<button class="p-1.5 rounded hover:bg-danger/10 text-danger" title="Delete">
+<span class="material-symbols-outlined" data-icon="delete">delete</span>
+</button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-fill-hover transition-colors">
+<td class="px-lg py-md">
+<div class="flex items-center gap-md">
+<div class="w-8 h-8 rounded bg-warning/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-warning text-[18px]" data-icon="edit_note">edit_note</span>
+</div>
+<span class="text-label-md font-label-md text-text-primary">Editor</span>
+</div>
+</td>
+<td class="px-lg py-md text-body-sm font-mono text-text-secondary">CONTENT_EDITOR</td>
+<td class="px-lg py-md text-body-sm text-text-secondary max-w-xs truncate">Content creation and publishing...</td>
+<td class="px-lg py-md text-body-sm text-text-secondary">2023-11-05</td>
+<td class="px-lg py-md text-right">
+<div class="flex items-center justify-end gap-sm">
+<button class="p-1.5 rounded hover:bg-surface-container-high text-link">
+<span class="material-symbols-outlined" data-icon="rule">rule</span>
+</button>
+<button class="p-1.5 rounded hover:bg-surface-container-high text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+</button>
+<button class="p-1.5 rounded hover:bg-danger/10 text-danger">
+<span class="material-symbols-outlined" data-icon="delete">delete</span>
+</button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-fill-hover transition-colors">
+<td class="px-lg py-md">
+<div class="flex items-center gap-md">
+<div class="w-8 h-8 rounded bg-success/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-success text-[18px]" data-icon="visibility">visibility</span>
+</div>
+<span class="text-label-md font-label-md text-text-primary">Viewer</span>
+</div>
+</td>
+<td class="px-lg py-md text-body-sm font-mono text-text-secondary">READ_ONLY</td>
+<td class="px-lg py-md text-body-sm text-text-secondary max-w-xs truncate">Read-only platform access...</td>
+<td class="px-lg py-md text-body-sm text-text-secondary">2023-11-08</td>
+<td class="px-lg py-md text-right">
+<div class="flex items-center justify-end gap-sm">
+<button class="p-1.5 rounded hover:bg-surface-container-high text-link">
+<span class="material-symbols-outlined" data-icon="rule">rule</span>
+</button>
+<button class="p-1.5 rounded hover:bg-surface-container-high text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+</button>
+<button class="p-1.5 rounded hover:bg-danger/10 text-danger">
+<span class="material-symbols-outlined" data-icon="delete">delete</span>
+</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<div class="px-lg py-md flex items-center justify-between bg-white border-t border-border">
+<span class="text-body-sm text-text-tertiary">Showing 1-10 of 24 roles</span>
+<div class="flex gap-2">
+<button class="p-1 rounded border border-border hover:bg-fill-hover disabled:opacity-50" disabled="">
+<span class="material-symbols-outlined text-[20px]" data-icon="chevron_left">chevron_left</span>
+</button>
+<button class="w-8 h-8 flex items-center justify-center rounded bg-primary text-white text-label-sm">1</button>
+<button class="w-8 h-8 flex items-center justify-center rounded hover:bg-fill-hover text-text-secondary text-label-sm">2</button>
+<button class="w-8 h-8 flex items-center justify-center rounded hover:bg-fill-hover text-text-secondary text-label-sm">3</button>
+<button class="p-1 rounded border border-border hover:bg-fill-hover">
+<span class="material-symbols-outlined text-[20px]" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<script>
+        // View Toggle Logic
+        const gridBtn = document.getElementById('grid-view-btn');
+        const listBtn = document.getElementById('list-view-btn');
+        const gridContainer = document.getElementById('grid-view-container');
+        const listContainer = document.getElementById('list-view-container');
+
+        gridBtn.addEventListener('click', () => {
+            gridContainer.classList.remove('hidden');
+            listContainer.classList.add('hidden');
+            
+            gridBtn.classList.add('bg-surface-container', 'text-primary');
+            gridBtn.classList.remove('text-text-tertiary');
+            
+            listBtn.classList.remove('bg-surface-container', 'text-primary');
+            listBtn.classList.add('text-text-tertiary');
+        });
+
+        listBtn.addEventListener('click', () => {
+            gridContainer.classList.add('hidden');
+            listContainer.classList.remove('hidden');
+            
+            listBtn.classList.add('bg-surface-container', 'text-primary');
+            listBtn.classList.remove('text-text-tertiary');
+            
+            gridBtn.classList.remove('bg-surface-container', 'text-primary');
+            gridBtn.classList.add('text-text-tertiary');
+        });
+
+        // Simple scale effect for micro-interactions
+        document.querySelectorAll('.role-card-hover').forEach(card => {
+            card.addEventListener('mousedown', () => card.style.transform = 'scale(0.98)');
+            card.addEventListener('mouseup', () => card.style.transform = 'scale(1)');
+        });
+    </script>
+</body></html>

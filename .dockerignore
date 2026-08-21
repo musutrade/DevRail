@@ -1,0 +1,12 @@
+.git
+.gitignore
+**/.env
+**/.env.*
+!**/.env.example
+!deployment/.env.production.example
+**/node_modules
+**/dist
+**/target
+codex-audit-pipeline/.codex/reports
+observability/logs
+deployment/tls

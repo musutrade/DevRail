@@ -1,0 +1,252 @@
+<div class="page">
+  <!-- 页面头部 -->
+  <div class="page-header">
+    <div>
+      <h1>角色管理</h1>
+      <p>定义和组织系统角色，并为角色分配精细化权限。</p>
+    </div>
+    <div class="header-actions">
+      <div class="view-toggle">
+        <button
+          type="button"
+          [class.active]="view() === 'grid'"
+          (click)="setView('grid')"
+          title="卡片视图"
+          aria-label="卡片视图"
+          [attr.aria-pressed]="view() === 'grid'"
+        >
+          <mat-icon>grid_view</mat-icon>
+        </button>
+        <button
+          type="button"
+          [class.active]="view() === 'list'"
+          (click)="setView('list')"
+          title="列表视图"
+          aria-label="列表视图"
+          [attr.aria-pressed]="view() === 'list'"
+        >
+          <mat-icon>table_rows</mat-icon>
+        </button>
+      </div>
+      @if (canWrite()) {
+        <button type="button" class="btn-primary" (click)="onCreateRole()" [disabled]="busy()">
+          <mat-icon>add_circle</mat-icon>
+          <span>创建角色</span>
+        </button>
+      }
+    </div>
+  </div>
+
+  @if (error()) {
+    <div class="empty-state" role="alert">
+      <mat-icon>error</mat-icon>
+      <p>{{ error() }}</p>
+      <button type="button" class="btn-outline" (click)="retry()">重新加载</button>
+    </div>
+  } @else if (loading()) {
+    <div class="loading-wrap" role="status" aria-live="polite" aria-label="正在加载角色">
+      <mat-progress-spinner diameter="32" mode="indeterminate" />
+    </div>
+  } @else if (view() === 'grid') {
+    <!-- 卡片网格视图 -->
+    <div class="roles-grid">
+      @for (r of roles(); track r.id) {
+        <div class="role-card">
+          <div class="role-card-head">
+            <div class="role-icon {{ 'ic-' + r.color }}">
+              <mat-icon>{{ r.icon }}</mat-icon>
+            </div>
+            <div class="role-card-meta">
+              <span
+                class="status-badge"
+                [class.st-active]="r.isActive"
+                [class.st-suspended]="!r.isActive"
+              >
+                <span class="status-dot"></span>
+                {{ r.isActive ? '启用' : '停用' }}
+              </span>
+              <span class="role-category {{ 'cat-' + r.color }}">{{ r.category }}</span>
+              @if (canWrite() && r.code !== 'super_admin') {
+                <button
+                  type="button"
+                  class="role-card-status-button"
+                  [class.is-activate]="!r.isActive"
+                  (click)="onToggleRoleStatus(r)"
+                  [disabled]="busy()"
+                  [attr.aria-label]="(r.isActive ? '停用角色 ' : '启用角色 ') + r.name"
+                  [title]="r.isActive ? '停用角色' : '启用角色'"
+                >
+                  <mat-icon>{{ r.isActive ? 'toggle_off' : 'toggle_on' }}</mat-icon>
+                </button>
+              }
+            </div>
+          </div>
+          <h3 class="role-name">{{ r.name }}</h3>
+          <p class="role-desc">{{ r.description }}</p>
+          <div class="role-card-foot">
+            <span class="role-category cat-neutral">{{ dataScopeLabel(r.dataScope) }}</span>
+            <div class="role-members">
+              <mat-icon>group</mat-icon>
+              <span>{{ r.members }} 名成员</span>
+            </div>
+            <div class="role-card-actions">
+              @if (canWrite()) {
+                <button
+                  type="button"
+                  class="role-edit-link"
+                  (click)="onEditRole(r)"
+                  [attr.aria-label]="'编辑角色 ' + r.name"
+                  [disabled]="busy()"
+                >
+                  编辑角色
+                </button>
+              }
+              @if (canAssign() && r.code !== 'super_admin') {
+                <button
+                  type="button"
+                  class="role-edit-link"
+                  (click)="onEditPermissions(r)"
+                  [attr.aria-label]="'权限设置 ' + r.name"
+                  [disabled]="busy()"
+                >
+                  权限设置 <mat-icon>arrow_forward</mat-icon>
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  } @else {
+    <!-- 列表视图 -->
+    <div class="table-card">
+      <div
+        class="table-scroll role-table-scroll"
+        role="region"
+        tabindex="0"
+        aria-label="角色列表，可横向滚动"
+      >
+        <table class="data-table roles-table">
+          <caption class="visually-hidden">
+            系统角色列表
+          </caption>
+          <thead>
+            <tr>
+              <th>角色</th>
+              <th>分类</th>
+              <th>成员</th>
+              <th>数据范围</th>
+              <th>状态</th>
+              <th>描述</th>
+              <th class="th-actions">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of roles(); track r.id) {
+              <tr>
+                <td>
+                  <div class="list-role-cell">
+                    <span class="role-icon {{ 'ic-' + r.color }} sm"
+                      ><mat-icon>{{ r.icon }}</mat-icon></span
+                    >
+                    <span class="list-role-identity">
+                      <span class="list-role-name">{{ r.name }}</span>
+                      <span class="list-role-code">{{ r.code }}</span>
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  <span class="role-category {{ 'cat-' + r.color }}">{{ r.category }}</span>
+                </td>
+                <td>
+                  <span class="member-count"><mat-icon>group</mat-icon>{{ r.members }}</span>
+                </td>
+                <td>{{ dataScopeLabel(r.dataScope) }}</td>
+                <td>
+                  <span
+                    class="status-badge"
+                    [class.st-active]="r.isActive"
+                    [class.st-suspended]="!r.isActive"
+                  >
+                    <span class="status-dot"></span>
+                    {{ r.isActive ? '启用' : '停用' }}
+                  </span>
+                </td>
+                <td class="cell-secondary list-desc" [title]="r.description">
+                  {{ r.description }}
+                </td>
+                <td class="td-actions">
+                  @if (canWrite()) {
+                    <button
+                      type="button"
+                      class="row-btn"
+                      (click)="onEditRole(r)"
+                      [disabled]="busy()"
+                      [attr.aria-label]="'编辑角色 ' + r.name"
+                      title="编辑角色"
+                    >
+                      <mat-icon>edit</mat-icon>
+                    </button>
+                  }
+                  @if (canAssign() && r.code !== 'super_admin') {
+                    <button
+                      type="button"
+                      class="row-btn"
+                      (click)="onEditPermissions(r)"
+                      [disabled]="busy()"
+                      [attr.aria-label]="'编辑权限 ' + r.name"
+                      title="编辑权限"
+                    >
+                      <mat-icon>tune</mat-icon>
+                    </button>
+                  }
+                  @if (canWrite() && r.code !== 'super_admin') {
+                    <button
+                      type="button"
+                      class="row-btn status-action"
+                      [class.is-activate]="!r.isActive"
+                      (click)="onToggleRoleStatus(r)"
+                      [disabled]="busy()"
+                      [attr.aria-label]="(r.isActive ? '停用角色 ' : '启用角色 ') + r.name"
+                      [title]="r.isActive ? '停用角色' : '启用角色'"
+                    >
+                      <mat-icon>{{ r.isActive ? 'toggle_off' : 'toggle_on' }}</mat-icon>
+                    </button>
+                  }
+                  @if (canWrite() && r.code !== 'super_admin') {
+                    <button
+                      type="button"
+                      class="row-btn danger"
+                      (click)="onDeleteRole(r)"
+                      [disabled]="busy()"
+                      [attr.aria-label]="'删除角色 ' + r.name"
+                      [title]="r.members > 0 ? '请先迁移已分配用户' : '删除角色'"
+                    >
+                      <mat-icon>delete</mat-icon>
+                    </button>
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="7">
+                  <div class="empty-state">
+                    <mat-icon>badge</mat-icon>
+                    <p>暂无角色</p>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="table-footer role-table-footer">
+        <span class="page-info">
+          显示第 {{ roles().length > 0 ? 1 : 0 }}-{{ roles().length }} 条，共
+          {{ roles().length }} 条
+        </span>
+        <span class="role-total"><mat-icon>badge</mat-icon>{{ roles().length }} 个角色</span>
+      </div>
+    </div>
+  }
+</div>

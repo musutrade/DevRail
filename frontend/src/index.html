@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>RBAC 管理中心</title>
+    <base href="/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/x-icon" href="favicon.ico" />
+    <script src="config.js"></script>
+    <script>
+      // 防止主题闪烁:在渲染前根据 localStorage 设置 data-theme
+      (function () {
+        var runtimeConfig = window.__ARC_ADMIN_CONFIG__ || {};
+        var appSlug = runtimeConfig.appSlug || 'arc-admin';
+        var storageKey = runtimeConfig.themeStorageKey || appSlug + '-theme';
+        if (runtimeConfig.appName) {
+          document.title = runtimeConfig.appName;
+        }
+        var saved = localStorage.getItem(storageKey);
+        if (saved === null && storageKey !== 'arc-theme') {
+          saved = localStorage.getItem('arc-theme');
+        }
+        if (saved === 'dark') {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <app-root></app-root>
+  </body>
+</html>

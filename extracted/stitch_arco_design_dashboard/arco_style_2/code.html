@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en" style=""><svg aria-hidden="true" class="inline-defs-container" style="position:absolute;width:0;height:0;overflow:hidden"></svg><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Permission Management | RBAC Control Center</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "outline": "#737688",
+                    "secondary-container": "#dee0e2",
+                    "inverse-primary": "#b6c4ff",
+                    "error-container": "#ffdad6",
+                    "surface-container-low": "#eff4ff",
+                    "link": "#165DFF",
+                    "on-secondary-fixed": "#191c1e",
+                    "on-primary-container": "#eeefff",
+                    "bg-white": "#FFFFFF",
+                    "on-background": "#111c2a",
+                    "background": "#f8f9ff",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-fixed": "#e1e2e4",
+                    "error": "#ba1a1a",
+                    "on-tertiary": "#ffffff",
+                    "text-secondary": "#4E5969",
+                    "on-tertiary-fixed": "#390c00",
+                    "primary-container": "#165dff",
+                    "primary": "#0047cf",
+                    "on-secondary-fixed-variant": "#444749",
+                    "surface-container": "#e5eeff",
+                    "success": "#00B42A",
+                    "surface-container-high": "#dee9fc",
+                    "danger": "#F53F3F",
+                    "on-surface": "#111c2a",
+                    "fill-hover": "#F2F3F5",
+                    "on-secondary": "#ffffff",
+                    "tertiary-fixed-dim": "#ffb59d",
+                    "on-secondary-container": "#606365",
+                    "text-primary": "#1D2129",
+                    "on-primary-fixed": "#00164f",
+                    "tertiary-container": "#c43e00",
+                    "surface-tint": "#004fe5",
+                    "on-error-container": "#93000a",
+                    "primary-fixed-dim": "#b6c4ff",
+                    "on-surface-variant": "#434656",
+                    "on-tertiary-fixed-variant": "#832700",
+                    "warning": "#FF7D00",
+                    "border": "#E5E6EB",
+                    "inverse-surface": "#263140",
+                    "surface-variant": "#d8e3f7",
+                    "tertiary": "#9a2f00",
+                    "surface-bright": "#f8f9ff",
+                    "on-error": "#ffffff",
+                    "tertiary-fixed": "#ffdbd0",
+                    "primary-fixed": "#dce1ff",
+                    "on-primary-fixed-variant": "#003bb0",
+                    "on-tertiary-container": "#ffece6",
+                    "text-tertiary": "#86909C",
+                    "surface-dim": "#cfdbee",
+                    "on-primary": "#ffffff",
+                    "secondary-fixed-dim": "#c5c6c8",
+                    "outline-variant": "#c3c5d9",
+                    "inverse-on-surface": "#eaf1ff",
+                    "surface": "#f8f9ff",
+                    "secondary": "#5c5f60",
+                    "surface-container-highest": "#d8e3f7"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "xl": "32px",
+                    "gutter": "16px",
+                    "sm": "8px",
+                    "xs": "4px",
+                    "lg": "24px",
+                    "md": "16px",
+                    "2xl": "48px",
+                    "container-max": "1200px"
+            },
+            "fontFamily": {
+                    "label-md": ["Inter"],
+                    "h1-mobile": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "h4": ["Inter"],
+                    "h3": ["Inter"],
+                    "h1": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "h2": ["Inter"],
+                    "body-md": ["Inter"]
+            },
+            "fontSize": {
+                    "label-md": ["14px", {"lineHeight": "22px", "fontWeight": "500"}],
+                    "h1-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                    "label-sm": ["12px", {"lineHeight": "20px", "fontWeight": "500"}],
+                    "h4": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "h3": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "h1": ["36px", {"lineHeight": "44px", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "body-sm": ["12px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "h2": ["30px", {"lineHeight": "38px", "fontWeight": "600"}],
+                    "body-md": ["14px", {"lineHeight": "22px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8f9ff; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e5e6eb; border-radius: 10px; }
+        .transition-table tr { transition: background-color 0.15s ease; }
+    </style>
+</head>
+<body class="text-text-primary"><div class="fixed top-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-md px-lg py-3 bg-white border border-border rounded-lg shadow-lg transition-all animate-in fade-in slide-in-from-top-4 duration-300">
+<div class="flex items-center justify-center w-6 h-6 rounded-full bg-success/10 text-success">
+<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<span class="text-body-md font-medium text-text-primary">Update Successful</span>
+<button class="ml-md text-text-tertiary hover:text-text-secondary transition-colors" onclick="this.parentElement.remove()">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+<!-- TopNavBar -->
+<header class="fixed top-0 left-0 z-40 flex justify-between items-center px-lg h-14 bg-white border-b border-border ml-64 right-0">
+<div class="flex items-center gap-md">
+<span class="text-h4 font-h4 font-bold text-primary">RBAC Control Center</span>
+<nav class="hidden md:flex items-center gap-lg ml-xl">
+<a class="text-text-secondary hover:text-primary transition-colors text-label-md font-label-md" href="#">Dashboard</a>
+<a class="text-text-secondary hover:text-primary transition-colors text-label-md font-label-md" href="#">Audit Logs</a>
+<a class="text-text-secondary hover:text-primary transition-colors text-label-md font-label-md" href="#">Security Settings</a>
+</nav>
+</div>
+<div class="flex items-center gap-md">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary">search</span>
+<input class="pl-10 pr-4 py-1.5 bg-fill-hover border-none rounded-lg text-body-sm w-64 focus:ring-2 focus:ring-primary/20 outline-none" placeholder="Global Search..." type="text"/>
+</div>
+<button class="p-2 rounded-lg hover:bg-fill-hover transition-colors">
+<span class="material-symbols-outlined text-text-secondary" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 rounded-lg hover:bg-fill-hover transition-colors">
+<span class="material-symbols-outlined text-text-secondary" data-icon="contrast">contrast</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center overflow-hidden border border-border">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a corporate IT administrator, mid-40s, with a friendly but focused expression. The background is a clean, out-of-focus modern office space with cool blue and white tones. High-end portrait photography style, shallow depth of field, bright and professional lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDsVWCCzlXSPsxIguNO5ru5Ue60QGyrub4qaXxWUWnpqB4ly3TXtngi75edOpTcO9wRb_adRe5CeH4Orq29xXZudWOegzU5kEJh676P5GKOzcd1jMwexx3a7e6g9ZZ1D7ftGjraH5kMzobWBLc9KEHD8F8o6PRbE2qbnjJKDp_mjcRp4gBmosa2FEW1j_Lc7xV_2eNUvD6XyqSdSdRlzZRowdahEo81044K7xbl8dR1Pz3wKlXHDA7J"/>
+</div>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="fixed left-0 bottom-0 flex flex-col py-md z-30 bg-surface-container-lowest border-r border-border top-0 w-64"><div class="px-md mb-lg">
+<div class="flex items-center gap-sm p-sm rounded-xl bg-surface-container-low border border-border/40">
+<div class="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-white">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">shield</span>
+</div>
+<div>
+<h2 class="text-label-md font-h4 text-primary leading-tight">RBAC Admin</h2>
+<p class="text-[10px] text-text-tertiary uppercase tracking-wider font-bold">Enterprise Tier</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 flex flex-col gap-1 px-sm overflow-y-auto custom-scrollbar">
+<div class="flex flex-col">
+<a class="flex items-center justify-between px-md py-3 rounded-lg text-text-secondary hover:bg-fill-hover transition-all" href="#">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="text-label-md font-label-md">User Management</span>
+</div>
+<span class="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
+</a>
+<div class="flex flex-col gap-1 ml-xl mt-1">
+<a class="flex items-center px-md py-2 rounded-lg text-text-secondary hover:bg-fill-hover transition-all text-body-sm" href="#">All Users</a>
+<a class="flex items-center px-md py-2 rounded-lg bg-fill-hover text-primary font-medium transition-all text-body-sm" href="#">Groups &amp; Teams</a>
+<a class="flex items-center px-md py-2 rounded-lg text-text-secondary hover:bg-fill-hover transition-all text-body-sm" href="#">Invitations</a>
+</div>
+</div>
+<a class="flex items-center gap-md px-md py-3 rounded-lg text-text-secondary hover:bg-fill-hover transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="badge">badge</span>
+<span class="text-label-md font-label-md">Role Permissions</span>
+</a>
+<a class="flex items-center gap-md px-md py-3 rounded-lg text-primary bg-surface-container font-bold scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="lock_person" style="font-variation-settings: 'FILL' 1;">lock_person</span>
+<span class="text-label-md font-label-md">Resource Access</span>
+</a>
+<a class="flex items-center gap-md px-md py-3 rounded-lg text-text-secondary hover:bg-fill-hover transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="policy">policy</span>
+<span class="text-label-md font-label-md">System Policies</span>
+</a>
+<a class="flex items-center gap-md px-md py-3 rounded-lg text-text-secondary hover:bg-fill-hover transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="shield">shield</span>
+<span class="text-label-md font-label-md">Security Center</span>
+</a>
+</nav>
+<div class="px-md mt-auto pt-md border-t border-border/50">
+<button class="w-full flex items-center justify-center gap-sm bg-primary text-white py-2.5 rounded-lg text-label-md font-label-md shadow-sm hover:bg-primary-container transition-colors mb-md">
+<span class="material-symbols-outlined text-[18px]">add</span>
+Create New Policy
+</button>
+<div class="flex flex-col gap-1">
+<a class="flex items-center gap-md px-md py-2 rounded-lg text-text-tertiary hover:text-text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="help">help</span>
+<span class="text-label-sm font-label-sm">Support</span>
+</a>
+<a class="flex items-center gap-md px-md py-2 rounded-lg text-text-tertiary hover:text-text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="description">description</span>
+<span class="text-label-sm font-label-sm">Documentation</span>
+</a>
+</div>
+</div>
+<button class="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white border border-border rounded-full flex items-center justify-center shadow-sm cursor-pointer hover:text-primary transition-colors z-40">
+<span class="material-symbols-outlined text-[16px]">chevron_left</span>
+</button></aside>
+<!-- Main Content -->
+<main class="pt-14 min-h-screen bg-background p-lg ml-64">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-md mb-xl">
+<div>
+<h1 class="text-h3 font-h3 text-text-primary">Resource Access Control</h1>
+<p class="text-body-md text-text-secondary">Manage granular permission codes and their hierarchy across the enterprise platform.</p>
+</div>
+<div class="flex items-center gap-sm">
+<button class="flex items-center gap-xs px-md py-2 bg-white border border-border rounded-lg text-label-md text-text-primary hover:bg-fill-hover transition-colors">
+<span class="material-symbols-outlined text-[20px]">filter_list</span>
+                    Advanced Filters
+                </button>
+<button class="flex items-center gap-xs px-md py-2 bg-white border border-border rounded-lg text-label-md text-text-primary hover:bg-fill-hover transition-colors">
+<span class="material-symbols-outlined text-[20px]">file_download</span>
+                    Export
+                </button>
+</div>
+</div>
+<!-- Filter Bar -->
+<div class="bg-white rounded-xl p-md mb-lg border border-border shadow-sm flex flex-wrap items-center gap-lg">
+<div class="flex-1 min-w-[300px] relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary">search</span>
+<input class="w-full pl-10 pr-md py-2 bg-surface-container-lowest border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-body-md transition-all" id="permissionSearch" placeholder="Search by name, code or description..." type="text"/>
+</div>
+<div class="flex items-center gap-md">
+<select class="bg-surface-container-lowest border border-border rounded-lg px-md py-2 text-label-md outline-none focus:ring-2 focus:ring-primary/20">
+<option>All Module Types</option>
+<option>Menu</option>
+<option>Button</option>
+<option>API</option>
+</select>
+<div class="h-6 w-px bg-border"></div>
+<div class="flex items-center gap-sm text-text-secondary text-label-sm">
+<span class="">Showing <strong>24</strong> total permissions</span>
+</div>
+</div>
+</div>
+<!-- Hierarchical Tree Table -->
+<div class="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
+<table class="w-full text-left border-collapse transition-table">
+<thead>
+<tr class="bg-surface-container-low border-b border-border">
+<th class="px-lg py-3 text-label-sm font-bold text-text-secondary uppercase tracking-wider w-[35%]">Permission Name</th>
+<th class="px-md py-3 text-label-sm font-bold text-text-secondary uppercase tracking-wider">Code Identifier</th>
+<th class="px-md py-3 text-label-sm font-bold text-text-secondary uppercase tracking-wider">Type</th>
+<th class="px-md py-3 text-label-sm font-bold text-text-secondary uppercase tracking-wider">Description</th>
+<th class="px-lg py-3 text-label-sm font-bold text-text-secondary uppercase tracking-wider text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="text-body-md">
+<!-- Module Group: Dashboard -->
+<tr class="bg-surface-container-low/50 font-bold border-b border-border">
+<td class="px-lg py-2.5" colspan="5">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary cursor-pointer">keyboard_arrow_down</span>
+<span class="material-symbols-outlined text-primary text-[20px]" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="text-text-primary">Dashboard Module</span>
+<span class="ml-2 px-2 py-0.5 rounded text-[10px] bg-primary/10 text-primary border border-primary/20">ROOT</span>
+</div>
+</td>
+</tr>
+<tr class="border-b border-border hover:bg-surface-container-low/30">
+<td class="px-lg py-4">
+<div class="flex items-center gap-md pl-8">
+<div class="w-1.5 h-1.5 rounded-full bg-border"></div>
+<span class="font-medium">View Analytics</span>
+</div>
+</td>
+<td class="px-md py-4"><code class="px-2 py-1 bg-fill-hover rounded font-mono text-[13px] text-primary">dashboard:analytics:read</code></td>
+<td class="px-md py-4">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100 text-label-sm">
+<span class="material-symbols-outlined text-[14px]">table_chart</span> Menu
+                            </span>
+</td>
+<td class="px-md py-4 text-text-secondary">Ability to access and view the statistical charts in dashboard.</td>
+<td class="px-lg py-4 text-right">
+<button class="text-text-tertiary hover:text-primary transition-colors"><span class="material-symbols-outlined">edit</span></button>
+<button class="text-text-tertiary hover:text-danger ml-3 transition-colors"><span class="material-symbols-outlined">delete</span></button>
+</td>
+</tr>
+<tr class="border-b border-border hover:bg-surface-container-low/30">
+<td class="px-lg py-4">
+<div class="flex items-center gap-md pl-8">
+<div class="w-1.5 h-1.5 rounded-full bg-border"></div>
+<span class="font-medium">Export Reports</span>
+</div>
+</td>
+<td class="px-md py-4"><code class="px-2 py-1 bg-fill-hover rounded font-mono text-[13px] text-primary">dashboard:analytics:export</code></td>
+<td class="px-md py-4">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-100 text-label-sm">
+<span class="material-symbols-outlined text-[14px]">smart_button</span> Button
+                            </span>
+</td>
+<td class="px-md py-4 text-text-secondary">Allows downloading CSV/PDF versions of analytics reports.</td>
+<td class="px-lg py-4 text-right">
+<button class="text-text-tertiary hover:text-primary transition-colors"><span class="material-symbols-outlined">edit</span></button>
+<button class="text-text-tertiary hover:text-danger ml-3 transition-colors"><span class="material-symbols-outlined">delete</span></button>
+</td>
+</tr>
+<!-- Module Group: User Management -->
+<tr class="bg-surface-container-low/50 font-bold border-b border-border">
+<td class="px-lg py-2.5 pt-6" colspan="5">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary cursor-pointer">keyboard_arrow_down</span>
+<span class="material-symbols-outlined text-primary text-[20px]" style="font-variation-settings: 'FILL' 1;">group</span>
+<span class="text-text-primary">Identity &amp; Access Module</span>
+<span class="ml-2 px-2 py-0.5 rounded text-[10px] bg-primary/10 text-primary border border-primary/20">ROOT</span>
+</div>
+</td>
+</tr>
+<tr class="border-b border-border hover:bg-surface-container-low/30">
+<td class="px-lg py-4">
+<div class="flex items-center gap-md pl-8">
+<div class="w-1.5 h-1.5 rounded-full bg-border"></div>
+<span class="font-medium">User Write Access</span>
+</div>
+</td>
+<td class="px-md py-4"><code class="px-2 py-1 bg-fill-hover rounded font-mono text-[13px] text-primary">user:write</code></td>
+<td class="px-md py-4">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-600 border border-purple-100 text-label-sm">
+<span class="material-symbols-outlined text-[14px]">api</span> API
+                            </span>
+</td>
+<td class="px-md py-4 text-text-secondary">Allows creating and updating user account data via REST endpoints.</td>
+<td class="px-lg py-4 text-right">
+<button class="text-text-tertiary hover:text-primary transition-colors"><span class="material-symbols-outlined">edit</span></button>
+<button class="text-text-tertiary hover:text-danger ml-3 transition-colors"><span class="material-symbols-outlined">delete</span></button>
+</td>
+</tr>
+<tr class="border-b border-border hover:bg-surface-container-low/30">
+<td class="px-lg py-4">
+<div class="flex items-center gap-md pl-8">
+<div class="w-1.5 h-1.5 rounded-full bg-border"></div>
+<span class="font-medium">Password Reset Trigger</span>
+</div>
+</td>
+<td class="px-md py-4"><code class="px-2 py-1 bg-fill-hover rounded font-mono text-[13px] text-primary">user:admin:reset_password</code></td>
+<td class="px-md py-4">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-100 text-label-sm">
+<span class="material-symbols-outlined text-[14px]">smart_button</span> Button
+                            </span>
+</td>
+<td class="px-md py-4 text-text-secondary">Grants authority to force a password reset on any user account.</td>
+<td class="px-lg py-4 text-right">
+<button class="text-text-tertiary hover:text-primary transition-colors"><span class="material-symbols-outlined">edit</span></button>
+<button class="text-text-tertiary hover:text-danger ml-3 transition-colors"><span class="material-symbols-outlined">delete</span></button>
+</td>
+</tr>
+<!-- Module Group: Resources -->
+<tr class="bg-surface-container-low/50 font-bold border-b border-border">
+<td class="px-lg py-2.5 pt-6" colspan="5">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary cursor-pointer">keyboard_arrow_down</span>
+<span class="material-symbols-outlined text-primary text-[20px]" style="font-variation-settings: 'FILL' 1;">inventory_2</span>
+<span class="text-text-primary">Resources Module</span>
+<span class="ml-2 px-2 py-0.5 rounded text-[10px] bg-primary/10 text-primary border border-primary/20">ROOT</span>
+</div>
+</td>
+</tr>
+<tr class="border-b border-border hover:bg-surface-container-low/30">
+<td class="px-lg py-4">
+<div class="flex items-center gap-md pl-8">
+<div class="w-1.5 h-1.5 rounded-full bg-border"></div>
+<span class="font-medium">Hardware Inventory Read</span>
+</div>
+</td>
+<td class="px-md py-4"><code class="px-2 py-1 bg-fill-hover rounded font-mono text-[13px] text-primary">resource:hw:read</code></td>
+<td class="px-md py-4">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100 text-label-sm">
+<span class="material-symbols-outlined text-[14px]">table_chart</span> Menu
+                            </span>
+</td>
+<td class="px-md py-4 text-text-secondary">View the list of all hardware assets in the system.</td>
+<td class="px-lg py-4 text-right">
+<button class="text-text-tertiary hover:text-primary transition-colors"><span class="material-symbols-outlined">edit</span></button>
+<button class="text-text-tertiary hover:text-danger ml-3 transition-colors"><span class="material-symbols-outlined">delete</span></button>
+</td>
+</tr>
+<tr class="border-b border-border hover:bg-surface-container-low/30">
+<td class="px-lg py-4">
+<div class="flex items-center gap-md pl-8">
+<div class="w-1.5 h-1.5 rounded-full bg-border"></div>
+<span class="font-medium">Modify Infrastructure</span>
+</div>
+</td>
+<td class="px-md py-4"><code class="px-2 py-1 bg-fill-hover rounded font-mono text-[13px] text-primary">resource:infra:manage</code></td>
+<td class="px-md py-4">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-600 border border-purple-100 text-label-sm">
+<span class="material-symbols-outlined text-[14px]">api</span> API
+                            </span>
+</td>
+<td class="px-md py-4 text-text-secondary">Critical permission for modifying cloud infrastructure components.</td>
+<td class="px-lg py-4 text-right">
+<button class="text-text-tertiary hover:text-primary transition-colors"><span class="material-symbols-outlined">edit</span></button>
+<button class="text-text-tertiary hover:text-danger ml-3 transition-colors"><span class="material-symbols-outlined">delete</span></button>
+</td>
+</tr>
+</tbody>
+</table>
+<!-- Pagination-like Footer -->
+<div class="px-lg py-4 bg-white border-t border-border flex items-center justify-between">
+<div class="text-body-sm text-text-tertiary">
+                    Page 1 of 12
+                </div>
+<div class="flex items-center gap-1">
+<button class="p-2 rounded hover:bg-fill-hover disabled:opacity-30" disabled="">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="w-8 h-8 rounded bg-primary text-white text-label-sm">1</button>
+<button class="w-8 h-8 rounded hover:bg-fill-hover text-label-sm text-text-secondary">2</button>
+<button class="w-8 h-8 rounded hover:bg-fill-hover text-label-sm text-text-secondary">3</button>
+<span class="px-2 text-text-tertiary">...</span>
+<button class="w-8 h-8 rounded hover:bg-fill-hover text-label-sm text-text-secondary">12</button>
+<button class="p-2 rounded hover:bg-fill-hover">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+<!-- Floating Micro-interaction Background Ornament (Subtle Arco Style) -->
+<div class="fixed top-0 right-0 -z-10 pointer-events-none opacity-20">
+<svg fill="none" height="400" viewbox="0 0 400 400" width="400" xmlns="http://www.w3.org/2000/svg">
+<circle cx="350" cy="50" fill="url(#paint0_linear)" r="150"></circle>
+<defs>
+<lineargradient gradientunits="userSpaceOnUse" id="paint0_linear" x1="200" x2="500" y1="-100" y2="200">
+<stop stop-color="#165DFF"></stop>
+<stop offset="1" stop-color="#165DFF" stop-opacity="0"></stop>
+</lineargradient>
+</defs>
+</svg>
+</div>
+<script>
+        // Simple search filtering logic
+        document.getElementById('permissionSearch').addEventListener('input', function(e) {
+            const term = e.target.value.toLowerCase();
+            const rows = document.querySelectorAll('tbody tr:not(.font-bold)');
+            
+            rows.forEach(row => {
+                const text = row.innerText.toLowerCase();
+                if (text.includes(term)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            // Logic to hide empty group headers could be added here
+        });
+
+        // Toggle Expand/Collapse animation for module groups
+        document.querySelectorAll('tbody tr.font-bold span.material-symbols-outlined').forEach(icon => {
+            if(icon.innerText === 'keyboard_arrow_down' || icon.innerText === 'keyboard_arrow_right') {
+                icon.addEventListener('click', function() {
+                    const isCollapsed = this.innerText === 'keyboard_arrow_right';
+                    this.innerText = isCollapsed ? 'keyboard_arrow_down' : 'keyboard_arrow_right';
+                    
+                    let next = this.closest('tr').nextElementSibling;
+                    while (next && !next.classList.contains('font-bold')) {
+                        next.style.display = isCollapsed ? '' : 'none';
+                        next = next.nextElementSibling;
+                    }
+                });
+            }
+        });
+    </script>
+</body></html>

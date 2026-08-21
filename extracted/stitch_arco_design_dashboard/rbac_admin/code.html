@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Login | RBAC Control Center</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-tertiary": "#ffffff",
+                    "surface-container-highest": "#d8e3f7",
+                    "secondary-fixed": "#e1e2e4",
+                    "surface-variant": "#d8e3f7",
+                    "secondary-fixed-dim": "#c5c6c8",
+                    "secondary-container": "#dee0e2",
+                    "on-secondary": "#ffffff",
+                    "on-tertiary-fixed-variant": "#832700",
+                    "tertiary-container": "#c43e00",
+                    "surface-container-high": "#dee9fc",
+                    "surface-dim": "#cfdbee",
+                    "on-error-container": "#93000a",
+                    "success": "#00B42A",
+                    "inverse-surface": "#263140",
+                    "on-primary-fixed": "#00164f",
+                    "text-secondary": "#4E5969",
+                    "warning": "#FF7D00",
+                    "on-secondary-fixed-variant": "#444749",
+                    "tertiary": "#9a2f00",
+                    "on-surface": "#111c2a",
+                    "on-secondary-fixed": "#191c1e",
+                    "error-container": "#ffdad6",
+                    "link": "#165DFF",
+                    "on-surface-variant": "#434656",
+                    "inverse-on-surface": "#eaf1ff",
+                    "tertiary-fixed": "#ffdbd0",
+                    "surface-container": "#e5eeff",
+                    "surface-container-low": "#eff4ff",
+                    "outline": "#737688",
+                    "danger": "#F53F3F",
+                    "text-primary": "#1D2129",
+                    "error": "#ba1a1a",
+                    "on-error": "#ffffff",
+                    "surface-container-lowest": "#ffffff",
+                    "background": "#f8f9ff",
+                    "bg-white": "#FFFFFF",
+                    "inverse-primary": "#b6c4ff",
+                    "primary-fixed": "#dce1ff",
+                    "on-primary-container": "#eeefff",
+                    "text-tertiary": "#86909C",
+                    "on-primary": "#ffffff",
+                    "border": "#E5E6EB",
+                    "fill-hover": "#F2F3F5",
+                    "on-background": "#111c2a",
+                    "surface-bright": "#f8f9ff",
+                    "on-tertiary-container": "#ffece6",
+                    "primary": "#0047cf",
+                    "secondary": "#5c5f60",
+                    "outline-variant": "#c3c5d9",
+                    "on-secondary-container": "#606365",
+                    "surface": "#f8f9ff",
+                    "tertiary-fixed-dim": "#ffb59d",
+                    "primary-container": "#165dff",
+                    "primary-fixed-dim": "#b6c4ff",
+                    "on-tertiary-fixed": "#390c00",
+                    "on-primary-fixed-variant": "#003bb0",
+                    "surface-tint": "#004fe5"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "xl": "32px",
+                    "lg": "24px",
+                    "xs": "4px",
+                    "md": "16px",
+                    "container-max": "1200px",
+                    "gutter": "16px",
+                    "sm": "8px",
+                    "2xl": "48px"
+            },
+            "fontFamily": {
+                    "body-md": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "h2": ["Inter"],
+                    "h4": ["Inter"],
+                    "label-md": ["Inter"],
+                    "h1": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "h3": ["Inter"],
+                    "h1-mobile": ["Inter"]
+            },
+            "fontSize": {
+                    "body-md": ["14px", {"lineHeight": "22px", "fontWeight": "400"}],
+                    "label-sm": ["12px", {"lineHeight": "20px", "fontWeight": "500"}],
+                    "h2": ["30px", {"lineHeight": "38px", "fontWeight": "600"}],
+                    "h4": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "label-md": ["14px", {"lineHeight": "22px", "fontWeight": "500"}],
+                    "h1": ["36px", {"lineHeight": "44px", "fontWeight": "600"}],
+                    "body-sm": ["12px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "h3": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "h1-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8f9ff;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .arco-input-focus:focus-within {
+            border-color: #0047cf;
+            box-shadow: 0 0 0 2px rgba(0, 71, 207, 0.1);
+        }
+        .bg-mesh {
+            background-color: #f8f9ff;
+            background-image: 
+                radial-gradient(at 0% 0%, hsla(220,100%,95%,1) 0, transparent 50%), 
+                radial-gradient(at 50% 0%, hsla(215,100%,97%,1) 0, transparent 50%), 
+                radial-gradient(at 100% 0%, hsla(210,100%,94%,1) 0, transparent 50%);
+        }
+    </style>
+</head>
+<body class="bg-mesh min-h-screen flex flex-col items-center justify-center p-md">
+<!-- Main Login Container -->
+<main class="w-full max-w-[400px] animate-in fade-in slide-in-from-bottom-4 duration-700">
+<!-- Logo & Header Section -->
+<div class="text-center mb-xl">
+<div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary mb-md shadow-sm">
+<span class="material-symbols-outlined text-white text-[28px]" style="font-variation-settings: 'FILL' 1;">shield</span>
+</div>
+<h1 class="font-h2 text-h2 text-text-primary mb-xs">Welcome back!</h1>
+<p class="font-body-md text-body-md text-text-secondary">Enter your credentials to access RBAC Admin</p>
+</div>
+<!-- Login Card -->
+<div class="bg-white rounded-xl border border-border shadow-sm p-xl">
+<form class="space-y-lg" id="loginForm" onsubmit="return false;">
+<!-- Username Field -->
+<div class="space-y-sm">
+<label class="font-label-md text-label-md text-text-primary block" for="username">Username</label>
+<div class="relative arco-input-focus border border-border rounded-lg transition-all duration-200">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary">person</span>
+<input class="w-full pl-10 pr-md py-2.5 bg-transparent border-none focus:ring-0 text-body-md font-body-md text-text-primary placeholder:text-text-tertiary" id="username" name="username" placeholder="Enter your username" required="" type="text"/>
+</div>
+</div>
+<!-- Password Field -->
+<div class="space-y-sm">
+<label class="font-label-md text-label-md text-text-primary block" for="password">Password</label>
+<div class="relative arco-input-focus border border-border rounded-lg transition-all duration-200">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary">lock</span>
+<input class="w-full pl-10 pr-12 py-2.5 bg-transparent border-none focus:ring-0 text-body-md font-body-md text-text-primary placeholder:text-text-tertiary" id="password" name="password" placeholder="Enter your password" required="" type="password"/>
+<button class="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-primary transition-colors" onclick="togglePassword()" type="button">
+<span class="material-symbols-outlined" id="eyeIcon">visibility</span>
+</button>
+</div>
+</div>
+<!-- Remember & Forgot -->
+<div class="flex items-center justify-between pt-xs">
+<label class="flex items-center cursor-pointer group">
+<input class="w-4 h-4 rounded border-border text-primary focus:ring-primary focus:ring-offset-0" type="checkbox"/>
+<span class="ml-2 font-body-sm text-body-sm text-text-secondary group-hover:text-text-primary transition-colors">Remember me</span>
+</label>
+<a class="font-body-sm text-body-sm text-link hover:underline" href="#">Forgot password?</a>
+</div>
+<!-- Submit Button -->
+<button class="w-full bg-primary hover:bg-primary-container text-white font-label-md text-label-md py-3 rounded-lg shadow-sm active:scale-[0.98] transition-all duration-150 flex items-center justify-center gap-2" id="submitBtn" type="submit">
+                    Login
+                    <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</form>
+</div>
+<!-- Footer Links -->
+<footer class="mt-xl flex justify-center items-center gap-lg">
+<a class="inline-flex items-center gap-xs font-label-sm text-label-sm text-text-tertiary hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[16px]">help</span>
+                Support
+            </a>
+<div class="w-1 h-1 rounded-full bg-border"></div>
+<a class="inline-flex items-center gap-xs font-label-sm text-label-sm text-text-tertiary hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[16px]">description</span>
+                Documentation
+            </a>
+</footer>
+</main>
+<!-- Background Decorative Elements -->
+<div class="fixed top-0 left-0 w-full h-full -z-10 overflow-hidden pointer-events-none">
+<div class="absolute -top-[10%] -right-[5%] w-[40%] h-[40%] bg-surface-container opacity-30 rounded-full blur-[120px]"></div>
+<div class="absolute -bottom-[10%] -left-[5%] w-[40%] h-[40%] bg-surface-container-high opacity-40 rounded-full blur-[120px]"></div>
+</div>
+<script>
+        function togglePassword() {
+            const input = document.getElementById('password');
+            const icon = document.getElementById('eyeIcon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.textContent = 'visibility_off';
+            } else {
+                input.type = 'password';
+                icon.textContent = 'visibility';
+            }
+        }
+
+        const loginForm = document.getElementById('loginForm');
+        const submitBtn = document.getElementById('submitBtn');
+
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            // Visual feedback for interaction
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `
+                <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Processing...
+            `;
+
+            // Simulate login delay
+            setTimeout(() => {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = 'Login <span class="material-symbols-outlined text-[18px]">arrow_forward</span>';
+                // In a real app, redirection would happen here
+            }, 1200);
+        });
+    </script>
+</body></html>

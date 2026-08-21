@@ -1,0 +1,117 @@
+/* 
+  Refined Angular Material Theme Tokens - Arco Design System v2
+  Optimized for: RBAC Admin & Enterprise OS
+  Derived from: {{DATA:DESIGN_SYSTEM:DESIGN_SYSTEM_2}} and {{DATA:DESIGN_SYSTEM:DESIGN_SYSTEM_1}}
+*/
+
+:root {
+  /* --- Primary Brand Colors (Arco Blue) --- */
+  --mat-sys-primary: #165dff;
+  --mat-sys-on-primary: #ffffff;
+  --mat-sys-primary-container: #e8f3ff;
+  --mat-sys-on-primary-container: #165dff;
+  --mat-sys-inverse-primary: #94bfff;
+
+  /* --- Surface & Background (Light Mode) --- */
+  --mat-sys-surface: #f8f9ff;
+  --mat-sys-on-surface: #1d2129;
+  --mat-sys-surface-variant: #f2f3f5;
+  --mat-sys-on-surface-variant: #4e5969;
+  
+  /* Container Levels */
+  --mat-sys-surface-container-lowest: #ffffff;
+  --mat-sys-surface-container-low: #f7f8fa;
+  --mat-sys-surface-container: #ffffff;
+  --mat-sys-surface-container-high: #e5e6eb;
+  --mat-sys-surface-container-highest: #f2f3f5;
+
+  /* --- Secondary / Neutral --- */
+  --mat-sys-secondary: #4e5969;
+  --mat-sys-on-secondary: #ffffff;
+  --mat-sys-secondary-container: #f2f3f5;
+  --mat-sys-on-secondary-container: #1d2129;
+
+  /* --- Semantic Colors (Arco Standard) --- */
+  /* Success */
+  --mat-sys-success: #00b42a;
+  --mat-sys-on-success: #ffffff;
+  --mat-sys-success-container: #e8ffea;
+  
+  /* Error / Danger */
+  --mat-sys-error: #f53f3f;
+  --mat-sys-on-error: #ffffff;
+  --mat-sys-error-container: #ffece8;
+  
+  /* Warning */
+  --mat-sys-warning: #ff7d00;
+  --mat-sys-on-warning: #ffffff;
+  --mat-sys-warning-container: #fff7e8;
+
+  /* --- Outline & Borders --- */
+  --mat-sys-outline: #e5e6eb;
+  --mat-sys-outline-variant: #f2f3f5;
+
+  /* --- Typography (Inter / SC Alignment) --- */
+  --mat-sys-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  
+  /* Display & Headlines */
+  --mat-sys-display-large-size: 56px;
+  --mat-sys-headline-large-size: 32px;
+  --mat-sys-headline-large-weight: 600;
+  --mat-sys-headline-medium-size: 24px;
+  --mat-sys-headline-medium-weight: 600;
+  
+  /* Titles & Body */
+  --mat-sys-title-large-size: 18px;
+  --mat-sys-title-large-weight: 500;
+  --mat-sys-title-medium-size: 16px;
+  --mat-sys-title-medium-weight: 500;
+  --mat-sys-body-large-size: 16px;
+  --mat-sys-body-medium-size: 14px;
+  --mat-sys-body-small-size: 12px;
+
+  /* --- Shapes & Elevation --- */
+  --mat-sys-corner-none: 0px;
+  --mat-sys-corner-extra-small: 2px;
+  --mat-sys-corner-small: 4px; /* Arco Standard Rounding */
+  --mat-sys-corner-medium: 8px;
+  --mat-sys-corner-large: 12px;
+  --mat-sys-corner-full: 9999px;
+
+  /* Elevation (Arco Shadows) */
+  --mat-sys-elevation-level1: 0 2px 4px rgba(0, 0, 0, 0.08);
+  --mat-sys-elevation-level2: 0 4px 10px rgba(0, 0, 0, 0.1);
+  --mat-sys-elevation-level3: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+/* --- Dark Mode Alignment (Arco Dark) --- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mat-sys-primary: #165dff;
+    --mat-sys-on-primary: #ffffff;
+    --mat-sys-primary-container: #165dff33;
+    --mat-sys-on-primary-container: #6ab1ff;
+
+    --mat-sys-surface: #131315;
+    --mat-sys-on-surface: #f2f3f5;
+    --mat-sys-surface-variant: #232324;
+    --mat-sys-on-surface-variant: #86909c;
+
+    --mat-sys-surface-container-lowest: #0e0e10;
+    --mat-sys-surface-container-low: #1b1b1d;
+    --mat-sys-surface-container: #1d1d1f;
+    --mat-sys-surface-container-high: #2e2e30;
+    --mat-sys-surface-container-highest: #333335;
+
+    --mat-sys-outline: #333335;
+    --mat-sys-outline-variant: #232324;
+    
+    --mat-sys-secondary: #86909c;
+    --mat-sys-on-secondary: #ffffff;
+    
+    /* Semantic Dark Adjustments */
+    --mat-sys-success-container: #00b42a33;
+    --mat-sys-error-container: #f53f3f33;
+    --mat-sys-warning-container: #ff7d0033;
+  }
+}

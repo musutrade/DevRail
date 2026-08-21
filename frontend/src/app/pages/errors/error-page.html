@@ -1,0 +1,78 @@
+<div class="error-page">
+  @switch (status) {
+    @case (403) {
+      <section class="error-content error-card" aria-labelledby="error-title">
+        <div class="error-illustration" aria-hidden="true">
+          <mat-icon class="illustration-icon">lock_reset</mat-icon>
+          <span class="error-badge">
+            <mat-icon class="filled">block</mat-icon>
+          </span>
+        </div>
+
+        <p class="error-code">403</p>
+        <h1 id="error-title" class="error-title">无权访问</h1>
+        <p class="error-desc">您没有访问此页面的权限，请联系管理员确认账号角色和权限配置。</p>
+
+        <div class="error-actions">
+          <button type="button" class="btn-primary" (click)="goHome()">
+            <mat-icon aria-hidden="true">arrow_back</mat-icon>
+            返回首页
+          </button>
+        </div>
+      </section>
+    }
+    @case (404) {
+      <section class="error-content error-content-wide error-card" aria-labelledby="error-title">
+        <div class="not-found-illustration" aria-hidden="true">
+          <span class="not-found-code">404</span>
+          <span class="not-found-icon">
+            <mat-icon class="filled">qr_code_2</mat-icon>
+            <span class="not-found-badge">
+              <mat-icon class="filled">error</mat-icon>
+            </span>
+          </span>
+        </div>
+
+        <h1 id="error-title" class="error-title error-title-large">页面不存在</h1>
+        <p class="error-desc error-desc-wide">
+          请求的页面不存在，可能已被移动、删除，或访问地址有误。
+        </p>
+
+        <div class="not-found-actions">
+          <button type="button" class="btn-primary" (click)="goHome()">
+            <mat-icon aria-hidden="true">home</mat-icon>
+            返回首页
+          </button>
+          <button type="button" class="btn-secondary" (click)="goBack()">
+            <mat-icon aria-hidden="true">arrow_back</mat-icon>
+            返回上一页
+          </button>
+        </div>
+      </section>
+    }
+    @case (500) {
+      <section class="error-content error-content-wide error-card" aria-labelledby="error-title">
+        <div class="server-error-illustration" aria-hidden="true">
+          <mat-icon class="filled">dangerous</mat-icon>
+        </div>
+
+        <p class="error-code">500</p>
+        <h1 id="error-title" class="error-title">服务器内部错误</h1>
+        <p class="error-desc">
+          服务器暂时无法完成请求，请稍后重试；如问题持续出现，请联系技术支持。
+        </p>
+
+        <div class="error-actions">
+          <button type="button" class="btn-primary" (click)="reload()">
+            <mat-icon aria-hidden="true">refresh</mat-icon>
+            刷新页面
+          </button>
+          <button type="button" class="btn-outline" (click)="goHome()">
+            <mat-icon aria-hidden="true">home</mat-icon>
+            返回首页
+          </button>
+        </div>
+      </section>
+    }
+  }
+</div>

@@ -1,0 +1,177 @@
+<div class="page">
+  <section class="page-header">
+    <div>
+      <h1>账号安全</h1>
+      <p>管理二次验证、通行密钥和恢复码。</p>
+    </div>
+  </section>
+
+  @if (loading()) {
+    <div class="loading-wrap" role="status" aria-live="polite" aria-label="正在加载账号安全设置">
+      <mat-progress-spinner diameter="28" mode="indeterminate" />
+    </div>
+  } @else if (error() && !status()) {
+    <div class="table-card">
+      <div class="empty-state" role="alert">
+        <mat-icon>error</mat-icon>
+        <p>{{ error() }}</p>
+        <button type="button" class="btn-outline" (click)="retry()">重新加载</button>
+      </div>
+    </div>
+  } @else if (recoveryCodes().length > 0) {
+    <section class="recovery-result" aria-live="polite">
+      <div class="section-heading">
+        <mat-icon>key</mat-icon>
+        <div>
+          <h2>新恢复码</h2>
+          <p>旧恢复码和现有会话已失效</p>
+        </div>
+      </div>
+      <div class="warning">
+        <mat-icon>warning</mat-icon><span>恢复码只显示一次，请立即安全保存。</span>
+      </div>
+      <div class="recovery-grid">
+        @for (code of recoveryCodes(); track code) {
+          <code>{{ code }}</code>
+        }
+      </div>
+      <div class="actions">
+        <button type="button" class="btn-outline" (click)="downloadRecoveryCodes()">
+          <mat-icon>download</mat-icon><span>下载恢复码</span>
+        </button>
+        <button type="button" class="btn-primary" (click)="returnToLogin()">
+          <mat-icon>login</mat-icon><span>重新登录</span>
+        </button>
+      </div>
+    </section>
+  } @else if (status(); as mfa) {
+    @if (error()) {
+      <div class="feedback error" role="alert">
+        <mat-icon>error</mat-icon><span>{{ error() }}</span>
+      </div>
+    }
+    @if (message()) {
+      <div class="feedback success" role="status" aria-live="polite">
+        <mat-icon>check_circle</mat-icon><span>{{ message() }}</span>
+      </div>
+    }
+
+    <section class="status-band" [class.inactive]="!mfa.totpEnabled">
+      <div class="status-icon" [class.active]="mfa.totpEnabled">
+        <mat-icon>{{ mfa.totpEnabled ? 'verified_user' : 'shield' }}</mat-icon>
+      </div>
+      <div>
+        <h2>{{ mfa.totpEnabled ? '身份验证器已启用' : '身份验证器未启用' }}</h2>
+        <p>
+          @if (mfa.required) {
+            当前账号必须启用身份验证器
+          } @else if (mfa.totpEnabled) {
+            当前账号的关键操作受身份验证器保护
+          } @else {
+            启用后可为关键操作提供额外保护
+          }
+        </p>
+      </div>
+      <span class="status-label">{{ mfa.totpEnabled ? '已保护' : '未启用' }}</span>
+    </section>
+
+    @if (mfa.totpEnabled) {
+      <section class="settings-section">
+        <div class="section-heading">
+          <mat-icon>passkey</mat-icon>
+          <div>
+            <h2>通行密钥</h2>
+            <p>{{ mfa.passkeys.length }} 个已注册凭据</p>
+          </div>
+        </div>
+
+        <div class="passkey-list">
+          @for (passkey of mfa.passkeys; track passkey.id) {
+            <article class="passkey-item">
+              <div class="passkey-main">
+                <mat-icon>fingerprint</mat-icon>
+                <div>
+                  <strong>{{ passkey.name }}</strong
+                  ><span>最近使用：{{ formatDate(passkey.lastUsedAt) }}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="icon-btn danger"
+                (click)="confirmRevoke(passkey.id)"
+                [attr.aria-label]="'撤销通行密钥 ' + passkey.name"
+              >
+                <mat-icon>delete</mat-icon>
+              </button>
+            </article>
+          } @empty {
+            <div class="passkey-empty">
+              <mat-icon>key_off</mat-icon><span>尚未添加通行密钥</span>
+            </div>
+          }
+        </div>
+
+        @if (auth.supportsPasskeys()) {
+          <form class="reauth-form" (submit)="registerPasskey(); $event.preventDefault()">
+            <h3>添加通行密钥</h3>
+            <div class="form-grid three">
+              <label
+                >名称<input
+                  [formField]="registrationForm.name"
+                  autocomplete="off"
+                  placeholder="办公电脑"
+              /></label>
+              <label
+                >当前密码<input
+                  type="password"
+                  [formField]="registrationForm.currentPassword"
+                  autocomplete="current-password"
+              /></label>
+              <app-authenticator-code-field
+                controlId="registration-totp-code"
+                [formField]="registrationForm.totpCode"
+              />
+            </div>
+            @if (registrationForm().touched() && registrationForm().invalid()) {
+              <p class="form-error">请完整填写名称、当前密码和验证码</p>
+            }
+            <button type="submit" class="btn-primary" [disabled]="submitting()">
+              <mat-icon>add</mat-icon><span>添加</span>
+            </button>
+          </form>
+        }
+      </section>
+
+      <section class="settings-section">
+        <div class="section-heading">
+          <mat-icon>vpn_key</mat-icon>
+          <div>
+            <h2>恢复码</h2>
+            <p>剩余 {{ mfa.recoveryCodesRemaining }} 个</p>
+          </div>
+        </div>
+        <form class="reauth-form" (submit)="regenerateRecoveryCodes(); $event.preventDefault()">
+          <h3>重新生成</h3>
+          <div class="form-grid">
+            <label
+              >当前密码<input
+                type="password"
+                [formField]="recoveryForm.currentPassword"
+                autocomplete="current-password"
+            /></label>
+            <app-authenticator-code-field
+              controlId="recovery-totp-code"
+              [formField]="recoveryForm.totpCode"
+            />
+          </div>
+          @if (recoveryForm().touched() && recoveryForm().invalid()) {
+            <p class="form-error">请填写当前密码和验证码</p>
+          }
+          <button type="submit" class="btn-outline" [disabled]="submitting()">
+            <mat-icon>refresh</mat-icon><span>生成新恢复码</span>
+          </button>
+        </form>
+      </section>
+    }
+  }
+</div>

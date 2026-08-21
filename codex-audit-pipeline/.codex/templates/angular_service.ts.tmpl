@@ -1,0 +1,36 @@
+// 放置于 frontend/src/app/features/<domain>/data-access/
+// 使用前替换: {{ENTITY_NAME}}, {{FILE_NAME}}, {{ROUTE_PATH}}
+// 只有 Service 允许注入 HttpClient，页面组件不得直接访问 API。
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Injectable, inject } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import { {{ENTITY_NAME}}, Page } from '../models/{{FILE_NAME}}.model';
+import { API_BASE_URL } from '../../../core/runtime-config';
+
+@Injectable({ providedIn: 'root' })
+export class {{ENTITY_NAME}}ApiService {
+  private readonly http = inject(HttpClient);
+  private readonly apiBaseUrl = inject(API_BASE_URL);
+  private readonly baseUrl = `${this.apiBaseUrl}/{{ROUTE_PATH}}`;
+
+  getById(id: number): Promise<{{ENTITY_NAME}}> {
+    return firstValueFrom(this.http.get<{{ENTITY_NAME}}>(`${this.baseUrl}/${id}`));
+  }
+
+  list(page = 1, pageSize = 20): Promise<Page<{{ENTITY_NAME}}>> {
+    const params = new HttpParams().set('page', page).set('pageSize', pageSize);
+    return firstValueFrom(this.http.get<Page<{{ENTITY_NAME}}>>(this.baseUrl, { params }));
+  }
+
+  create(data: Partial<{{ENTITY_NAME}}>): Promise<{{ENTITY_NAME}}> {
+    return firstValueFrom(this.http.post<{{ENTITY_NAME}}>(this.baseUrl, data));
+  }
+
+  update(id: number, data: Partial<{{ENTITY_NAME}}>): Promise<{{ENTITY_NAME}}> {
+    return firstValueFrom(this.http.put<{{ENTITY_NAME}}>(`${this.baseUrl}/${id}`, data));
+  }
+
+  async delete(id: number): Promise<void> {
+    await firstValueFrom(this.http.delete<void>(`${this.baseUrl}/${id}`));
+  }
+}

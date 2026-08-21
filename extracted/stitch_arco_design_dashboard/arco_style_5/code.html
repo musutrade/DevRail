@@ -1,0 +1,450 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>RBAC Control Center - Assign Permissions</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "outline": "#737688",
+                        "secondary-container": "#dee0e2",
+                        "inverse-primary": "#b6c4ff",
+                        "error-container": "#ffdad6",
+                        "surface-container-low": "#eff4ff",
+                        "link": "#165DFF",
+                        "on-secondary-fixed": "#191c1e",
+                        "on-primary-container": "#eeefff",
+                        "bg-white": "#FFFFFF",
+                        "on-background": "#111c2a",
+                        "background": "#f8f9ff",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed": "#e1e2e4",
+                        "error": "#ba1a1a",
+                        "on-tertiary": "#ffffff",
+                        "text-secondary": "#4E5969",
+                        "on-tertiary-fixed": "#390c00",
+                        "primary-container": "#165dff",
+                        "primary": "#0047cf",
+                        "on-secondary-fixed-variant": "#444749",
+                        "surface-container": "#e5eeff",
+                        "success": "#00B42A",
+                        "surface-container-high": "#dee9fc",
+                        "danger": "#F53F3F",
+                        "on-surface": "#111c2a",
+                        "fill-hover": "#F2F3F5",
+                        "on-secondary": "#ffffff",
+                        "tertiary-fixed-dim": "#ffb59d",
+                        "on-secondary-container": "#606365",
+                        "text-primary": "#1D2129",
+                        "on-primary-fixed": "#00164f",
+                        "tertiary-container": "#c43e00",
+                        "surface-tint": "#004fe5",
+                        "on-error-container": "#93000a",
+                        "primary-fixed-dim": "#b6c4ff",
+                        "on-surface-variant": "#434656",
+                        "on-tertiary-fixed-variant": "#832700",
+                        "warning": "#FF7D00",
+                        "border": "#E5E6EB",
+                        "inverse-surface": "#263140",
+                        "surface-variant": "#d8e3f7",
+                        "tertiary": "#9a2f00",
+                        "surface-bright": "#f8f9ff",
+                        "on-error": "#ffffff",
+                        "tertiary-fixed": "#ffdbd0",
+                        "primary-fixed": "#dce1ff",
+                        "on-primary-fixed-variant": "#003bb0",
+                        "on-tertiary-container": "#ffece6",
+                        "text-tertiary": "#86909C",
+                        "surface-dim": "#cfdbee",
+                        "on-primary": "#ffffff",
+                        "secondary-fixed-dim": "#c5c6c8",
+                        "outline-variant": "#c3c5d9",
+                        "inverse-on-surface": "#eaf1ff",
+                        "surface": "#f8f9ff",
+                        "secondary": "#5c5f60",
+                        "surface-container-highest": "#d8e3f7"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "xl": "32px",
+                        "gutter": "16px",
+                        "sm": "8px",
+                        "xs": "4px",
+                        "lg": "24px",
+                        "md": "16px",
+                        "2xl": "48px",
+                        "container-max": "1200px"
+                    },
+                    "fontFamily": {
+                        "label-md": ["Inter"],
+                        "h1-mobile": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "h4": ["Inter"],
+                        "h3": ["Inter"],
+                        "h1": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "h2": ["Inter"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-md": ["14px", {"lineHeight": "22px", "fontWeight": "500"}],
+                        "h1-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                        "label-sm": ["12px", {"lineHeight": "20px", "fontWeight": "500"}],
+                        "h4": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "h3": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "h1": ["36px", {"lineHeight": "44px", "fontWeight": "600"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "body-sm": ["12px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "h2": ["30px", {"lineHeight": "38px", "fontWeight": "600"}],
+                        "body-md": ["14px", {"lineHeight": "22px", "fontWeight": "400"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #E5E6EB; border-radius: 10px; }
+        .modal-overlay { backdrop-filter: blur(2px); background-color: rgba(29, 33, 41, 0.6); }
+    </style>
+</head>
+<body class="bg-background text-on-surface">
+<!-- TopNavBar -->
+<nav class="fixed top-0 left-0 w-full z-40 flex justify-between items-center px-lg h-14 bg-white border-b border-border">
+<div class="flex items-center gap-md">
+<span class="text-h4 font-h4 font-bold text-primary">RBAC Control Center</span>
+<div class="hidden md:flex items-center gap-xl ml-lg">
+<a class="text-text-secondary font-label-md text-label-md hover:text-primary transition-colors" href="#">Dashboard</a>
+<a class="text-text-secondary font-label-md text-label-md hover:text-primary transition-colors" href="#">Audit Logs</a>
+<a class="text-text-secondary font-label-md text-label-md hover:text-primary transition-colors" href="#">Security Settings</a>
+</div>
+</div>
+<div class="flex items-center gap-md">
+<div class="relative">
+<span class="material-symbols-outlined text-on-surface-variant p-2 hover:bg-fill-hover rounded-full cursor-pointer">notifications</span>
+<span class="absolute top-1 right-1 w-2 h-2 bg-danger rounded-full border-2 border-white"></span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant p-2 hover:bg-fill-hover rounded-full cursor-pointer">contrast</span>
+<span class="material-symbols-outlined text-on-surface-variant p-2 hover:bg-fill-hover rounded-full cursor-pointer">settings</span>
+<div class="h-8 w-8 rounded-full overflow-hidden ml-sm border border-border">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a senior system administrator in a clean-lit modern corporate environment. The image uses a soft, neutral color palette with high-key lighting to emphasize clarity and professionalism. The focus is sharp on the facial features, suggesting expertise and reliability in an enterprise tech setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD7l4EtxhMol6AB6QzAgCjbCNaTv_6HgnCAteudHw4EFwH-eYoE5FbRla7LTRrhsRcUy_lP9oAEWMyolmKdpdPqyJgLecG6zfcHKKtdQdhylkdzz3nzzRvCRKOkKydtoJb9G6NYhRVvCt_Ron6Lbm5PpJMto3xhwfG4FWJ3HXTyX2a4t_KC8QhoMvt1qM7lj807wM8x7LdBacbUDvOkf6-Af8f4XS4OozKlkXwSuSedo3rmw--nvW9j">
+</div>
+</div>
+</nav>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-14 bottom-0 w-60 flex flex-col py-md z-30 bg-surface-container-lowest border-r border-border"><div class="px-md mb-lg">
+<div class="flex items-center gap-sm p-sm rounded-lg">
+<div class="w-8 h-8 bg-primary rounded flex items-center justify-center text-white font-bold">RA</div>
+<div>
+<div class="text-label-md font-h4 text-primary leading-tight">RBAC Admin</div>
+<div class="text-[10px] text-text-tertiary uppercase tracking-wider">Enterprise Tier</div>
+</div>
+</div>
+</div>
+<div class="flex-1 space-y-1 px-sm overflow-y-auto custom-scrollbar">
+<div>
+<button class="w-full flex items-center justify-between px-md py-3 text-text-secondary font-label-md text-label-md rounded-lg hover:bg-fill-hover transition-all group">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined">group</span>
+<span class="">User Management</span>
+</div>
+<span class="material-symbols-outlined text-[18px] transition-transform group-hover:rotate-90">chevron_right</span>
+</button>
+<div class="ml-lg mt-1 space-y-1">
+<a class="flex items-center gap-md px-md py-2 text-text-secondary font-label-md text-label-sm rounded-lg bg-fill-hover transition-all" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+<span class="">Active Users</span>
+</a>
+<a class="flex items-center gap-md px-md py-2 text-text-secondary font-label-md text-label-sm rounded-lg hover:bg-fill-hover transition-all" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-border"></span>
+<span class="">Pending Invites</span>
+</a>
+</div>
+</div>
+<a class="flex items-center gap-md px-md py-3 text-primary bg-surface-container font-bold text-label-md rounded-lg scale-95 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">badge</span>
+<span class="">Role Permissions</span>
+</a>
+<a class="flex items-center gap-md px-md py-3 text-text-secondary font-label-md text-label-md rounded-lg hover:bg-fill-hover transition-all" href="#">
+<span class="material-symbols-outlined">lock_person</span>
+<span class="">Resource Access</span>
+</a>
+<a class="flex items-center gap-md px-md py-3 text-text-secondary font-label-md text-label-md rounded-lg hover:bg-fill-hover transition-all" href="#">
+<span class="material-symbols-outlined">policy</span>
+<span class="">System Policies</span>
+</a>
+<a class="flex items-center gap-md px-md py-3 text-text-secondary font-label-md text-label-md rounded-lg hover:bg-fill-hover transition-all" href="#">
+<span class="material-symbols-outlined">shield</span>
+<span class="">Security Center</span>
+</a>
+</div>
+<div class="mt-auto px-sm pt-md border-t border-border">
+<button class="w-full bg-primary text-white py-2 rounded-lg font-label-md flex items-center justify-center gap-sm hover:opacity-90 transition-opacity mb-md">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span class="">Create New Policy</span>
+</button>
+<a class="flex items-center gap-md px-md py-2 text-text-tertiary text-label-sm hover:text-primary" href="#">
+<span class="material-symbols-outlined text-[18px]">help</span>
+<span class="">Support</span>
+</a>
+<a class="flex items-center gap-md px-md py-2 text-text-tertiary text-label-sm hover:text-primary" href="#">
+<span class="material-symbols-outlined text-[18px]">description</span>
+<span class="">Documentation</span>
+</a>
+</div>
+<button class="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white border border-border rounded-full flex items-center justify-center shadow-sm hover:bg-fill-hover transition-colors z-50">
+<span class="material-symbols-outlined text-[16px]">chevron_left</span>
+</button></aside>
+<!-- Main Content Background (Blurred/Dimmed) -->
+<main class="ml-60 mt-14 p-xl transition-all blur-[2px] opacity-50">
+<div class="flex justify-between items-end mb-lg">
+<div>
+<h1 class="text-h2 font-h2 text-text-primary mb-xs">Role Management</h1>
+<p class="text-body-md text-text-secondary">Define and configure granular access controls for system roles.</p>
+</div>
+<div class="flex gap-md">
+<button class="px-lg py-2 border border-border bg-white rounded-lg text-text-primary font-label-md hover:bg-fill-hover">Export Rules</button>
+<button class="px-lg py-2 bg-primary text-white rounded-lg font-label-md">Add New Role</button>
+</div>
+</div>
+<div class="bg-white rounded-xl border border-border overflow-hidden shadow-sm">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low border-b border-border">
+<th class="px-lg py-md text-label-sm text-text-secondary font-semibold">Role Name</th>
+<th class="px-lg py-md text-label-sm text-text-secondary font-semibold">Users Assigned</th>
+<th class="px-lg py-md text-label-sm text-text-secondary font-semibold">Status</th>
+<th class="px-lg py-md text-label-sm text-text-secondary font-semibold text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border">
+<tr class="hover:bg-fill-hover">
+<td class="px-lg py-md font-label-md text-text-primary">Super Administrator</td>
+<td class="px-lg py-md text-body-md text-text-secondary">12 users</td>
+<td class="px-lg py-md">
+<span class="bg-surface-container text-primary text-label-sm px-2 py-0.5 rounded-lg border border-primary-fixed-dim">Active</span>
+</td>
+<td class="px-lg py-md text-right">
+<button class="text-link font-label-md">Edit Permissions</button>
+</td>
+</tr>
+<!-- Representative rows for layout -->
+<tr class="hover:bg-fill-hover">
+<td class="px-lg py-md font-label-md text-text-primary">Compliance Officer</td>
+<td class="px-lg py-md text-body-md text-text-secondary">5 users</td>
+<td class="px-lg py-md">
+<span class="bg-surface-container text-primary text-label-sm px-2 py-0.5 rounded-lg border border-primary-fixed-dim">Active</span>
+</td>
+<td class="px-lg py-md text-right">
+<button class="text-link font-label-md">Edit Permissions</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</main>
+<!-- MODAL OVERLAY -->
+<div class="fixed inset-0 z-50 flex items-center justify-center p-md modal-overlay" id="permissionModal">
+<!-- MODAL DIALOG -->
+<div class="bg-white w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in duration-300">
+<!-- Modal Header -->
+<div class="px-xl py-lg border-b border-border flex justify-between items-center bg-white">
+<div>
+<h2 class="text-h4 font-h4 text-text-primary">Assign Permissions - Admin Role</h2>
+<p class="text-body-sm text-text-tertiary mt-1">Configure functional access rights for this role level.</p>
+</div>
+<button class="p-2 hover:bg-fill-hover rounded-full text-text-tertiary transition-colors" onclick="closeModal()">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<!-- Search & Actions Bar -->
+<div class="px-xl py-md bg-surface-container-low border-b border-border flex flex-col md:flex-row gap-md items-center">
+<div class="relative w-full flex-1">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary text-[20px]">search</span>
+<input class="w-full pl-10 pr-md py-2 border border-border rounded-lg bg-white text-body-md focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" placeholder="Search permissions (e.g. 'audit', 'user')..." type="text">
+</div>
+<div class="flex items-center gap-md">
+<button class="text-link font-label-md text-label-md flex items-center gap-1 hover:underline" onclick="selectAll()">
+<span class="material-symbols-outlined text-[18px]">done_all</span>
+                        Select All
+                    </button>
+<div class="w-px h-4 bg-border"></div>
+<button class="text-link font-label-md text-label-md flex items-center gap-1 hover:underline" onclick="invertSelection()">
+<span class="material-symbols-outlined text-[18px]">swap_horiz</span>
+                        Invert Selection
+                    </button>
+</div>
+</div>
+<!-- Scrollable Content -->
+<div class="flex-1 overflow-y-auto px-xl py-lg custom-scrollbar">
+<!-- Category: User Management -->
+<div class="mb-xl">
+<div class="flex items-center gap-2 mb-md">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">group</span>
+<h3 class="text-label-md font-bold text-text-primary uppercase tracking-wide">User Management</h3>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-y-sm gap-x-xl">
+<label class="flex items-center gap-md p-2 hover:bg-surface-container-low rounded-lg cursor-pointer transition-colors group">
+<input checked="" class="w-4 h-4 rounded-sm border-border text-primary focus:ring-primary" type="checkbox">
+<div>
+<div class="text-body-md text-text-primary font-medium">Create User</div>
+<div class="text-[11px] text-text-tertiary">Allow adding new users to the organization</div>
+</div>
+</label>
+<label class="flex items-center gap-md p-2 hover:bg-surface-container-low rounded-lg cursor-pointer transition-colors group">
+<input checked="" class="w-4 h-4 rounded-sm border-border text-primary focus:ring-primary" type="checkbox">
+<div>
+<div class="text-body-md text-text-primary font-medium">Delete User</div>
+<div class="text-[11px] text-text-tertiary">Permanently remove user accounts</div>
+</div>
+</label>
+<label class="flex items-center gap-md p-2 hover:bg-surface-container-low rounded-lg cursor-pointer transition-colors group">
+<input checked="" class="w-4 h-4 rounded-sm border-border text-primary focus:ring-primary" type="checkbox">
+<div>
+<div class="text-body-md text-text-primary font-medium">Edit User Profile</div>
+<div class="text-[11px] text-text-tertiary">Modify user details and attributes</div>
+</div>
+</label>
+<label class="flex items-center gap-md p-2 hover:bg-surface-container-low rounded-lg cursor-pointer transition-colors group">
+<input class="w-4 h-4 rounded-sm border-border text-primary focus:ring-primary" type="checkbox">
+<div>
+<div class="text-body-md text-text-primary font-medium">Impersonate User</div>
+<div class="text-[11px] text-text-tertiary">Login as another user for support</div>
+</div>
+</label>
+</div>
+</div>
+<!-- Category: System Access -->
+<div class="mb-xl">
+<div class="flex items-center gap-2 mb-md">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">settings_suggest</span>
+<h3 class="text-label-md font-bold text-text-primary uppercase tracking-wide">System Configuration</h3>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-y-sm gap-x-xl">
+<label class="flex items-center gap-md p-2 hover:bg-surface-container-low rounded-lg cursor-pointer transition-colors group">
+<input class="w-4 h-4 rounded-sm border-border text-primary focus:ring-primary" type="checkbox">
+<div>
+<div class="text-body-md text-text-primary font-medium">Modify API Keys</div>
+<div class="text-[11px] text-text-tertiary">Manage global integration secrets</div>
+</div>
+</label>
+<label class="flex items-center gap-md p-2 hover:bg-surface-container-low rounded-lg cursor-pointer transition-colors group">
+<input class="w-4 h-4 rounded-sm border-border text-primary focus:ring-primary" type="checkbox">
+<div>
+<div class="text-body-md text-text-primary font-medium">Update Billing</div>
+<div class="text-[11px] text-text-tertiary">Access financial and subscription settings</div>
+</div>
+</label>
+</div>
+</div>
+<!-- Category: Security & Logs -->
+<div>
+<div class="flex items-center gap-2 mb-md">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">security</span>
+<h3 class="text-label-md font-bold text-text-primary uppercase tracking-wide">Security &amp; Monitoring</h3>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-y-sm gap-x-xl">
+<label class="flex items-center gap-md p-2 hover:bg-surface-container-low rounded-lg cursor-pointer transition-colors group">
+<input checked="" class="w-4 h-4 rounded-sm border-border text-primary focus:ring-primary" type="checkbox">
+<div>
+<div class="text-body-md text-text-primary font-medium">View Audit Logs</div>
+<div class="text-[11px] text-text-tertiary">Access immutable system activity history</div>
+</div>
+</label>
+<label class="flex items-center gap-md p-2 hover:bg-surface-container-low rounded-lg cursor-pointer transition-colors group">
+<input class="w-4 h-4 rounded-sm border-border text-primary focus:ring-primary" type="checkbox">
+<div>
+<div class="text-body-md text-text-primary font-medium">Export Security Data</div>
+<div class="text-[11px] text-text-tertiary">Download CSV/JSON compliance reports</div>
+</div>
+</label>
+<label class="flex items-center gap-md p-2 hover:bg-surface-container-low rounded-lg cursor-pointer transition-colors group">
+<input checked="" class="w-4 h-4 rounded-sm border-border text-primary focus:ring-primary" type="checkbox">
+<div>
+<div class="text-body-md text-text-primary font-medium">Manage MFA</div>
+<div class="text-[11px] text-text-tertiary">Reset user multi-factor authentication</div>
+</div>
+</label>
+</div>
+</div>
+</div>
+<!-- Modal Footer -->
+<div class="px-xl py-lg border-t border-border bg-surface-container-lowest flex justify-end gap-md">
+<button class="px-lg py-2 border border-border text-text-primary font-label-md rounded-lg hover:bg-fill-hover transition-colors" onclick="closeModal()">
+                    Cancel
+                </button>
+<button class="px-xl py-2 bg-primary text-white font-label-md rounded-lg hover:opacity-90 shadow-md transition-all active:scale-95" onclick="saveChanges()">
+                    Save Changes
+                </button>
+</div>
+</div>
+</div>
+<script>
+        function closeModal() {
+            const modal = document.getElementById('permissionModal');
+            modal.style.opacity = '0';
+            modal.style.pointerEvents = 'none';
+            document.querySelector('main').classList.remove('blur-[2px]', 'opacity-50');
+        }
+
+        function saveChanges() {
+            // Simulated success interaction
+            const saveBtn = event.currentTarget;
+            const originalText = saveBtn.innerText;
+            saveBtn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[18px]">progress_activity</span> Processing...';
+            saveBtn.disabled = true;
+            
+            setTimeout(() => {
+                alert('Permissions updated successfully!');
+                closeModal();
+                saveBtn.innerText = originalText;
+                saveBtn.disabled = false;
+            }, 800);
+        }
+
+        function selectAll() {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = true);
+        }
+
+        function invertSelection() {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = !cb.checked);
+        }
+
+        // Search highlight simulation (Micro-interaction)
+        const searchInput = document.querySelector('input[type="text"]');
+        searchInput.addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            const items = document.querySelectorAll('label.flex');
+            items.forEach(item => {
+                const text = item.innerText.toLowerCase();
+                if (text.includes(term)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+    </script>
+
+
+</body></html>

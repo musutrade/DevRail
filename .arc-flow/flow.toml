@@ -1,0 +1,520 @@
+version = 2
+
+[project]
+name = "arc-admin"
+default_profile = "full"
+hook_profile = "hook"
+
+[paths]
+reports = "codex-audit-pipeline/.codex/reports"
+audit_config = "codex-audit-pipeline/.codex/audit.toml"
+secrets_config = "codex-audit-pipeline/.codex/secrets.toml"
+
+[paths.aliases.backend]
+path = "backend"
+env = "ARC_FLOW_BACKEND"
+
+[paths.aliases.frontend]
+path = "frontend"
+env = "ARC_FLOW_FRONTEND"
+
+[paths.aliases.tool_manifest]
+path = "codex-audit-pipeline/tools/arc-flow/Cargo.toml"
+env = "ARC_FLOW_TOOL_MANIFEST"
+
+[policy]
+required_steps = [
+  "backend.format",
+  "backend.clippy",
+  "backend.compile",
+  "backend.tests",
+  "frontend.lint",
+  "frontend.format",
+  "frontend.tests",
+  "frontend.e2e",
+  "frontend.fullstack-smoke",
+  "frontend.build",
+  "workflow.hook-syntax",
+  "workflow.project-init-tests",
+  "workflow.template-quality",
+  "workflow.template-quality-tests",
+  "workflow.observability-config",
+  "workflow.tracing-config",
+  "workflow.production-deployment-config",
+  "workflow.audit-retention-config",
+  "workflow.api-generation",
+  "workflow.supply-chain-config",
+  "workflow.format",
+  "workflow.clippy",
+  "workflow.tests",
+]
+
+[[doctor.checks]]
+id = "tool.git"
+label = "git"
+kind = "command"
+program = "git"
+args = ["--version"]
+
+[[doctor.checks]]
+id = "tool.cargo"
+label = "cargo"
+kind = "command"
+program = "cargo"
+args = ["--version"]
+
+[[doctor.checks]]
+id = "tool.rustc"
+label = "rustc"
+kind = "command"
+program = "rustc"
+args = ["--version"]
+
+[[doctor.checks]]
+id = "tool.node"
+label = "node"
+kind = "command"
+program = "node"
+args = ["--version"]
+
+[[doctor.checks]]
+id = "tool.npm"
+label = "npm"
+kind = "command"
+program = "npm"
+args = ["--version"]
+
+[[doctor.checks]]
+id = "frontend.dependencies"
+label = "frontend dependencies"
+kind = "path"
+path = "{frontend}/node_modules"
+path_type = "directory"
+help = "run `cd frontend && npm ci`"
+
+[[doctor.checks]]
+id = "runtime.database"
+label = "runtime database"
+kind = "env-or-file"
+env = "DATABASE_URL"
+path = "{backend}/.env"
+contains = "DATABASE_URL="
+help = "create backend/.env from backend/.env.example"
+
+[[doctor.checks]]
+id = "backend.migrations"
+label = "migrations"
+kind = "glob"
+pattern = "{backend}/migrations/*.sql"
+help = "add at least one SQL migration"
+
+[[doctor.checks]]
+id = "git.hooks"
+label = "Git hooks"
+required = false
+kind = "git-config"
+key = "core.hooksPath"
+expected = "codex-audit-pipeline/hooks"
+help = "run `git config core.hooksPath codex-audit-pipeline/hooks`"
+
+[[doctor.checks]]
+id = "node.version"
+label = "Node version"
+kind = "version"
+program = "node"
+args = ["--version"]
+path = "{root}/.node-version"
+trim_prefix = "v"
+
+[[doctor.checks]]
+id = "git.remotes"
+label = "Git remotes"
+kind = "git-remotes"
+
+[[doctor.checks]]
+id = "test.database"
+label = "test database"
+required = false
+kind = "service"
+service = "test-postgres"
+help = "configure TEST_DATABASE_URL or Docker"
+
+[services.test-postgres]
+kind = "docker"
+image = "postgres:16-alpine"
+image_env = "ARC_FLOW_POSTGRES_IMAGE"
+external_env = "TEST_DATABASE_URL"
+inject_env = "TEST_DATABASE_URL"
+external_value_policy = "isolated-postgres"
+startup_timeout_secs = 30
+timeout_env = "ARC_FLOW_DATABASE_TIMEOUT_SECS"
+container_port = 5432
+environment = { POSTGRES_USER = "arc_admin_test", POSTGRES_PASSWORD = "arc_admin_test", POSTGRES_DB = "arc_admin_test" }
+healthcheck = ["pg_isready", "-h", "127.0.0.1", "-U", "arc_admin_test", "-d", "arc_admin_test"]
+connection = "postgres://arc_admin_test:arc_admin_test@127.0.0.1:{host_port}/arc_admin_test"
+
+[parsers.rust]
+kind = "regex"
+patterns = ['(?m)^running ([0-9]+) tests?$']
+capture = 1
+minimum = 1
+
+[parsers.angular]
+kind = "regex"
+patterns = ['Tests\s+([0-9]+) passed']
+capture = 1
+minimum = 1
+
+[scope]
+unmatched = "fail"
+
+[[scope.rules]]
+patterns = [
+  "README.md",
+  "CHANGELOG.md",
+  ".gitignore",
+  ".gitattributes",
+  ".dockerignore",
+  "AGENTS.md",
+  "start.sh",
+  "deny.toml",
+  "scripts/**",
+  "observability/**",
+  "deployment/**",
+  "compose.production.yaml",
+  "FRAMEWORK_VERSION",
+  ".arc-framework/**",
+  ".arc-project.json",
+  "docs/**",
+  "extracted/**",
+  "codex-audit-pipeline/README.md",
+  "codex-audit-pipeline/docs/**",
+  ".github/**",
+]
+components = ["workflow"]
+
+[[scope.rules]]
+patterns = ["backend/**"]
+components = ["backend"]
+
+[[scope.rules]]
+patterns = ["frontend/**", ".node-version"]
+components = ["frontend"]
+
+[[scope.rules]]
+patterns = ["rust-toolchain.toml"]
+components = ["backend", "workflow"]
+
+[[scope.rules]]
+patterns = [
+  ".arc-flow/**",
+  "codex-audit-pipeline/tools/arc-flow/**",
+  "codex-audit-pipeline/hooks/**",
+  ".cargo/config.toml",
+]
+components = ["backend", "frontend", "workflow"]
+
+[[scope.rules]]
+patterns = [
+  "backend/src/openapi.rs",
+  "backend/src/bin/export_openapi.rs",
+  "docs/openapi.json",
+  "frontend/ng-openapi-gen.json",
+  "frontend/src/app/generated/api/**",
+  ".github/workflows/**",
+]
+components = ["backend", "frontend", "workflow"]
+
+[[scope.rules]]
+patterns = [
+  "codex-audit-pipeline/.codex/audit.toml",
+  "codex-audit-pipeline/.codex/secrets.toml",
+  "codex-audit-pipeline/.codex/templates/**",
+]
+components = ["workflow"]
+
+[[steps]]
+id = "backend.format"
+label = "backend format"
+component = "backend"
+profiles = ["full", "hook"]
+program = "cargo"
+args = ["fmt", "--manifest-path", "{backend}/Cargo.toml", "--", "--check"]
+cwd = "{root}"
+log = "backend_fmt.log"
+timeout_secs = 180
+
+[[steps]]
+id = "backend.clippy"
+label = "backend Clippy"
+component = "backend"
+profiles = ["full", "hook"]
+program = "cargo"
+args = ["clippy", "--manifest-path", "{backend}/Cargo.toml", "--locked", "--all-targets", "--all-features", "--", "-D", "warnings", "-D", "clippy::allow_attributes_without_reason"]
+cwd = "{root}"
+log = "backend_clippy.log"
+timeout_secs = 180
+
+[[steps]]
+id = "backend.compile"
+label = "backend compile"
+component = "backend"
+profiles = ["full"]
+program = "cargo"
+args = ["check", "--manifest-path", "{backend}/Cargo.toml", "--locked", "--all-targets"]
+cwd = "{root}"
+log = "backend_check.log"
+timeout_secs = 180
+
+[[steps]]
+id = "backend.tests"
+label = "backend tests"
+component = "backend"
+profiles = ["full"]
+program = "cargo"
+args = ["test", "--manifest-path", "{backend}/Cargo.toml", "--locked", "--", "--nocapture"]
+cwd = "{root}"
+log = "backend_tests.log"
+timeout_secs = 600
+timeout_env = "RUST_TEST_TIMEOUT"
+parser = "rust"
+services = ["test-postgres"]
+remove_env = ["DATABASE_URL"]
+
+[[steps]]
+id = "frontend.lint"
+label = "frontend lint"
+component = "frontend"
+profiles = ["full", "hook"]
+program = "npm"
+args = ["exec", "--offline", "eslint", "--", "src", "--max-warnings=0"]
+cwd = "{frontend}"
+log = "frontend_lint.log"
+timeout_secs = 180
+
+[[steps]]
+id = "frontend.format"
+label = "frontend format"
+component = "frontend"
+profiles = ["full", "hook"]
+program = "npm"
+args = ["run", "format:check"]
+cwd = "{frontend}"
+log = "frontend_format.log"
+timeout_secs = 180
+
+[[steps]]
+id = "frontend.tests"
+label = "frontend tests"
+component = "frontend"
+profiles = ["full"]
+program = "npm"
+args = ["test", "--", "--watch=false", "--runner=vitest"]
+cwd = "{frontend}"
+log = "frontend_tests.log"
+timeout_secs = 180
+timeout_env = "ANGULAR_TEST_TIMEOUT"
+parser = "angular"
+
+[[steps]]
+id = "frontend.e2e"
+label = "frontend end-to-end tests"
+component = "frontend"
+profiles = ["full"]
+program = "npm"
+args = ["run", "e2e"]
+cwd = "{frontend}"
+log = "frontend_e2e.log"
+timeout_secs = 240
+
+[[steps]]
+id = "frontend.fullstack-smoke"
+label = "frontend real full-stack smoke test"
+component = "frontend"
+profiles = ["full"]
+program = "npm"
+args = ["run", "e2e:fullstack"]
+cwd = "{frontend}"
+log = "frontend_fullstack_smoke.log"
+timeout_secs = 300
+services = ["test-postgres"]
+remove_env = ["DATABASE_URL"]
+
+[[steps]]
+id = "frontend.build"
+label = "frontend production build"
+component = "frontend"
+profiles = ["full"]
+program = "npm"
+args = ["run", "build"]
+cwd = "{frontend}"
+log = "frontend_build.log"
+timeout_secs = 180
+timeout_env = "ANGULAR_BUILD_TIMEOUT"
+
+[[steps]]
+id = "workflow.hook-syntax"
+label = "Git hook syntax"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "sh"
+args = ["-n", "{root}/codex-audit-pipeline/hooks/pre-commit"]
+cwd = "{root}"
+log = "git_hook_syntax.log"
+timeout_secs = 180
+
+[[steps]]
+id = "workflow.project-init-tests"
+label = "project initializer tests"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["--test", "{root}/scripts/init-project.test.mjs"]
+cwd = "{root}"
+log = "project_init_tests.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.framework-release-config"
+label = "framework release configuration gate"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["{root}/scripts/check-framework-release.mjs"]
+cwd = "{root}"
+log = "framework_release_config.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.framework-upgrade-tests"
+label = "framework upgrade tests"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["--test", "{root}/scripts/upgrade-framework.test.mjs"]
+cwd = "{root}"
+log = "framework_upgrade_tests.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.template-quality"
+label = "template quality gate"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["{root}/scripts/check-templates.mjs"]
+cwd = "{root}"
+log = "template_quality.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.template-quality-tests"
+label = "template quality gate tests"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["--test", "{root}/scripts/check-templates.test.mjs"]
+cwd = "{root}"
+log = "template_quality_tests.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.observability-config"
+label = "observability configuration gate"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["{root}/scripts/check-observability.mjs"]
+cwd = "{root}"
+log = "observability_config.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.tracing-config"
+label = "optional tracing and compliance configuration gate"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["{root}/scripts/check-tracing.mjs"]
+cwd = "{root}"
+log = "tracing_config.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.production-deployment-config"
+label = "production deployment configuration gate"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["{root}/scripts/check-production-deployment.mjs"]
+cwd = "{root}"
+log = "production_deployment_config.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.audit-retention-config"
+label = "audit retention and archive configuration gate"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["{root}/scripts/check-audit-retention.mjs"]
+cwd = "{root}"
+log = "audit_retention_config.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.api-generation"
+label = "Rust OpenAPI and Angular client generation gate"
+component = "workflow"
+profiles = ["full"]
+program = "node"
+args = ["{root}/scripts/check-api-generation.mjs"]
+cwd = "{root}"
+log = "api_generation.log"
+timeout_secs = 180
+
+[[steps]]
+id = "workflow.supply-chain-config"
+label = "supply chain security configuration gate"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["{root}/scripts/check-supply-chain.mjs"]
+cwd = "{root}"
+log = "supply_chain_config.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.format"
+label = "arc-flow format"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "cargo"
+args = ["fmt", "--manifest-path", "{tool_manifest}", "--", "--check"]
+cwd = "{root}"
+log = "arc_flow_fmt.log"
+timeout_secs = 180
+
+[[steps]]
+id = "workflow.clippy"
+label = "arc-flow Clippy"
+component = "workflow"
+profiles = ["full"]
+program = "cargo"
+args = ["clippy", "--manifest-path", "{tool_manifest}", "--locked", "--all-targets", "--all-features", "--", "-D", "warnings", "-D", "clippy::allow_attributes_without_reason"]
+cwd = "{root}"
+log = "arc_flow_clippy.log"
+timeout_secs = 180
+
+[[steps]]
+id = "workflow.tests"
+label = "arc-flow tests"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "cargo"
+args = ["test", "--manifest-path", "{tool_manifest}", "--locked", "--", "--nocapture"]
+cwd = "{root}"
+log = "arc_flow_tests.log"
+timeout_secs = 120
+timeout_env = "RUST_TEST_TIMEOUT"
+parser = "rust"

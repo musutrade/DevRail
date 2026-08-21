@@ -1,0 +1,117 @@
+name: ${COMPOSE_PROJECT_NAME:-arc-admin-observability}
+
+services:
+  tempo:
+    profiles: [tracing]
+    image: grafana/tempo:2.10.7
+    command:
+      - -config.file=/etc/tempo/config.yaml
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3200:3200"
+    volumes:
+      - ./tempo/config.yaml:/etc/tempo/config.yaml:ro
+      - tempo-data:/var/tempo
+    networks:
+      - observability
+      - monitoring
+
+  prometheus:
+    image: prom/prometheus:v3.13.2
+    command:
+      - --config.file=/etc/prometheus/prometheus.yaml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - observability
+      - monitoring
+
+  blackbox:
+    image: quay.io/prometheus/blackbox-exporter:v0.28.0
+    command:
+      - --config.file=/etc/blackbox/blackbox.yaml
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9115:9115"
+    volumes:
+      - ./blackbox/blackbox.yaml:/etc/blackbox/blackbox.yaml:ro
+    networks:
+      - observability
+      - monitoring
+
+  loki:
+    image: grafana/loki:3.7.2
+    command:
+      - -config.file=/etc/loki/config.yaml
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - ./loki/config.yaml:/etc/loki/config.yaml:ro
+      - loki-data:/loki
+    networks:
+      - observability
+
+  alloy:
+    image: grafana/alloy:v1.18.1
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    restart: unless-stopped
+    depends_on:
+      - loki
+      - prometheus
+    ports:
+      - "127.0.0.1:12345:12345"
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy-data:/var/lib/alloy/data
+      - ./logs:/var/log/application:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - observability
+
+  grafana:
+    image: grafana/grafana:13.1.0
+    restart: unless-stopped
+    depends_on:
+      - loki
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?请在 observability/.env 中设置 GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning/alerting/log-alerts.yaml:/etc/grafana/provisioning/alerting/log-alerts.yaml:ro
+      - ./grafana/provisioning/alerting/metrics-alerts.yaml:/etc/grafana/provisioning/alerting/metrics-alerts.yaml:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - observability
+
+networks:
+  observability:
+  monitoring:
+    name: ${MONITORING_NETWORK:-arc-admin-monitoring}
+    external: true
+
+volumes:
+  alloy-data:
+  grafana-data:
+  loki-data:
+  prometheus-data:
+  tempo-data:

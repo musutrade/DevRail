@@ -1,0 +1,124 @@
+<div class="page">
+  <!-- 页面头部 -->
+  <div class="page-header">
+    <div>
+      <h1>权限目录</h1>
+      <p>查看和管理系统权限编码及其层级关系。</p>
+    </div>
+  </div>
+
+  <!-- 过滤栏 -->
+  <div class="filter-bar">
+    <div class="filter-search">
+      <mat-icon>search</mat-icon>
+      <input
+        type="text"
+        placeholder="按名称、编码或描述搜索..."
+        aria-label="按名称、编码或描述搜索权限"
+        [value]="search()"
+        (input)="searchPermissions($any($event.target).value)"
+      />
+    </div>
+    <div class="filter-right">
+      <select
+        class="filter-select"
+        aria-label="按权限类型筛选"
+        [value]="typeFilter()"
+        (change)="applyTypeFilter($any($event.target).value)"
+      >
+        <option value="all">全部权限类型</option>
+        <option value="menu">菜单</option>
+        <option value="button">按钮</option>
+        <option value="api">API</option>
+      </select>
+      <div class="filter-divider"></div>
+      <span class="filter-count"
+        >共 <b>{{ totalCount() }}</b> 个权限</span
+      >
+    </div>
+  </div>
+
+  <!-- 层级权限表格 -->
+  <div class="table-card">
+    @if (error()) {
+      <div class="empty-state" role="alert">
+        <mat-icon>error</mat-icon>
+        <p>{{ error() }}</p>
+        <button type="button" class="btn-outline" (click)="retry()">重新加载</button>
+      </div>
+    } @else if (loading()) {
+      <div class="loading-wrap" role="status" aria-live="polite" aria-label="正在加载权限目录">
+        <mat-progress-spinner diameter="32" mode="indeterminate" />
+      </div>
+    } @else if (filteredGroups().length === 0) {
+      <div class="empty-state">
+        <mat-icon>search_off</mat-icon>
+        <p>没有匹配的权限记录</p>
+      </div>
+    } @else {
+      <div class="table-scroll" role="region" tabindex="0" aria-label="权限目录，可横向滚动">
+        <table class="perm-table">
+          <caption class="visually-hidden">
+            权限目录列表
+          </caption>
+          <thead>
+            <tr>
+              <th class="col-name">权限名称</th>
+              <th>权限编码</th>
+              <th>类型</th>
+              <th>描述</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (group of filteredGroups(); track group.id) {
+              <!-- 模块分组行 -->
+              <tr class="group-row">
+                <td colspan="4">
+                  <button
+                    type="button"
+                    class="group-toggle"
+                    (click)="toggleGroup(group.id)"
+                    [attr.aria-expanded]="!group.collapsed"
+                    [attr.aria-label]="
+                      (group.collapsed ? '展开 ' : '收起 ') + group.name + '权限分组'
+                    "
+                  >
+                    <mat-icon class="group-caret">{{
+                      group.collapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down'
+                    }}</mat-icon>
+                    <mat-icon class="group-icon filled">{{ group.icon }}</mat-icon>
+                    <span class="group-name">{{ group.name }}</span>
+                    <span class="root-tag">根级</span>
+                  </button>
+                </td>
+              </tr>
+              <!-- 权限行 -->
+              @if (!group.collapsed) {
+                @for (p of group.permissions; track p.id) {
+                  <tr class="perm-row">
+                    <td class="col-name">
+                      <div class="perm-name-cell">
+                        <span class="dot"></span>
+                        <span class="perm-name">{{ p.name }}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <code class="perm-code">{{ p.code }}</code>
+                    </td>
+                    <td>
+                      <span class="type-badge {{ typeMeta[p.type].cls }}">
+                        <mat-icon>{{ typeMeta[p.type].icon }}</mat-icon>
+                        {{ typeMeta[p.type].label }}
+                      </span>
+                    </td>
+                    <td class="perm-desc">{{ p.description }}</td>
+                  </tr>
+                }
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</div>

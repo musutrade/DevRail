@@ -1,0 +1,83 @@
+<div class="page">
+  <!-- 页面头部 -->
+  <div class="page-header">
+    <div>
+      <h1>权限分配</h1>
+      <p>按角色配置精细化功能访问权限。</p>
+    </div>
+    @if (canCreateRole()) {
+      <button type="button" class="btn-primary" (click)="onCreateRole()" [disabled]="busy()">
+        <mat-icon>add</mat-icon>
+        <span>新增角色</span>
+      </button>
+    }
+  </div>
+
+  <!-- 角色表格 -->
+  <div class="table-card">
+    @if (error()) {
+      <div class="empty-state" role="alert">
+        <mat-icon>error</mat-icon>
+        <p>{{ error() }}</p>
+        <button type="button" class="btn-outline" (click)="retry()">重新加载</button>
+      </div>
+    } @else if (loading()) {
+      <div class="loading-wrap" role="status" aria-live="polite" aria-label="正在加载权限分配">
+        <mat-progress-spinner diameter="32" mode="indeterminate" />
+      </div>
+    } @else {
+      <div class="table-scroll" role="region" tabindex="0" aria-label="权限分配列表，可横向滚动">
+        <table class="data-table role-permission-table">
+          <caption class="visually-hidden">
+            角色权限分配列表
+          </caption>
+          <thead>
+            <tr>
+              <th>角色名称</th>
+              <th>已分配用户</th>
+              <th>状态</th>
+              <th class="th-actions">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows(); track row.roleId) {
+              <tr>
+                <td>
+                  <div class="role-name-cell">
+                    <span class="role-avatar"><mat-icon>badge</mat-icon></span>
+                    <span class="role-name">{{ row.roleName }}</span>
+                  </div>
+                </td>
+                <td class="cell-secondary">{{ row.usersAssigned }} 名用户</td>
+                <td>
+                  <span
+                    class="status-badge"
+                    [class.st-active]="row.active"
+                    [class.st-suspended]="!row.active"
+                  >
+                    <span class="status-dot"></span>
+                    {{ row.active ? '启用' : '停用' }}
+                  </span>
+                </td>
+                <td class="td-actions">
+                  @if (row.roleCode !== 'super_admin') {
+                    <button
+                      type="button"
+                      class="edit-link"
+                      (click)="onEditPermissions(row)"
+                      [attr.aria-label]="'编辑权限 ' + row.roleName"
+                      [disabled]="busy()"
+                    >
+                      <mat-icon>tune</mat-icon>
+                      编辑权限
+                    </button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</div>

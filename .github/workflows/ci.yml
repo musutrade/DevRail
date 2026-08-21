@@ -1,0 +1,142 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality gate
+    runs-on: self-hosted
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Verify development workflow
+        run: cargo flow verify --components workflow
+      - name: Upload quality reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: quality-reports
+          path: codex-audit-pipeline/.codex/reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  backend:
+    name: Backend verification
+    runs-on: self-hosted
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: arc_admin_test
+          POSTGRES_PASSWORD: arc_admin_test
+          POSTGRES_DB: arc_admin_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U arc_admin_test -d arc_admin_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run backend checks and tests
+        env:
+          TEST_DATABASE_URL: postgres://arc_admin_test:arc_admin_test@127.0.0.1:5432/arc_admin_test
+        run: cargo flow verify --components backend
+      - name: Upload backend report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-report
+          path: codex-audit-pipeline/.codex/reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  frontend:
+    name: Frontend verification
+    runs-on: self-hosted
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: arc_admin_test
+          POSTGRES_PASSWORD: arc_admin_test
+          POSTGRES_DB: arc_admin_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U arc_admin_test -d arc_admin_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Prepare Doctor prerequisites
+        run: |
+          cp backend/.env.example backend/.env
+          git config core.hooksPath codex-audit-pipeline/hooks
+          mkdir -p codex-audit-pipeline/.codex/reports
+      - name: Verify CI environment
+        env:
+          TEST_DATABASE_URL: postgres://arc_admin_test:arc_admin_test@127.0.0.1:5432/arc_admin_test
+        run: |
+          set -o pipefail
+          cargo flow doctor --strict --json | tee codex-audit-pipeline/.codex/reports/doctor.json
+      - name: Audit production dependencies
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+      - name: Install Playwright browser
+        working-directory: frontend
+        # CentOS runner dependencies are provisioned on the runner host.
+        run: npx playwright install chromium
+      - name: Run frontend checks and tests
+        env:
+          TEST_DATABASE_URL: postgres://arc_admin_test:arc_admin_test@127.0.0.1:5432/arc_admin_test
+        run: cargo flow verify --components frontend
+      - name: Upload frontend report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-report
+          path: codex-audit-pipeline/.codex/reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request' && github.event.repository.private == false
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: moderate

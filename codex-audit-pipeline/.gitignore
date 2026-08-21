@@ -1,0 +1,12 @@
+# 运行时生成的审计/测试产物，不提交
+.codex/reports/*
+!.codex/reports/.gitkeep
+
+target/
+node_modules/
+dist/
+
+# 本地配置（可能含敏感信息）
+.env
+.env.local
+*.local.toml
