@@ -1,7 +1,7 @@
 version = 2
 
 [project]
-name = "arc-admin"
+name = "devrail"
 default_profile = "full"
 hook_profile = "hook"
 

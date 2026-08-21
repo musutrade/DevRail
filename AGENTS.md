@@ -1,4 +1,19 @@
-# 项目全局公约（Angular + Rust 双端工作流）
+# DevRail 项目全局公约（Angular + Rust 双端工作流）
+
+DevRail 基于 arc-admin `v2.3.0`，产品业务前缀为 `devrail`。本文件与 [项目公约](docs/devrail-governance.md)、[审计与门禁](docs/devrail-audit-and-gates.md) 一起构成所有 Agent、开发者和 CI 的强制约束。
+
+## DevRail 业务硬边界
+
+- Codex harness 只能由后端 Harness Supervisor 启动；前端只能通过 DevRail API 和 SSE 获取状态。
+- 工作区必须位于受控根目录；默认网络关闭、工作区外路径拒绝、危险命令必须审批。
+- Agent event、命令、差异和推送 payload 必须脱敏，禁止写入密码、Cookie、token、私钥、数据库连接串或完整请求头。
+- 站内通知先写 PostgreSQL transactional outbox；推送供应商调用只能由 dispatcher worker 执行，不能放在 Handler 请求中。
+- 推送 payload 只允许通知 ID、事件类型、脱敏摘要和深链接；深链接打开后重新执行会话、权限和数据范围校验。
+- 所有 DevRail 表必须包含组织、部门和所有者边界；Repository 查询必须在 SQL 中完成数据范围过滤。
+
+## 框架兼容标识
+
+`arc-admin-backend` crate 名、`arc-admin` Angular project target、`arc_admin_*` Prometheus 指标和 `arc_admin.audit_maintenance` PostgreSQL 设置属于框架兼容标识。除非同步修改升级清单、生成契约、测试和运维配置，否则不得单独重命名。
 
 ## 📁 目录结构
 

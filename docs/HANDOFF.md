@@ -1,6 +1,8 @@
-# 项目状态与交接
+# DevRail 项目状态与交接
 
 更新日期：2026-08-21。长期约定以根目录 `AGENTS.md`、[开发指南](development.md)、[架构说明](architecture.md)、[UI 与 CSS 规范](ui-design-system.md) 和生成的 [OpenAPI 契约](openapi.json) 为准。
+
+DevRail 的产品范围见 [需求文档](requirements.md)，业务边界见 [项目公约](devrail-governance.md)，门禁和审计证据见 [审计与门禁](devrail-audit-and-gates.md)。项目通过 `scripts/init-project.sh` 以 `devrail` slug、数据库名和权限前缀完成初始化，并以 `.arc-project.json` 记录 arc-admin 框架版本。
 
 ## 当前基线
 

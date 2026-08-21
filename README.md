@@ -1,8 +1,7 @@
 <!-- ARC_PROJECT_HEADER_START -->
+# DevRail
 
-# arc-admin
-
-面向生产环境的 RBAC 管理后台与全栈工程基线。前端使用 Angular 22 + Angular Material，后端使用 Rust（Axum + SQLX），数据存储为 PostgreSQL 16。
+基于 arc-admin v2.3.0 权限框架构建。项目标识：`devrail`。
 <!-- ARC_PROJECT_HEADER_END -->
 
 当前框架版本为 `v2.3.0`。仓库内置身份认证、组织与部门、用户、角色、权限目录、权限分配、审计日志、`super_admin` MFA，以及开发、测试、部署和可观测性工具链。
@@ -143,11 +142,11 @@ npm run generate:api:all
 
 ```javascript
 window.__ARC_ADMIN_CONFIG__ = {
-  appName: "RBAC 管理中心",
-  appShortName: "RBAC",
-  appSlug: "arc-admin",
+  appName: "DevRail",
+  appShortName: "DevRail",
+  appSlug: "devrail",
   apiBaseUrl: "/api/v1",
-  themeStorageKey: "arc-admin-theme",
+  themeStorageKey: "devrail-theme",
 };
 ```
 
@@ -178,28 +177,19 @@ window.__ARC_ADMIN_CONFIG__ = {
 - [高合规部署基线](docs/high-compliance.md)：需要在项目层补齐的独立控制；
 - [框架版本与派生项目升级](docs/framework-upgrades.md)：版本标签、三方合并和冲突处理；
 - [当前项目状态](docs/HANDOFF.md)：最新能力、验证基线和剩余生产事项；
+- [DevRail 需求文档](docs/requirements.md)：产品范围、Agent 运行、审批和手机推送需求；
+- [DevRail 项目公约](docs/devrail-governance.md)：业务边界、Harness、数据和 PR 约定；
+- [DevRail 审计与门禁](docs/devrail-audit-and-gates.md)：本地、CI 和发布检查清单；
 - [arc-flow 操作手册](codex-audit-pipeline/README.md) 与 [schema v2 参考](codex-audit-pipeline/docs/configuration.md)。
 
-<!-- ARC_TEMPLATE_USAGE_START -->
+## DevRail 项目约定
 
-## 从模板创建业务项目
+DevRail 不是直接修改 arc-admin 源仓库，而是以 `.arc-project.json` 登记的派生项目。框架管理文件由 arc-admin 升级器维护，DevRail 业务代码、需求和推送能力按 [项目公约](docs/devrail-governance.md) 扩展。
 
-从 GitHub Template 创建独立仓库后，在新仓库根目录执行一次初始化：
-
-```bash
-./scripts/init-project.sh \
-  --slug stock-analysis \
-  --title 股票分析系统 \
-  --short-name 投研平台 \
-  --database stock_analysis \
-  --permission-prefix stock
-```
-
-初始化要求 Git 工作区干净，并会拒绝在框架源仓库或已初始化项目中执行。它会同步运行时产品配置、数据库、服务、镜像、监控网络和 WebAuthn 标识，生成受 `.gitignore` 保护的本地环境文件，并写入 `.arc-project.json`。
-
-生成的 `deployment/.env.production` 仍包含空白密钥和示例域名。部署前必须按 [最小生产部署](docs/production-deployment.md) 补齐并校验。使用 `./scripts/init-project.sh --help` 查看所有参数。
-
-<!-- ARC_TEMPLATE_USAGE_END -->
+- 业务权限前缀固定为 `devrail`，新增权限必须同步数据库、Rust 和 Angular 三端声明；
+- Agent 只能经后端 Harness Supervisor 执行，浏览器不得直连 `codex app-server`；
+- 工具审批、工作区隔离、事件脱敏和手机推送 outbox 是强制安全边界；
+- PR 合并前必须通过 [审计与门禁](docs/devrail-audit-and-gates.md) 规定的本地和 CI 检查。
 
 ## 升级派生项目
 
