@@ -453,6 +453,23 @@ pub async fn find_task(
         .fetch_optional(pool)
         .await
 }
+
+pub async fn find_task_by_id(
+    pool: &PgPool,
+    actor: &ActorContext,
+    id: i64,
+) -> Result<Option<DevRailTaskRow>, sqlx::Error> {
+    let sql = format!("WITH RECURSIVE visible_departments AS (SELECT id FROM departments WHERE id=$4 AND organization_id=$2 UNION SELECT child.id FROM departments child JOIN visible_departments parent ON child.parent_id=parent.id WHERE child.organization_id=$2) SELECT {TASK_COLUMNS} FROM devrail_tasks t WHERE t.id=$5 AND t.archived_at IS NULL AND {}", scope_sql("t"));
+    sqlx::query_as::<_, DevRailTaskRow>(AssertSqlSafe(sql))
+        .bind(actor.data_scope.as_str())
+        .bind(actor.organization_id)
+        .bind(actor.user_id)
+        .bind(actor.department_id)
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+}
+
 pub(crate) async fn create_task(
     c: &mut PgConnection,
     actor: &ActorContext,

@@ -22,6 +22,7 @@ pub mod permissions;
 pub mod repositories;
 pub mod services;
 pub mod telemetry;
+pub mod workers;
 
 pub use error::ApiError;
 
@@ -67,6 +68,11 @@ const DEVRAIL_ENVIRONMENTS_PATH: &str = "/api/v1/projects/{project_id}/environme
 const DEVRAIL_ENVIRONMENT_PATH: &str = "/api/v1/projects/{project_id}/environments/{id}";
 const DEVRAIL_TASKS_PATH: &str = "/api/v1/projects/{project_id}/tasks";
 const DEVRAIL_TASK_PATH: &str = "/api/v1/projects/{project_id}/tasks/{id}";
+const DEVRAIL_TASK_RUNS_PATH: &str = "/api/v1/tasks/{task_id}/runs";
+const DEVRAIL_RUN_PATH: &str = "/api/v1/runs/{id}";
+const DEVRAIL_RUN_INTERRUPT_PATH: &str = "/api/v1/runs/{id}/interrupt";
+const DEVRAIL_RUN_EVENTS_PATH: &str = "/api/v1/runs/{id}/events";
+const DEVRAIL_RUN_EVENTS_STREAM_PATH: &str = "/api/v1/runs/{id}/events/stream";
 const METRICS_PATH: &str = "/metrics";
 
 /// Public HTTP operations generated into `docs/openapi.json`.
@@ -112,6 +118,11 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_ENVIRONMENT_PATH, &["get", "patch"]),
     (DEVRAIL_TASKS_PATH, &["get", "post"]),
     (DEVRAIL_TASK_PATH, &["get", "patch"]),
+    (DEVRAIL_TASK_RUNS_PATH, &["get", "post"]),
+    (DEVRAIL_RUN_PATH, &["get"]),
+    (DEVRAIL_RUN_INTERRUPT_PATH, &["post"]),
+    (DEVRAIL_RUN_EVENTS_PATH, &["get"]),
+    (DEVRAIL_RUN_EVENTS_STREAM_PATH, &["get"]),
 ];
 
 #[derive(Clone)]
@@ -119,6 +130,7 @@ pub struct AppState {
     pub pool: PgPool,
     pub auth: Arc<auth::AuthSessionConfig>,
     pub mfa: Arc<mfa::MfaConfig>,
+    pub supervisor: Arc<workers::harness_supervisor::HarnessSupervisor>,
 }
 
 async fn healthz() -> Json<models::HealthResponse> {
@@ -271,6 +283,23 @@ fn base_router(state: AppState) -> Router {
         .route(
             DEVRAIL_TASK_PATH,
             get(handlers::devrail::get_task).patch(handlers::devrail::update_task),
+        )
+        .route(
+            DEVRAIL_TASK_RUNS_PATH,
+            get(handlers::devrail::list_runs).post(handlers::devrail::create_run),
+        )
+        .route(DEVRAIL_RUN_PATH, get(handlers::devrail::get_run))
+        .route(
+            DEVRAIL_RUN_INTERRUPT_PATH,
+            post(handlers::devrail::interrupt_run),
+        )
+        .route(
+            DEVRAIL_RUN_EVENTS_PATH,
+            get(handlers::devrail::list_run_events),
+        )
+        .route(
+            DEVRAIL_RUN_EVENTS_STREAM_PATH,
+            get(handlers::devrail::stream_run_events),
         )
         .with_state(state)
 }

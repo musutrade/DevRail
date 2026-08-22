@@ -1,6 +1,7 @@
 use arc_admin_backend::auth::{self, AuthSessionConfig};
 use arc_admin_backend::mfa::MfaConfig;
 use arc_admin_backend::models::{NullablePatch, UpdateUserRequest};
+use arc_admin_backend::workers::harness_supervisor::HarnessSupervisor;
 use arc_admin_backend::{build_router, db, repositories, services, AppState};
 use axum::body::Body;
 use axum::extract::connect_info::MockConnectInfo;
@@ -482,6 +483,14 @@ async fn login_and_user_crud_flow() {
             )
             .expect("MFA config"),
         ),
+        supervisor: Arc::new(HarnessSupervisor::new(
+            pool.clone(),
+            "codex".to_string(),
+            1,
+            60,
+            "/tmp/devrail-test".to_string(),
+            1,
+        )),
     })
     .layer(MockConnectInfo(
         "10.2.0.5:4567"
@@ -1016,6 +1025,10 @@ async fn login_and_user_crud_flow() {
             "devrail:environment:write",
             "devrail:task:read",
             "devrail:task:write",
+            "devrail:run:read",
+            "devrail:run:execute",
+            "devrail:run:interrupt",
+            "devrail:run:retry",
         ])
     );
     let permission_id = |code: &str| {

@@ -8,7 +8,11 @@ use crate::services;
 use crate::AppState;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
+use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::Json;
+use futures_core::Stream;
+use std::convert::Infallible;
+use std::time::Duration;
 
 pub async fn list_projects(
     State(s): State<AppState>,
@@ -178,4 +182,96 @@ pub async fn update_task(
     services::devrail::update_task(&s.pool, &auth, project_id, id, &req)
         .await
         .map(Json)
+}
+
+pub async fn create_run(
+    State(s): State<AppState>,
+    auth: RequirePermission<RunExecute>,
+    Path(task_id): Path<i64>,
+    Json(req): Json<CreateDevRailRunRequest>,
+) -> Result<(StatusCode, Json<DevRailRunResponse>), ApiError> {
+    services::devrail_runs::create_run(&s.pool, &auth, &s.supervisor, task_id, &req)
+        .await
+        .map(|v| (StatusCode::ACCEPTED, Json(v)))
+}
+
+pub async fn list_runs(
+    State(s): State<AppState>,
+    auth: RequirePermission<RunRead>,
+    Path(task_id): Path<i64>,
+    Query(q): Query<DevRailListQuery>,
+) -> Result<Json<DevRailRunPage>, ApiError> {
+    let page = q.page.unwrap_or(1).max(1);
+    let size = q.page_size.unwrap_or(20).clamp(1, 100);
+    services::devrail_runs::list_runs(&s.pool, &auth, task_id, page, size)
+        .await
+        .map(Json)
+}
+
+pub async fn get_run(
+    State(s): State<AppState>,
+    auth: RequirePermission<RunRead>,
+    Path(id): Path<i64>,
+) -> Result<Json<DevRailRunResponse>, ApiError> {
+    services::devrail_runs::get_run(&s.pool, &auth, id)
+        .await
+        .map(Json)
+}
+
+pub async fn interrupt_run(
+    State(s): State<AppState>,
+    auth: RequirePermission<RunInterrupt>,
+    Path(id): Path<i64>,
+) -> Result<Json<DevRailRunResponse>, ApiError> {
+    services::devrail_runs::interrupt_run(&s.pool, &auth, &s.supervisor, id)
+        .await
+        .map(Json)
+}
+
+pub async fn list_run_events(
+    State(s): State<AppState>,
+    auth: RequirePermission<RunRead>,
+    Path(id): Path<i64>,
+    Query(query): Query<RunEventQuery>,
+) -> Result<Json<DevRailRunEventPage>, ApiError> {
+    services::devrail_runs::list_events(
+        &s.pool,
+        &auth,
+        id,
+        query.after_cursor.unwrap_or(0).max(0),
+        query.limit.unwrap_or(100),
+    )
+    .await
+    .map(Json)
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct RunEventQuery {
+    pub after_cursor: Option<i64>,
+    pub limit: Option<i64>,
+}
+
+pub async fn stream_run_events(
+    State(s): State<AppState>,
+    auth: RequirePermission<RunRead>,
+    Path(id): Path<i64>,
+) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
+    let _ = services::devrail_runs::get_run(&s.pool, &auth, id).await?;
+    let pool = s.pool.clone();
+    let actor = auth.actor.clone();
+    let stream = async_stream::stream! {
+        let mut cursor = 0_i64;
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
+        loop {
+            interval.tick().await;
+            match services::devrail_runs::list_events(&pool, &actor, id, cursor, 100).await {
+                Ok(page) => {
+                    for event in page.items { cursor = event.cursor; if let Ok(data) = serde_json::to_string(&event) { yield Ok(Event::default().id(cursor.to_string()).event(event.event_type).data(data)); } }
+                }
+                Err(_) => break,
+            }
+            if let Ok(run) = services::devrail_runs::get_run(&pool, &actor, id).await { if matches!(run.status.as_str(), "completed"|"failed"|"cancelled") { break; } }
+        }
+    };
+    Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
 }

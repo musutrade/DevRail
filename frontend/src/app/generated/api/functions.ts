@@ -89,6 +89,18 @@ export type { GetDevRailTask$Params as GetDevRailTask$Params } from './fn/devrai
 export { getDevRailTask as getDevRailTask } from './fn/devrail/get-dev-rail-task';
 export type { UpdateDevRailTask$Params as UpdateDevRailTask$Params } from './fn/devrail/update-dev-rail-task';
 export { updateDevRailTask as updateDevRailTask } from './fn/devrail/update-dev-rail-task';
+export type { GetDevRailRun$Params as GetDevRailRun$Params } from './fn/devrail/get-dev-rail-run';
+export { getDevRailRun as getDevRailRun } from './fn/devrail/get-dev-rail-run';
+export type { ListDevRailRunEvents$Params as ListDevRailRunEvents$Params } from './fn/devrail/list-dev-rail-run-events';
+export { listDevRailRunEvents as listDevRailRunEvents } from './fn/devrail/list-dev-rail-run-events';
+export type { StreamDevRailRunEvents$Params as StreamDevRailRunEvents$Params } from './fn/devrail/stream-dev-rail-run-events';
+export { streamDevRailRunEvents as streamDevRailRunEvents } from './fn/devrail/stream-dev-rail-run-events';
+export type { InterruptDevRailRun$Params as InterruptDevRailRun$Params } from './fn/devrail/interrupt-dev-rail-run';
+export { interruptDevRailRun as interruptDevRailRun } from './fn/devrail/interrupt-dev-rail-run';
+export type { ListDevRailRuns$Params as ListDevRailRuns$Params } from './fn/devrail/list-dev-rail-runs';
+export { listDevRailRuns as listDevRailRuns } from './fn/devrail/list-dev-rail-runs';
+export type { CreateDevRailRun$Params as CreateDevRailRun$Params } from './fn/devrail/create-dev-rail-run';
+export { createDevRailRun as createDevRailRun } from './fn/devrail/create-dev-rail-run';
 export type { ListRoles$Params as ListRoles$Params } from './fn/roles/list-roles';
 export { listRoles as listRoles } from './fn/roles/list-roles';
 export type { CreateRole$Params as CreateRole$Params } from './fn/roles/create-role';
