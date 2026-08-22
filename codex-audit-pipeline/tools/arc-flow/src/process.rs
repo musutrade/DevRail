@@ -295,6 +295,7 @@ fn terminate(child: &mut Child) -> std::io::Result<ExitStatus> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     use super::*;
 
     #[cfg(unix)]
