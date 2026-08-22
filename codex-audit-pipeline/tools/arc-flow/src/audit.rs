@@ -8,6 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 const AUDIT_CONFIG_VERSION: u32 = 2;
 const AUDIT_MIGRATION_GUIDE: &str = "codex-audit-pipeline/docs/configuration.md#audit-v2-migration";
@@ -15,7 +16,7 @@ const AUDIT_MIGRATION_GUIDE: &str = "codex-audit-pipeline/docs/configuration.md#
 // ============================================================
 // 配置结构体（与 .codex/audit.toml 对应）
 // ============================================================
-#[derive(Debug, Default, Deserialize, Clone)]
+#[derive(Debug, Default, Deserialize, Clone, PartialEq)]
 struct PathsConfig {
     #[serde(default)]
     exclude: Vec<String>,
@@ -24,7 +25,7 @@ struct PathsConfig {
     aliases: HashMap<String, String>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct Config {
     version: u32,
@@ -92,7 +93,7 @@ fn parse_audit_config(source: &str) -> Result<Config> {
     })
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct EngineConfig {
     ignore_filename: String,
@@ -104,7 +105,7 @@ struct EngineConfig {
     comment_syntax: HashMap<String, CommentSyntax>,
 }
 
-#[derive(Debug, Default, Deserialize, Clone)]
+#[derive(Debug, Default, Deserialize, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct CommentSyntax {
     #[serde(default)]
@@ -115,7 +116,7 @@ struct CommentSyntax {
     strings: Vec<StringSyntax>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct BlockCommentSyntax {
     start: String,
@@ -124,7 +125,7 @@ struct BlockCommentSyntax {
     nested: bool,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct StringSyntax {
     start: String,
@@ -133,14 +134,14 @@ struct StringSyntax {
     escape: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 enum AllowlistEntry {
     PathPrefix { path: String },
     Regex { pattern: String },
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct HardRule {
     name: String,
@@ -154,7 +155,7 @@ struct HardRule {
     allowlist: Vec<AllowlistEntry>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct ArchRule {
     name: String,
@@ -188,6 +189,52 @@ struct ArchViolation {
     line: usize,
     content: String,
     rule_name: String,
+}
+
+#[derive(Default)]
+struct FileCache {
+    entries: Mutex<HashMap<PathBuf, Arc<FileSnapshot>>>,
+}
+
+struct FileSnapshot {
+    content: String,
+    line_starts: Vec<usize>,
+    comments: Vec<Range<usize>>,
+}
+
+impl FileCache {
+    fn snapshot(
+        &self,
+        path: &Path,
+        syntax: Option<&CommentSyntax>,
+        extension: &str,
+    ) -> Result<Arc<FileSnapshot>> {
+        {
+            let entries = self
+                .entries
+                .lock()
+                .map_err(|_| anyhow::anyhow!("audit file cache lock poisoned"))?;
+            if let Some(snapshot) = entries.get(path) {
+                return Ok(Arc::clone(snapshot));
+            }
+        }
+        let content = fs::read_to_string(path)
+            .with_context(|| format!("read audit source {}", path.display()))?;
+        let snapshot = Arc::new(FileSnapshot {
+            line_starts: source_line_starts(&content),
+            comments: syntax
+                .map(|syntax| comment_ranges(&content, syntax, extension))
+                .unwrap_or_default(),
+            content,
+        });
+        let mut entries = self
+            .entries
+            .lock()
+            .map_err(|_| anyhow::anyhow!("audit file cache lock poisoned"))?;
+        Ok(Arc::clone(
+            entries.entry(path.to_path_buf()).or_insert(snapshot),
+        ))
+    }
 }
 
 // ============================================================
@@ -417,132 +464,341 @@ fn source_line_at<'a>(
     )
 }
 
-enum LexicalState<'a> {
-    Code,
-    String(&'a StringSyntax),
-    LineComment {
-        start: usize,
-    },
-    BlockComment {
-        syntax: &'a BlockCommentSyntax,
-        start: usize,
-        depth: usize,
-    },
-}
-
 fn token_at(bytes: &[u8], offset: usize, token: &str) -> bool {
     bytes[offset..].starts_with(token.as_bytes())
 }
 
-fn comment_ranges(content: &str, syntax: &CommentSyntax) -> Vec<Range<usize>> {
-    let bytes = content.as_bytes();
-    let mut ranges = Vec::new();
-    let mut state = LexicalState::Code;
-    let mut offset = 0;
+fn raw_string_bounds(bytes: &[u8], offset: usize, extension: &str) -> Option<(Vec<u8>, usize)> {
+    if extension != "rs" {
+        return None;
+    }
+    let mut cursor = offset;
+    if bytes.get(cursor) == Some(&b'b') {
+        cursor += 1;
+    }
+    if bytes.get(cursor) != Some(&b'r') {
+        return None;
+    }
+    cursor += 1;
+    let hashes_start = cursor;
+    while bytes.get(cursor) == Some(&b'#') {
+        cursor += 1;
+    }
+    if bytes.get(cursor) != Some(&b'"') {
+        return None;
+    }
+    let mut delimiter = b"\"".to_vec();
+    delimiter.extend(std::iter::repeat_n(b'#', cursor - hashes_start));
+    Some((delimiter, cursor + 1))
+}
 
+fn dollar_quote_delimiter(bytes: &[u8], offset: usize, extension: &str) -> Option<Vec<u8>> {
+    if extension != "sql" || bytes.get(offset) != Some(&b'$') {
+        return None;
+    }
+    let mut cursor = offset + 1;
+    if bytes.get(cursor) != Some(&b'$')
+        && bytes
+            .get(cursor)
+            .is_some_and(|byte| !byte.is_ascii_alphabetic() && *byte != b'_')
+    {
+        return None;
+    }
+    while bytes
+        .get(cursor)
+        .is_some_and(|byte| byte.is_ascii_alphanumeric() || *byte == b'_')
+    {
+        cursor += 1;
+    }
+    if bytes.get(cursor) != Some(&b'$') {
+        return None;
+    }
+    Some(bytes[offset..=cursor].to_vec())
+}
+
+fn skip_until(bytes: &[u8], mut offset: usize, delimiter: &[u8]) -> usize {
     while offset < bytes.len() {
-        match state {
-            LexicalState::Code => {
-                if let Some(string) = syntax
-                    .strings
-                    .iter()
-                    .filter(|string| token_at(bytes, offset, &string.start))
-                    .max_by_key(|string| string.start.len())
-                {
-                    offset += string.start.len();
-                    state = LexicalState::String(string);
-                } else if let Some(block) = syntax
-                    .block
-                    .iter()
-                    .filter(|block| token_at(bytes, offset, &block.start))
-                    .max_by_key(|block| block.start.len())
-                {
-                    let start = offset;
-                    offset += block.start.len();
-                    state = LexicalState::BlockComment {
-                        syntax: block,
-                        start,
-                        depth: 1,
-                    };
-                } else if let Some(line) = syntax
-                    .line
-                    .iter()
-                    .filter(|line| token_at(bytes, offset, line))
-                    .max_by_key(|line| line.len())
-                {
-                    let start = offset;
-                    offset += line.len();
-                    state = LexicalState::LineComment { start };
-                } else {
-                    offset += 1;
-                }
+        if bytes[offset..].starts_with(delimiter) {
+            return offset + delimiter.len();
+        }
+        offset += 1;
+    }
+    bytes.len()
+}
+
+fn previous_significant_byte(bytes: &[u8], offset: usize) -> Option<u8> {
+    bytes[..offset]
+        .iter()
+        .rev()
+        .find(|byte| !byte.is_ascii_whitespace())
+        .copied()
+}
+
+fn regex_literal_start(bytes: &[u8], offset: usize) -> bool {
+    if bytes.get(offset) != Some(&b'/') || matches!(bytes.get(offset + 1), Some(b'/') | Some(b'*'))
+    {
+        return false;
+    }
+    match previous_significant_byte(bytes, offset) {
+        None => true,
+        Some(byte) if b"([{,:;=!&|?+-*%^~<>".contains(&byte) => true,
+        Some(_) => {
+            let before = String::from_utf8_lossy(&bytes[..offset]);
+            let before = before.trim_end();
+            [
+                "return", "throw", "case", "delete", "void", "typeof", "yield", "await",
+            ]
+            .iter()
+            .any(|keyword| {
+                before.strip_suffix(keyword).is_some_and(|prefix| {
+                    prefix
+                        .as_bytes()
+                        .last()
+                        .is_none_or(|byte| !byte.is_ascii_alphanumeric() && *byte != b'_')
+                })
+            })
+        }
+    }
+}
+
+fn skip_sql_quoted(bytes: &[u8], mut offset: usize, quote: u8, backslash_escape: bool) -> usize {
+    while offset < bytes.len() {
+        if backslash_escape && bytes[offset] == b'\\' {
+            offset = (offset + 2).min(bytes.len());
+        } else if bytes[offset] == quote {
+            if bytes.get(offset + 1) == Some(&quote) {
+                offset += 2;
+            } else {
+                return offset + 1;
             }
-            LexicalState::String(string) => {
-                if string
-                    .escape
-                    .as_deref()
-                    .is_some_and(|escape| token_at(bytes, offset, escape))
-                {
-                    offset += string.escape.as_deref().map_or(0, str::len);
-                    offset = (offset + 1).min(bytes.len());
-                } else if token_at(bytes, offset, &string.end) {
-                    offset += string.end.len();
-                    state = LexicalState::Code;
-                } else {
-                    offset += 1;
-                }
-            }
-            LexicalState::LineComment { start } => {
-                if bytes[offset] == b'\n' {
-                    ranges.push(start..offset);
-                    state = LexicalState::Code;
-                }
+        } else {
+            offset += 1;
+        }
+    }
+    bytes.len()
+}
+
+fn sql_quoted_string_end(bytes: &[u8], offset: usize, extension: &str) -> Option<usize> {
+    if extension != "sql" {
+        return None;
+    }
+    match (bytes.get(offset), bytes.get(offset + 1)) {
+        (Some(b'e' | b'E'), Some(b'\'')) => Some(skip_sql_quoted(bytes, offset + 2, b'\'', true)),
+        (Some(b'\''), _) => Some(skip_sql_quoted(bytes, offset + 1, b'\'', false)),
+        (Some(b'"'), _) => Some(skip_sql_quoted(bytes, offset + 1, b'"', false)),
+        _ => None,
+    }
+}
+
+fn skip_regex_literal(bytes: &[u8], mut offset: usize) -> usize {
+    offset += 1;
+    let mut escaped = false;
+    let mut in_class = false;
+    while offset < bytes.len() {
+        let byte = bytes[offset];
+        if escaped {
+            escaped = false;
+        } else if byte == b'\\' {
+            escaped = true;
+        } else if byte == b'[' {
+            in_class = true;
+        } else if byte == b']' {
+            in_class = false;
+        } else if byte == b'/' && !in_class {
+            offset += 1;
+            while bytes.get(offset).is_some_and(u8::is_ascii_alphabetic) {
                 offset += 1;
             }
-            LexicalState::BlockComment {
-                syntax: block,
-                start,
-                mut depth,
-            } => {
+            return offset;
+        } else if byte == b'\n' || byte == b'\r' {
+            return offset;
+        }
+        offset += 1;
+    }
+    bytes.len()
+}
+
+fn skip_template_expression(
+    bytes: &[u8],
+    mut offset: usize,
+    syntax: &CommentSyntax,
+    extension: &str,
+    ranges: &mut Vec<Range<usize>>,
+) -> usize {
+    let mut depth = 1usize;
+    while offset < bytes.len() {
+        if let Some((raw_delimiter, content_start)) = raw_string_bounds(bytes, offset, extension) {
+            offset = skip_until(bytes, content_start, &raw_delimiter);
+        } else if let Some(dollar_delimiter) = dollar_quote_delimiter(bytes, offset, extension) {
+            offset = skip_until(bytes, offset + dollar_delimiter.len(), &dollar_delimiter);
+        } else if let Some(end) = sql_quoted_string_end(bytes, offset, extension) {
+            offset = end;
+        } else if matches!(extension, "ts" | "js" | "tsx" | "jsx") && bytes[offset] == b'`' {
+            offset = skip_template_literal(bytes, offset + 1, syntax, extension, ranges);
+        } else if let Some(string) = syntax
+            .strings
+            .iter()
+            .filter(|string| token_at(bytes, offset, &string.start))
+            .max_by_key(|string| string.start.len())
+        {
+            offset += string.start.len();
+            offset = skip_configured_string(bytes, offset, string);
+        } else if matches!(extension, "ts" | "js" | "tsx" | "jsx") {
+            if regex_literal_start(bytes, offset) {
+                offset = skip_regex_literal(bytes, offset);
+                continue;
+            }
+            if token_at(bytes, offset, "//") {
+                let start = offset;
+                offset = skip_until(bytes, offset + 2, b"\n");
+                ranges.push(start..offset.min(bytes.len()));
+                continue;
+            }
+            if token_at(bytes, offset, "/*") {
+                let start = offset;
+                offset = skip_until(bytes, offset + 2, b"*/");
+                ranges.push(start..offset);
+                continue;
+            }
+        }
+        if offset >= bytes.len() {
+            break;
+        }
+        match bytes[offset] {
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return offset + 1;
+                }
+            }
+            _ => {}
+        }
+        offset += 1;
+    }
+    bytes.len()
+}
+
+fn skip_template_literal(
+    bytes: &[u8],
+    mut offset: usize,
+    syntax: &CommentSyntax,
+    extension: &str,
+    ranges: &mut Vec<Range<usize>>,
+) -> usize {
+    while offset < bytes.len() {
+        if bytes[offset] == b'\\' {
+            offset = (offset + 2).min(bytes.len());
+        } else if token_at(bytes, offset, "${") {
+            offset = skip_template_expression(bytes, offset + 2, syntax, extension, ranges);
+        } else if bytes[offset] == b'`' {
+            return offset + 1;
+        } else {
+            offset += 1;
+        }
+    }
+    bytes.len()
+}
+
+fn skip_configured_string(bytes: &[u8], mut offset: usize, string: &StringSyntax) -> usize {
+    while offset < bytes.len() {
+        if string
+            .escape
+            .as_deref()
+            .is_some_and(|escape| token_at(bytes, offset, escape))
+        {
+            offset += string.escape.as_deref().map_or(0, str::len);
+            offset = (offset + 1).min(bytes.len());
+        } else if token_at(bytes, offset, &string.end) {
+            return offset + string.end.len();
+        } else {
+            offset += 1;
+        }
+    }
+    bytes.len()
+}
+
+fn scan_code_comments(
+    bytes: &[u8],
+    mut offset: usize,
+    syntax: &CommentSyntax,
+    extension: &str,
+    ranges: &mut Vec<Range<usize>>,
+) -> usize {
+    while offset < bytes.len() {
+        if let Some((raw_delimiter, content_start)) = raw_string_bounds(bytes, offset, extension) {
+            offset = skip_until(bytes, content_start, &raw_delimiter);
+            continue;
+        }
+        if let Some(dollar_delimiter) = dollar_quote_delimiter(bytes, offset, extension) {
+            offset = skip_until(bytes, offset + dollar_delimiter.len(), &dollar_delimiter);
+            continue;
+        }
+        if let Some(end) = sql_quoted_string_end(bytes, offset, extension) {
+            offset = end;
+            continue;
+        }
+        if matches!(extension, "ts" | "js" | "tsx" | "jsx") {
+            if regex_literal_start(bytes, offset) {
+                offset = skip_regex_literal(bytes, offset);
+                continue;
+            }
+            if bytes[offset] == b'`' {
+                offset = skip_template_literal(bytes, offset + 1, syntax, extension, ranges);
+                continue;
+            }
+        }
+        if let Some(string) = syntax
+            .strings
+            .iter()
+            .filter(|string| token_at(bytes, offset, &string.start))
+            .max_by_key(|string| string.start.len())
+        {
+            offset += string.start.len();
+            offset = skip_configured_string(bytes, offset, string);
+            continue;
+        }
+        if let Some(block) = syntax
+            .block
+            .iter()
+            .filter(|block| token_at(bytes, offset, &block.start))
+            .max_by_key(|block| block.start.len())
+        {
+            let start = offset;
+            offset += block.start.len();
+            let mut depth = 1usize;
+            while offset < bytes.len() {
                 if block.nested && token_at(bytes, offset, &block.start) {
                     depth += 1;
                     offset += block.start.len();
-                    state = LexicalState::BlockComment {
-                        syntax: block,
-                        start,
-                        depth,
-                    };
                 } else if token_at(bytes, offset, &block.end) {
                     depth -= 1;
                     offset += block.end.len();
                     if depth == 0 {
-                        ranges.push(start..offset);
-                        state = LexicalState::Code;
-                    } else {
-                        state = LexicalState::BlockComment {
-                            syntax: block,
-                            start,
-                            depth,
-                        };
+                        break;
                     }
                 } else {
                     offset += 1;
-                    state = LexicalState::BlockComment {
-                        syntax: block,
-                        start,
-                        depth,
-                    };
                 }
             }
+            ranges.push(start..offset);
+            continue;
         }
+        if syntax.line.iter().any(|line| token_at(bytes, offset, line)) {
+            let start = offset;
+            offset = skip_until(bytes, offset, b"\n");
+            ranges.push(start..offset);
+            continue;
+        }
+        offset += 1;
     }
+    bytes.len()
+}
 
-    match state {
-        LexicalState::LineComment { start } | LexicalState::BlockComment { start, .. } => {
-            ranges.push(start..bytes.len())
-        }
-        LexicalState::Code | LexicalState::String(_) => {}
-    }
+fn comment_ranges(content: &str, syntax: &CommentSyntax, extension: &str) -> Vec<Range<usize>> {
+    let mut ranges = Vec::new();
+    scan_code_comments(content.as_bytes(), 0, syntax, extension, &mut ranges);
+    ranges.sort_by_key(|range| range.start);
     ranges
 }
 
@@ -551,17 +807,66 @@ fn is_comment_offset(ranges: &[Range<usize>], offset: usize) -> bool {
     index > 0 && ranges[index - 1].contains(&offset)
 }
 
-fn is_allowlisted(path: &Path, project_root: &Path, allowlist: &[AllowlistEntry]) -> bool {
-    let relative = path.strip_prefix(project_root).unwrap_or(path);
-    let path_str = relative.to_str().unwrap_or("");
+enum CompiledAllowlist {
+    PathPrefix(String),
+    Regex(Regex),
+}
+
+fn compile_allowlist(allowlist: &[AllowlistEntry]) -> Result<Vec<CompiledAllowlist>> {
+    allowlist
+        .iter()
+        .map(|entry| match entry {
+            AllowlistEntry::PathPrefix { path } => Ok(CompiledAllowlist::PathPrefix(
+                path.replace('\\', "/").trim_matches('/').to_string(),
+            )),
+            AllowlistEntry::Regex { pattern } => Regex::new(pattern)
+                .map(CompiledAllowlist::Regex)
+                .with_context(|| format!("invalid allowlist regex {pattern:?}")),
+        })
+        .collect()
+}
+
+fn is_allowlisted_compiled(
+    path: &Path,
+    project_root: &Path,
+    allowlist: &[CompiledAllowlist],
+) -> bool {
+    let path_str = normalized_relative_path(path, project_root);
     allowlist.iter().any(|entry| match entry {
-        AllowlistEntry::PathPrefix { path } => relative.starts_with(Path::new(path)),
-        AllowlistEntry::Regex { pattern } => Regex::new(pattern)
-            .map(|re| re.is_match(path_str))
-            .unwrap_or(false),
+        CompiledAllowlist::PathPrefix(prefix) => {
+            path_str == *prefix || path_str.starts_with(&format!("{prefix}/"))
+        }
+        CompiledAllowlist::Regex(regex) => regex.is_match(&path_str),
     })
 }
 
+fn normalized_relative_path(path: &Path, project_root: &Path) -> String {
+    path.strip_prefix(project_root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "kept as a focused unit-test helper for allowlist semantics"
+    )
+)]
+fn is_allowlisted(path: &Path, project_root: &Path, allowlist: &[AllowlistEntry]) -> bool {
+    compile_allowlist(allowlist)
+        .map(|compiled| is_allowlisted_compiled(path, project_root, &compiled))
+        .unwrap_or(false)
+}
+
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "kept as a focused unit-test helper for uncached scans"
+    )
+)]
 fn scan_files(
     project_root: &Path,
     root_paths: &[PathBuf],
@@ -569,12 +874,31 @@ fn scan_files(
     rule: &HardRule,
     engine: &EngineConfig,
 ) -> Result<Vec<Violation>> {
+    scan_files_cached(
+        project_root,
+        root_paths,
+        exclude_dirs,
+        rule,
+        engine,
+        &FileCache::default(),
+    )
+}
+
+fn scan_files_cached(
+    project_root: &Path,
+    root_paths: &[PathBuf],
+    exclude_dirs: &[PathBuf],
+    rule: &HardRule,
+    engine: &EngineConfig,
+    cache: &FileCache,
+) -> Result<Vec<Violation>> {
     if root_paths.is_empty() || rule.patterns.is_empty() {
         return Ok(Vec::new());
     }
 
     let regexes = compile_regexes(&rule.patterns)?;
     let exclude_regexes = compile_regexes(&rule.exclude_patterns)?;
+    let allowlist = compile_allowlist(&rule.allowlist)?;
 
     let rule_name = rule.name.clone();
     let mut walk_builder = WalkBuilder::new(root_paths[0].clone());
@@ -605,31 +929,27 @@ fn scan_files(
                     return false;
                 }
             }
-            let relative = path.strip_prefix(project_root).unwrap_or(path);
-            let path_str = relative.to_str().unwrap_or("");
-            if exclude_regexes.iter().any(|re| re.is_match(path_str)) {
+            let path_str = normalized_relative_path(path, project_root);
+            if exclude_regexes.iter().any(|re| re.is_match(&path_str)) {
                 return false;
             }
-            !is_allowlisted(path, project_root, &rule.allowlist)
+            !is_allowlisted_compiled(path, project_root, &allowlist)
         })
         .map(|entry| -> Result<Vec<Violation>> {
             let path = entry.path();
-            let content = fs::read_to_string(path)
-                .with_context(|| format!("read audit source {}", path.display()))?;
+            let extension = path
+                .extension()
+                .and_then(|value| value.to_str())
+                .unwrap_or("");
+            let snapshot = cache.snapshot(path, engine.comment_syntax.get(extension), extension)?;
             let mut violations = Vec::new();
             let mut reported_lines = HashSet::new();
-            let line_starts = source_line_starts(&content);
-            let extension = path.extension().and_then(|value| value.to_str());
-            let comments = extension
-                .and_then(|extension| engine.comment_syntax.get(extension))
-                .map(|syntax| comment_ranges(&content, syntax))
-                .unwrap_or_default();
 
             for (idx, re) in regexes.iter().enumerate() {
-                for matched in re.find_iter(&content) {
+                for matched in re.find_iter(&snapshot.content) {
                     let (line_number, line, _) =
-                        source_line_at(&content, &line_starts, matched.start());
-                    if is_comment_offset(&comments, matched.start())
+                        source_line_at(&snapshot.content, &snapshot.line_starts, matched.start());
+                    if is_comment_offset(&snapshot.comments, matched.start())
                         || !reported_lines.insert(line_number)
                     {
                         continue;
@@ -649,13 +969,36 @@ fn scan_files(
             Ok(violations)
         })
         .collect::<Result<Vec<_>>>()?;
-    Ok(violations.into_iter().flatten().collect())
+    let mut violations = violations.into_iter().flatten().collect::<Vec<_>>();
+    violations.sort_by(|left, right| {
+        left.file
+            .cmp(&right.file)
+            .then(left.line.cmp(&right.line))
+            .then(left.rule_name.cmp(&right.rule_name))
+    });
+    Ok(violations)
 }
 
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "kept as a focused unit-test helper for uncached scans"
+    )
+)]
 fn scan_arch_rules(
     project_root: &Path,
     config: &Config,
     exclude_dirs: &[PathBuf],
+) -> Result<Vec<ArchViolation>> {
+    scan_arch_rules_cached(project_root, config, exclude_dirs, &FileCache::default())
+}
+
+fn scan_arch_rules_cached(
+    project_root: &Path,
+    config: &Config,
+    exclude_dirs: &[PathBuf],
+    cache: &FileCache,
 ) -> Result<Vec<ArchViolation>> {
     let mut all_violations = Vec::new();
 
@@ -675,6 +1018,7 @@ fn scan_arch_rules(
         let regexes = compile_regexes(&patterns)?;
         let allowed_regexes = compile_regexes(&allowed_patterns)?;
         let exclude_regexes = compile_regexes(&exclude_patterns)?;
+        let compiled_allowlist = compile_allowlist(&allowlist)?;
 
         let rule_name = rule.name.clone();
         let mut walk_builder = WalkBuilder::new(root_paths[0].clone());
@@ -705,31 +1049,31 @@ fn scan_arch_rules(
                         return false;
                     }
                 }
-                let relative = path.strip_prefix(project_root).unwrap_or(path);
-                let path_str = relative.to_str().unwrap_or("");
-                if exclude_regexes.iter().any(|re| re.is_match(path_str)) {
+                let path_str = normalized_relative_path(path, project_root);
+                if exclude_regexes.iter().any(|re| re.is_match(&path_str)) {
                     return false;
                 }
-                !is_allowlisted(path, project_root, &allowlist)
+                !is_allowlisted_compiled(path, project_root, &compiled_allowlist)
             })
             .map(|entry| -> Result<Vec<ArchViolation>> {
                 let path = entry.path();
-                let content = fs::read_to_string(path)
-                    .with_context(|| format!("read audit source {}", path.display()))?;
+                let extension = path
+                    .extension()
+                    .and_then(|value| value.to_str())
+                    .unwrap_or("");
+                let snapshot =
+                    cache.snapshot(path, config.engine.comment_syntax.get(extension), extension)?;
                 let mut violations = Vec::new();
                 let mut reported_lines = HashSet::new();
-                let line_starts = source_line_starts(&content);
-                let extension = path.extension().and_then(|value| value.to_str());
-                let comments = extension
-                    .and_then(|extension| config.engine.comment_syntax.get(extension))
-                    .map(|syntax| comment_ranges(&content, syntax))
-                    .unwrap_or_default();
 
                 for re in &regexes {
-                    for matched in re.find_iter(&content) {
-                        let (line_number, line, _) =
-                            source_line_at(&content, &line_starts, matched.start());
-                        if is_comment_offset(&comments, matched.start())
+                    for matched in re.find_iter(&snapshot.content) {
+                        let (line_number, line, _) = source_line_at(
+                            &snapshot.content,
+                            &snapshot.line_starts,
+                            matched.start(),
+                        );
+                        if is_comment_offset(&snapshot.comments, matched.start())
                             || allowed_regexes.iter().any(|allowed| allowed.is_match(line))
                             || !reported_lines.insert(line_number)
                         {
@@ -754,6 +1098,12 @@ fn scan_arch_rules(
         all_violations.extend(rule_violations.into_iter().flatten());
     }
 
+    all_violations.sort_by(|left, right| {
+        left.file
+            .cmp(&right.file)
+            .then(left.line.cmp(&right.line))
+            .then(left.rule_name.cmp(&right.rule_name))
+    });
     Ok(all_violations)
 }
 
@@ -1139,22 +1489,24 @@ pub fn run(
     let config = parse_audit_config(&config_str)
         .with_context(|| format!("parse audit config {}", config_path.display()))?;
     let exclude_dirs = validate_audit_config(project_root, &config)?;
+    let cache = FileCache::default();
 
     let mut all_hard_violations = Vec::new();
     for rule in &config.hard_rules {
         let root_paths =
             resolve_rule_roots(project_root, &rule.paths, &config.paths.aliases, &rule.name)?;
-        let violations = scan_files(
+        let violations = scan_files_cached(
             project_root,
             &root_paths,
             &exclude_dirs,
             rule,
             &config.engine,
+            &cache,
         )?;
         all_hard_violations.extend(violations);
     }
 
-    let arch_violations = scan_arch_rules(project_root, &config, &exclude_dirs)?;
+    let arch_violations = scan_arch_rules_cached(project_root, &config, &exclude_dirs, &cache)?;
     let report = generate_report(&config, &all_hard_violations, &arch_violations);
     let full_json = serde_json::to_string_pretty(&report)?;
     let outcome = AuditOutcome {
@@ -1257,7 +1609,7 @@ mod tests {
             AUDIT_CONFIG_VERSION
         );
 
-        let missing_version = current.replacen("version = 2\n", "", 1);
+        let missing_version = current.replacen("version = 2", "", 1);
         let error = parse_audit_config(&missing_version)
             .expect_err("an unversioned audit config must fail closed");
         assert!(error.to_string().contains("add `version = 2`"));
@@ -1593,6 +1945,19 @@ exclude_patterns = []
     }
 
     #[test]
+    fn compiled_path_allowlist_normalizes_windows_separators() {
+        let allowlist = compile_allowlist(&[AllowlistEntry::PathPrefix {
+            path: r"backend\src\repositories".to_string(),
+        }])
+        .expect("allowlist must compile");
+        assert!(is_allowlisted_compiled(
+            Path::new(r"/repo/backend/src/repositories/users.rs"),
+            Path::new("/repo"),
+            &allowlist
+        ));
+    }
+
+    #[test]
     fn configured_comment_syntax_handles_strings_and_block_comments() {
         let test_dir = TestDir::new("comment-syntax");
         let source = test_dir.child("src");
@@ -1636,6 +2001,231 @@ exclude_patterns = []
                 .collect::<Vec<_>>(),
             vec![2, 6]
         );
+    }
+
+    #[test]
+    fn lexical_scanner_handles_arbitrary_rust_raw_string_hashes() {
+        let syntax = configured_audit()
+            .engine
+            .comment_syntax
+            .get("rs")
+            .cloned()
+            .expect("Rust syntax must be configured");
+        let content = concat!(
+            "const VALUE: &str = r####\"// not a comment /* not a comment */\"####;\n",
+            "forbidden_call();\n",
+            "// forbidden_call();\n",
+        );
+        let ranges = comment_ranges(content, &syntax, "rs");
+        assert!(!is_comment_offset(&ranges, content.find("// not").unwrap()));
+        assert!(!is_comment_offset(
+            &ranges,
+            content.find("forbidden_call").unwrap()
+        ));
+        assert_eq!(ranges.len(), 1);
+    }
+
+    #[test]
+    fn lexical_scanner_handles_typescript_regex_and_nested_templates() {
+        let syntax = configured_audit()
+            .engine
+            .comment_syntax
+            .get("ts")
+            .cloned()
+            .expect("TypeScript syntax must be configured");
+        let content = concat!(
+            "const matcher = /https?:\\/\\/example\\.invalid/gi;\n",
+            "const value = `literal // ${`nested /* ${1 + 2} */`} forbidden_call()`;\n",
+            "// forbidden_call();\n",
+        );
+        let ranges = comment_ranges(content, &syntax, "ts");
+        assert!(!is_comment_offset(
+            &ranges,
+            content.find("forbidden_call").unwrap()
+        ));
+        assert!(is_comment_offset(
+            &ranges,
+            content.rfind("// forbidden").unwrap()
+        ));
+        assert_eq!(ranges.len(), 1);
+    }
+
+    #[test]
+    fn lexical_scanner_handles_postgres_dollar_quotes_and_escaped_strings() {
+        let syntax = configured_audit()
+            .engine
+            .comment_syntax
+            .get("sql")
+            .cloned()
+            .expect("SQL syntax must be configured");
+        let content = concat!(
+            "SELECT $tag$-- not a comment /* still text */$tag$;\n",
+            "SELECT E'escaped \\\' -- not a comment';\n",
+            "-- actual comment forbidden_call();\n",
+            "DELETE FROM sessions;\n",
+        );
+        let ranges = comment_ranges(content, &syntax, "sql");
+        assert!(is_comment_offset(
+            &ranges,
+            content.find("actual comment").unwrap()
+        ));
+        assert!(!is_comment_offset(
+            &ranges,
+            content.find("not a comment").unwrap()
+        ));
+        assert_eq!(ranges.len(), 1);
+    }
+
+    #[test]
+    fn lexical_scanner_handles_unclosed_comments_and_non_ascii_content() {
+        let syntax = configured_audit()
+            .engine
+            .comment_syntax
+            .get("rs")
+            .cloned()
+            .expect("Rust syntax must be configured");
+        let content = "// 中文注释\n/* 未闭合 forbidden_call();";
+        let ranges = comment_ranges(content, &syntax, "rs");
+        assert_eq!(ranges.len(), 2);
+        assert!(is_comment_offset(&ranges, content.len() - 2));
+    }
+
+    #[test]
+    fn lexical_scanner_is_deterministic_for_seeded_random_unicode() {
+        let syntax = configured_audit()
+            .engine
+            .comment_syntax
+            .get("ts")
+            .cloned()
+            .expect("TypeScript syntax must be configured");
+        let alphabet = [
+            'a', '/', '*', '\\', '\'', '"', '`', '$', '{', '}', '\n', '中', 'é', '\0',
+        ];
+        let mut state = 0x5eed_u64;
+        for length in 0..512 {
+            let mut input = String::new();
+            for _ in 0..length {
+                state = state
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1);
+                input.push(alphabet[(state as usize) % alphabet.len()]);
+            }
+            let first = comment_ranges(&input, &syntax, "ts");
+            let second = comment_ranges(&input, &syntax, "ts");
+            assert_eq!(first, second);
+            assert!(first.iter().all(|range| range.start <= range.end));
+            assert!(first.iter().all(|range| range.end <= input.len()));
+            assert!(first.windows(2).all(|pair| pair[0].start <= pair[1].start));
+        }
+    }
+
+    #[test]
+    fn config_and_path_matching_are_deterministic_for_seeded_inputs() {
+        let template = include_str!("../presets/empty.audit.toml");
+        let root = Path::new("/repo");
+        let mut state = 0xa11c_e123_4567_u64;
+
+        for index in 0..128 {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1);
+            let limit = 1024 + (state as usize % 16_384);
+            let source = template.replace(
+                "markdown_max_bytes = 4096",
+                &format!("markdown_max_bytes = {limit}"),
+            );
+            let first = parse_audit_config(&source).expect("seeded config must parse");
+            let second = parse_audit_config(&source).expect("same seeded config must parse");
+            assert_eq!(first, second);
+
+            let prefix = format!("src/generated/{index}/资料");
+            let allowlist = compile_allowlist(&[AllowlistEntry::PathPrefix {
+                path: prefix.clone(),
+            }])
+            .expect("seeded path prefix must compile");
+            let matching = root.join(format!("{prefix}/文件.rs"));
+            let non_matching = root.join(format!("src/generated/{index}/资料_backup.rs"));
+            let first_match = is_allowlisted_compiled(&matching, root, &allowlist);
+            let second_match = is_allowlisted_compiled(&matching, root, &allowlist);
+            assert_eq!(first_match, second_match);
+            assert!(first_match);
+            assert!(!is_allowlisted_compiled(&non_matching, root, &allowlist));
+        }
+    }
+
+    #[test]
+    fn audit_source_boundaries_fail_closed_without_panicking() {
+        let test_dir = TestDir::new("source-boundaries");
+        let source = test_dir.child("src");
+        fs::write(source.join("empty.rs"), "").expect("write empty fixture");
+        fs::write(
+            source.join("long.rs"),
+            format!("{}forbidden_call();\n", "x".repeat(1_000_000)),
+        )
+        .expect("write long fixture");
+        fs::write(source.join("binary.rs"), [0xff, 0xfe, 0xfd])
+            .expect("write malformed UTF-8 fixture");
+        let rule = HardRule {
+            name: "boundary rule".into(),
+            severity: "error".into(),
+            paths: Vec::new(),
+            extensions: vec!["rs".into()],
+            patterns: vec!["forbidden_call".into()],
+            exclude_patterns: Vec::new(),
+            allowlist: Vec::new(),
+        };
+
+        let long_violations = scan_files(
+            &test_dir.0,
+            &[source.join("long.rs")],
+            &[],
+            &rule,
+            &configured_audit().engine,
+        )
+        .expect("a one-megabyte source line must scan without panicking");
+        assert_eq!(long_violations.len(), 1);
+
+        let error = scan_files(
+            &test_dir.0,
+            &[source],
+            &[],
+            &rule,
+            &configured_audit().engine,
+        )
+        .expect_err("malformed UTF-8 must fail closed");
+        assert!(error.to_string().contains("read audit source"));
+    }
+
+    #[test]
+    fn file_snapshots_are_reused_across_rules() {
+        let test_dir = TestDir::new("snapshot-cache");
+        let source = test_dir.child("src");
+        fs::write(source.join("sample.rs"), "first(); second();\n").expect("write cache fixture");
+        let cache = FileCache::default();
+        let mut rule = HardRule {
+            name: "first rule".into(),
+            severity: "error".into(),
+            paths: Vec::new(),
+            extensions: vec!["rs".into()],
+            patterns: vec!["first".into()],
+            exclude_patterns: Vec::new(),
+            allowlist: Vec::new(),
+        };
+        let engine = configured_audit().engine;
+        scan_files_cached(
+            &test_dir.0,
+            std::slice::from_ref(&source),
+            &[],
+            &rule,
+            &engine,
+            &cache,
+        )
+        .expect("scan first rule");
+        rule.name = "second rule".into();
+        rule.patterns = vec!["second".into()];
+        scan_files_cached(&test_dir.0, &[source], &[], &rule, &engine, &cache)
+            .expect("scan second rule");
+        assert_eq!(cache.entries.lock().expect("cache lock").len(), 1);
     }
 
     #[test]

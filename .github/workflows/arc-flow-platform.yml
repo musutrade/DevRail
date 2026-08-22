@@ -1,0 +1,71 @@
+name: arc-flow platform
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arc-flow-platform-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: arc-flow ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: 1.97.1
+          components: rustfmt, clippy
+          cache: false
+      - name: Rust format
+        run: cargo fmt --manifest-path codex-audit-pipeline/tools/arc-flow/Cargo.toml -- --check
+      - name: Rust Clippy
+        run: cargo clippy --manifest-path codex-audit-pipeline/tools/arc-flow/Cargo.toml --locked --all-targets --all-features -- -D warnings
+      - name: Rust tests
+        run: cargo test --manifest-path codex-audit-pipeline/tools/arc-flow/Cargo.toml --locked
+
+  benchmark:
+    name: arc-flow benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: 1.97.1
+          components: rustfmt, clippy
+          cache: false
+      - name: Run 10,000-file benchmark
+        env:
+          ARC_FLOW_BENCH_FILES: 10000
+          ARC_FLOW_BENCH_MAX_MS: 30000
+          ARC_FLOW_BENCH_MAX_RSS_MB: 512
+          ARC_FLOW_BENCH_THREADS: 4
+          ARC_FLOW_BENCH_OUTPUT: dist/arc-flow-release/benchmark.json
+        run: node scripts/benchmark-audit.mjs
+      - name: Build release binary
+        run: cargo build --release --locked --manifest-path codex-audit-pipeline/tools/arc-flow/Cargo.toml
+      - name: Generate SPDX SBOM and SHA-256 checksum
+        run: node scripts/generate-arc-flow-sbom.mjs dist/arc-flow-release codex-audit-pipeline/tools/arc-flow/target/release/arc-flow
+      - name: Upload arc-flow release evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: arc-flow-release-evidence
+          path: |
+            dist/arc-flow-release/
+            codex-audit-pipeline/tools/arc-flow/target/release/arc-flow
+            codex-audit-pipeline/tools/arc-flow/target/release/arc-flow.sha256
+          if-no-files-found: error
+          retention-days: 30

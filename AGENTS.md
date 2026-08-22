@@ -78,9 +78,10 @@ DevRail 基于 arc-admin `v2.3.0`，产品业务前缀为 `devrail`。本文件�
 - 判定顺序由 `cargo flow verify` 固定为：secret scan → 审计门禁 → lint/compile/test/build → LLM reviewer（可选）。
 
 ## 🔒 提交安全
-- 只允许 `git add <变更文件清单>` 和 `git commit -m "..."`。
-- **严禁** `git push` / `git push --force` / `git reset --hard`。
-- 提交完成后输出：`✅ 代码已本地提交，请人工执行 git push 或创建 PR。`
+- 只允许使用明确的变更文件清单执行 `git add <变更文件清单>`，再使用 `git commit -m "..."` 提交。
+- 用户明确要求远端交付时，允许执行普通 `git push` 并使用 `gh pr create` 创建远端 PR；推送和创建 PR 前必须先通过 `cargo flow verify --all`。
+- **严禁** `git push --force`、`git push --force-with-lease` 和 `git reset --hard`；不得覆盖或重写他人远端历史。
+- 远端交付完成后输出提交 SHA、分支、PR URL 和 CI 状态；仅本地交付时输出：`✅ 代码已本地提交。`
 - 提交前快速门禁由 `codex-audit-pipeline/hooks/pre-commit` 执行（lint + 审计），完整测试不在提交钩子里跑。
 - 提交到远端前必须执行 `cargo flow verify --all`；该命令不会修改源码，后端测试只使用 `TEST_DATABASE_URL` 或一次性 PostgreSQL 容器。
 
@@ -104,5 +105,5 @@ DevRail 基于 arc-admin `v2.3.0`，产品业务前缀为 `devrail`。本文件�
   → 4. cargo flow verify（secret → audit → lint/check/test/build）
   → 5. 可选 LLM reviewer：只读变更文件做语义/架构审查
   → 6. cargo flow verify --all 做交付前完整验证
-  → 7. 本地提交（禁止 push），pre-commit 调用 cargo flow hook
+  → 7. 本地提交；用户要求远端交付时 push 并创建 PR，pre-commit 调用 cargo flow hook
 ```

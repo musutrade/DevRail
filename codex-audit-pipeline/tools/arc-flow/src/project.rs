@@ -140,6 +140,9 @@ pub(crate) fn resolve_repo_path(
     label: &str,
     must_exist: bool,
 ) -> Result<PathBuf> {
+    let root = root
+        .canonicalize()
+        .with_context(|| format!("resolve repository root {}", root.display()))?;
     if path.as_os_str().is_empty() || path.is_absolute() {
         bail!("{label} must be a non-empty repository-relative path");
     }
@@ -226,9 +229,12 @@ fn find_root(start: &Path, config_override: Option<&Path>) -> Result<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     use super::*;
+    #[cfg(unix)]
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    #[cfg(unix)]
     fn fixture(name: &str) -> PathBuf {
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)

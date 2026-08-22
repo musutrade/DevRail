@@ -483,7 +483,8 @@ fn scanner_for_mode(project: &Project, mode: SecretMode) -> Result<SecretScanner
             let relative = relative
                 .to_str()
                 .context("secret scan configuration path must be UTF-8")?;
-            let bytes = staged_file_bytes(project, relative)?.ok_or_else(|| {
+            let relative = relative.replace('\\', "/");
+            let bytes = staged_file_bytes(project, &relative)?.ok_or_else(|| {
                 anyhow::anyhow!("staged secret scan configuration is missing: {relative}")
             })?;
             let source = std::str::from_utf8(&bytes)

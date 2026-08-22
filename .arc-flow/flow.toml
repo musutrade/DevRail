@@ -44,6 +44,7 @@ required_steps = [
   "workflow.audit-retention-config",
   "workflow.api-generation",
   "workflow.supply-chain-config",
+  "workflow.audit-tool-production",
   "workflow.format",
   "workflow.clippy",
   "workflow.tests",
@@ -482,6 +483,17 @@ program = "node"
 args = ["{root}/scripts/check-supply-chain.mjs"]
 cwd = "{root}"
 log = "supply_chain_config.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.audit-tool-production"
+label = "audit tool productionization"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["{root}/scripts/check-audit-tool-production.mjs"]
+cwd = "{root}"
+log = "audit_tool_production.log"
 timeout_secs = 60
 
 [[steps]]

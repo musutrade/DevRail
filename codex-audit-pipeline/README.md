@@ -362,6 +362,18 @@ arc-flow verify --all
 
 终端只展示摘要。步骤失败时先看 `test_result.md` 中的日志路径，再打开对应日志；不要只根据最后一行猜测根因。
 
+## 审计工具生产化验证
+
+auditor 是 Clippy、ESLint、CodeQL 等语言级工具之前的确定性补充门禁。词法边界明确覆盖任意数量 `#` 的 Rust raw string、TypeScript/JavaScript 正则和嵌套模板插值、PostgreSQL dollar-quoted string、转义字符串、未闭合输入及非 ASCII 文本；不把这些字符串内部的注释标记误报为注释。审计规则的正则、allowlist 和每个文件的内容/行索引/注释区间会在一次运行内预编译并缓存。
+
+本仓库保留三类可重复证据：
+
+- `node scripts/benchmark-audit.mjs`：生成默认 10,000 个源文件，比较单线程/并行结果并检查 30 秒、512 MiB 峰值 RSS 预算，可通过 `ARC_FLOW_BENCH_FILES`、`ARC_FLOW_BENCH_MAX_MS`、`ARC_FLOW_BENCH_MAX_RSS_MB`、`ARC_FLOW_BENCH_THREADS` 和 `ARC_FLOW_BENCH_OUTPUT` 调整；
+- `node scripts/audit-production-drill.mjs`：在临时仓库执行初始化、v1 配置迁移、首条规则、故意失败和恢复演练；
+- `node scripts/generate-arc-flow-sbom.mjs <output-dir> <binary>`：从 `cargo metadata` 生成 SPDX 2.3 SBOM，并为发布二进制生成 SHA-256 校验和。
+
+`.github/workflows/arc-flow-platform.yml` 在 Linux 和 Windows 矩阵上运行 arc-flow 的格式、Clippy 和测试，并在 Linux 上执行 10,000 文件基准、发布构建、SBOM 和校验和产物。跨平台路径测试使用 `/` 与 `\\` 两种分隔符，Windows runner 的结果以 CI artifact 为准。
+
 JSON Lines 应用日志可提取同一 trace 的上下文：
 
 ```bash
