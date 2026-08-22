@@ -71,8 +71,13 @@ const DEVRAIL_TASK_PATH: &str = "/api/v1/projects/{project_id}/tasks/{id}";
 const DEVRAIL_TASK_RUNS_PATH: &str = "/api/v1/tasks/{task_id}/runs";
 const DEVRAIL_RUN_PATH: &str = "/api/v1/runs/{id}";
 const DEVRAIL_RUN_INTERRUPT_PATH: &str = "/api/v1/runs/{id}/interrupt";
+const DEVRAIL_RUN_RETRY_PATH: &str = "/api/v1/runs/{id}/retry";
 const DEVRAIL_RUN_EVENTS_PATH: &str = "/api/v1/runs/{id}/events";
 const DEVRAIL_RUN_EVENTS_STREAM_PATH: &str = "/api/v1/runs/{id}/events/stream";
+const DEVRAIL_APPROVALS_PATH: &str = "/api/v1/approvals";
+const DEVRAIL_APPROVAL_PATH: &str = "/api/v1/approvals/{id}";
+const DEVRAIL_APPROVAL_APPROVE_PATH: &str = "/api/v1/approvals/{id}/approve";
+const DEVRAIL_APPROVAL_REJECT_PATH: &str = "/api/v1/approvals/{id}/reject";
 const METRICS_PATH: &str = "/metrics";
 
 /// Public HTTP operations generated into `docs/openapi.json`.
@@ -121,8 +126,13 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_TASK_RUNS_PATH, &["get", "post"]),
     (DEVRAIL_RUN_PATH, &["get"]),
     (DEVRAIL_RUN_INTERRUPT_PATH, &["post"]),
+    (DEVRAIL_RUN_RETRY_PATH, &["post"]),
     (DEVRAIL_RUN_EVENTS_PATH, &["get"]),
     (DEVRAIL_RUN_EVENTS_STREAM_PATH, &["get"]),
+    (DEVRAIL_APPROVALS_PATH, &["get"]),
+    (DEVRAIL_APPROVAL_PATH, &["get"]),
+    (DEVRAIL_APPROVAL_APPROVE_PATH, &["post"]),
+    (DEVRAIL_APPROVAL_REJECT_PATH, &["post"]),
 ];
 
 #[derive(Clone)]
@@ -293,6 +303,7 @@ fn base_router(state: AppState) -> Router {
             DEVRAIL_RUN_INTERRUPT_PATH,
             post(handlers::devrail::interrupt_run),
         )
+        .route(DEVRAIL_RUN_RETRY_PATH, post(handlers::devrail::retry_run))
         .route(
             DEVRAIL_RUN_EVENTS_PATH,
             get(handlers::devrail::list_run_events),
@@ -300,6 +311,19 @@ fn base_router(state: AppState) -> Router {
         .route(
             DEVRAIL_RUN_EVENTS_STREAM_PATH,
             get(handlers::devrail::stream_run_events),
+        )
+        .route(
+            DEVRAIL_APPROVALS_PATH,
+            get(handlers::devrail::list_approvals),
+        )
+        .route(DEVRAIL_APPROVAL_PATH, get(handlers::devrail::get_approval))
+        .route(
+            DEVRAIL_APPROVAL_APPROVE_PATH,
+            post(handlers::devrail::approve_approval),
+        )
+        .route(
+            DEVRAIL_APPROVAL_REJECT_PATH,
+            post(handlers::devrail::reject_approval),
         )
         .with_state(state)
 }

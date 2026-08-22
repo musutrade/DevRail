@@ -84,6 +84,18 @@ allowlist = [
 ]
 exclude_patterns = []
 
+[[hard_rules]]
+name = "产品后端禁止 Clippy allow 属性"
+severity = "blocker"
+paths = ["backend/src"]
+extensions = ["rs"]
+patterns = [
+  '#\[\s*allow\s*\([^]]*clippy::',
+  '#\[\s*cfg_attr\s*\([^]]*clippy::[^]]*allow\s*\(',
+]
+allowlist = []
+exclude_patterns = []
+
 # ============================================================
 # 架构分层审计
 # ============================================================

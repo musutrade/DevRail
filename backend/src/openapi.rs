@@ -10,7 +10,8 @@ use crate::models::{
     ChangePasswordRequest, CreateDepartmentRequest, CreateDevRailEnvironmentRequest,
     CreateDevRailProjectRequest, CreateDevRailRepositoryRequest, CreateDevRailRunRequest,
     CreateDevRailTaskRequest, CreateRoleRequest, CreateUserRequest, DashboardStats,
-    DataScopeSchema, DepartmentResponse, DepartmentStatusSchema, DevRailEnvironmentPage,
+    DataScopeSchema, DepartmentResponse, DepartmentStatusSchema, DevRailApprovalDecisionRequest,
+    DevRailApprovalPage, DevRailApprovalResponse, DevRailEnvironmentPage,
     DevRailEnvironmentResponse, DevRailListQuery, DevRailProjectPage, DevRailProjectResponse,
     DevRailRepositoryPage, DevRailRepositoryResponse, DevRailRunEventPage, DevRailRunPage,
     DevRailRunResponse, DevRailTaskPage, DevRailTaskResponse, HealthResponse, LoginRequest,
@@ -20,11 +21,11 @@ use crate::models::{
     MfaStatusResponse, MfaWebauthnChallengeResponse, ModuleUnlockRequest, ModuleUnlockScopeSchema,
     ModuleUnlockStatusResponse, PageAuditLog, PageQuery, PageUser, PermissionCodes,
     PermissionGroupResponse, PermissionResponse, PermissionTypeSchema, ReadinessResponse,
-    RecoveryCodesResponse, RoleColorSchema, RolePermissions, RoleResponse, SortDirectionSchema,
-    StepUpRequest, StepUpResponse, UpdateDepartmentRequest, UpdateDevRailEnvironmentRequest,
-    UpdateDevRailProjectRequest, UpdateDevRailRepositoryRequest, UpdateDevRailTaskRequest,
-    UpdateRolePermissionsRequest, UpdateRoleRequest, UpdateUserRequest, UserResponse,
-    UserSortBySchema, UserStatusSchema,
+    RecoveryCodesResponse, RetryDevRailRunRequest, RoleColorSchema, RolePermissions, RoleResponse,
+    SortDirectionSchema, StepUpRequest, StepUpResponse, UpdateDepartmentRequest,
+    UpdateDevRailEnvironmentRequest, UpdateDevRailProjectRequest, UpdateDevRailRepositoryRequest,
+    UpdateDevRailTaskRequest, UpdateRolePermissionsRequest, UpdateRoleRequest, UpdateUserRequest,
+    UserResponse, UserSortBySchema, UserStatusSchema,
 };
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::openapi::OpenApi as OpenApiDocument;
@@ -751,6 +752,16 @@ fn interrupt_devrail_run() {}
 fn list_devrail_run_events() {}
 #[utoipa::path(get, path = "/runs/{id}/events/stream", operation_id = "streamDevRailRunEvents", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 200, description = "运行事件 SSE 流")))]
 fn stream_devrail_run_events() {}
+#[utoipa::path(post, path = "/runs/{id}/retry", operation_id = "retryDevRailRun", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), request_body = RetryDevRailRunRequest, responses((status = 202, body = DevRailRunResponse)))]
+fn retry_devrail_run() {}
+#[utoipa::path(get, path = "/approvals", operation_id = "listDevRailApprovals", tag = "devrail", security(("cookieAuth" = [])), params(DevRailListQuery), responses((status = 200, body = DevRailApprovalPage)))]
+fn list_devrail_approvals() {}
+#[utoipa::path(get, path = "/approvals/{id}", operation_id = "getDevRailApproval", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 200, body = DevRailApprovalResponse)))]
+fn get_devrail_approval() {}
+#[utoipa::path(post, path = "/approvals/{id}/approve", operation_id = "approveDevRailApproval", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), request_body = DevRailApprovalDecisionRequest, responses((status = 200, body = DevRailApprovalResponse)))]
+fn approve_devrail_approval() {}
+#[utoipa::path(post, path = "/approvals/{id}/reject", operation_id = "rejectDevRailApproval", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), request_body = DevRailApprovalDecisionRequest, responses((status = 200, body = DevRailApprovalResponse)))]
+fn reject_devrail_approval() {}
 
 #[derive(OpenApi)]
 #[openapi(
@@ -809,7 +820,8 @@ fn stream_devrail_run_events() {}
         update_devrail_environment, list_devrail_tasks, create_devrail_task,
         get_devrail_task, update_devrail_task, create_devrail_run, list_devrail_runs,
         get_devrail_run, interrupt_devrail_run, list_devrail_run_events
-        ,stream_devrail_run_events
+        ,stream_devrail_run_events, retry_devrail_run, list_devrail_approvals,
+        get_devrail_approval, approve_devrail_approval, reject_devrail_approval
     ),
     components(schemas(
         ErrorEnvelope,
@@ -869,7 +881,8 @@ fn stream_devrail_run_events() {}
         UpdateDevRailRepositoryRequest, CreateDevRailEnvironmentRequest,
         UpdateDevRailEnvironmentRequest, CreateDevRailTaskRequest,
         UpdateDevRailTaskRequest, CreateDevRailRunRequest, DevRailRunResponse,
-        DevRailRunPage, DevRailRunEventPage
+        DevRailRunPage, DevRailRunEventPage, RetryDevRailRunRequest,
+        DevRailApprovalResponse, DevRailApprovalPage, DevRailApprovalDecisionRequest
     )),
     servers((url = "/api/v1", description = "默认 API 根路径")),
     modifiers(&SecurityAddon),

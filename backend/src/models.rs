@@ -259,6 +259,30 @@ pub struct DevRailRunEventRow {
     pub occurred_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, FromRow)]
+pub struct DevRailApprovalRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub run_id: i64,
+    pub event_id: Option<i64>,
+    pub idempotency_key: String,
+    pub tool_name: String,
+    pub args_summary: Value,
+    pub cwd: String,
+    pub impact_scope: Option<String>,
+    pub risk_level: String,
+    pub requested_by: i64,
+    pub decided_by: Option<i64>,
+    pub status: String,
+    pub decision_reason: Option<String>,
+    pub expires_at: DateTime<Utc>,
+    pub policy_version: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 // ===== API DTO =====
 
 #[derive(Debug, utoipa::ToSchema)]
@@ -903,6 +927,43 @@ pub struct DevRailRunEventPage {
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct DevRailApprovalResponse {
+    pub id: i64,
+    pub run_id: i64,
+    pub event_id: Option<i64>,
+    pub idempotency_key: String,
+    pub tool_name: String,
+    pub args_summary: Value,
+    pub cwd: String,
+    pub impact_scope: Option<String>,
+    pub risk_level: String,
+    pub requested_by: i64,
+    pub decided_by: Option<i64>,
+    pub status: String,
+    pub decision_reason: Option<String>,
+    pub expires_at: DateTime<Utc>,
+    pub policy_version: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailApprovalPage {
+    pub items: Vec<DevRailApprovalResponse>,
+    pub total: i64,
+    pub page: i64,
+    pub page_size: i64,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailApprovalDecisionRequest {
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct DevRailProjectPage {
     pub items: Vec<DevRailProjectResponse>,
     pub total: i64,
@@ -1055,6 +1116,13 @@ pub struct CreateDevRailRunRequest {
     pub environment_id: i64,
     pub idempotency_key: String,
     pub model_id: Option<String>,
+    pub input: Option<String>,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RetryDevRailRunRequest {
+    pub idempotency_key: String,
     pub input: Option<String>,
 }
 

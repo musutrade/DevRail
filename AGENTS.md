@@ -35,6 +35,10 @@ DevRail 基于 arc-admin `v2.3.0`，产品业务前缀为 `devrail`。本文件�
 - Service、Handler、路由层出现写操作 SQL 会被 auditor 硬性扫描判定为 blocker，直接打回。
 - AI 或任何子代理禁止直接连接生产数据库；测试一律走 `cargo flow verify` 管理的 `TEST_DATABASE_URL` 或一次性 PostgreSQL 容器。
 
+## ⛔ Clippy 质量红线
+- 产品后端禁止 `#[allow(clippy::...)]` 和任何条件形式的 Clippy allow 属性；禁止通过 `#[allow]`、降低 lint 等级或扩大阈值绕过 Clippy 失败。
+- 参数过多、复杂度、可读性等 Clippy 诊断必须通过参数对象、拆分函数或明确的数据结构修复。审计规则将这类属性判定为 blocker，`cargo flow` 的后端 Clippy 也会拒绝所有 allow 属性。
+
 ## 🚫 读取策略（Token 节约 + 准确性平衡）
 - **默认不读源码**。编码/修复阶段先读 `codex-audit-pipeline/.codex/reports/review_context.json`（完整明细，含文件:行号），按行号精准读取，单次 ≤ 200 行。
 - **reviewer 子代理例外**：允许读取 `codex-audit-pipeline/.codex/reports/changed_files.txt` 中列出的变更文件（评审必须基于真实代码）。

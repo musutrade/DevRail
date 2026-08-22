@@ -2,6 +2,7 @@ pub mod audit_logs;
 pub mod auth_sessions;
 pub mod departments;
 pub mod devrail;
+pub mod devrail_approvals;
 pub mod devrail_runs;
 pub mod mfa;
 pub mod module_unlock;

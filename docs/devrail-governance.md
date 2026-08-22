@@ -74,7 +74,13 @@ DevRail 通过 `.arc-project.json` 登记为 arc-admin 派生项目。框架更�
 - SQL 写入只能出现在 Repository、migration、测试或 seed；审计表的维护开关只能由受控归档命令使用。
 - 所有外部 URL、仓库凭据、环境 Secret 和推送密钥通过部署 Secret 管理注入。
 
-## 6. Git 和 PR
+## 6. Rust 质量与 Clippy
+
+- 产品后端不得使用 `#[allow(clippy::...)]` 或条件形式的 Clippy allow 属性。
+- 不得通过 `#[allow]`、降低 lint 等级、移除 required check 或扩大阈值规避 Clippy 诊断；必须重构参数、拆分职责或补充明确的数据结构。
+- `cargo flow` 后端 Clippy 使用 `-D clippy::allow_attributes`，审计工具对 Clippy allow 属性以 blocker 处理。
+
+## 7. Git 和 PR
 
 - 分支使用 `<type>/<short-description>`，例如 `feat/devrail-task-runs`、`fix/push-retry`、`docs/governance`。
 - `main` 只接受 PR，禁止直接推送、强制推送和在 PR 中混入无关格式化。
@@ -83,7 +89,7 @@ DevRail 通过 `.arc-project.json` 登记为 arc-admin 派生项目。框架更�
 - 生成文件变更必须说明生成命令；禁止手改 `docs/openapi.json` 和 `frontend/src/app/generated/api/`。
 - 合并前必须通过 `Quality gate`、`Backend verification`、`Frontend verification`；安全 workflow 失败时不得以重跑代替修复。
 
-## 7. 变更完成定义
+## 8. 变更完成定义
 
 - 需求、API、数据模型、权限和 UI 文档同步；
 - migration、Repository、Service、Handler、前端 feature 和测试均位于规定边界；
