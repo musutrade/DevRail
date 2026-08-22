@@ -1609,7 +1609,7 @@ mod tests {
             AUDIT_CONFIG_VERSION
         );
 
-        let missing_version = current.replacen("version = 2\n", "", 1);
+        let missing_version = current.replacen("version = 2", "", 1);
         let error = parse_audit_config(&missing_version)
             .expect_err("an unversioned audit config must fail closed");
         assert!(error.to_string().contains("add `version = 2`"));
