@@ -140,6 +140,9 @@ pub(crate) fn resolve_repo_path(
     label: &str,
     must_exist: bool,
 ) -> Result<PathBuf> {
+    let root = root
+        .canonicalize()
+        .with_context(|| format!("resolve repository root {}", root.display()))?;
     if path.as_os_str().is_empty() || path.is_absolute() {
         bail!("{label} must be a non-empty repository-relative path");
     }
