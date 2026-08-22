@@ -58,6 +58,15 @@ const DEPARTMENT_PATH: &str = "/api/v1/departments/{id}";
 const PERMISSION_GROUPS_PATH: &str = "/api/v1/permissions/groups";
 const DASHBOARD_STATS_PATH: &str = "/api/v1/dashboard/stats";
 const AUDIT_LOGS_PATH: &str = "/api/v1/audit-logs";
+const DEVRAIL_PROJECTS_PATH: &str = "/api/v1/projects";
+const DEVRAIL_PROJECT_PATH: &str = "/api/v1/projects/{id}";
+const DEVRAIL_PROJECT_ARCHIVE_PATH: &str = "/api/v1/projects/{id}/archive";
+const DEVRAIL_REPOSITORIES_PATH: &str = "/api/v1/projects/{project_id}/repositories";
+const DEVRAIL_REPOSITORY_PATH: &str = "/api/v1/projects/{project_id}/repositories/{id}";
+const DEVRAIL_ENVIRONMENTS_PATH: &str = "/api/v1/projects/{project_id}/environments";
+const DEVRAIL_ENVIRONMENT_PATH: &str = "/api/v1/projects/{project_id}/environments/{id}";
+const DEVRAIL_TASKS_PATH: &str = "/api/v1/projects/{project_id}/tasks";
+const DEVRAIL_TASK_PATH: &str = "/api/v1/projects/{project_id}/tasks/{id}";
 const METRICS_PATH: &str = "/metrics";
 
 /// Public HTTP operations generated into `docs/openapi.json`.
@@ -94,6 +103,15 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (PERMISSION_GROUPS_PATH, &["get"]),
     (DASHBOARD_STATS_PATH, &["get"]),
     (AUDIT_LOGS_PATH, &["get"]),
+    (DEVRAIL_PROJECTS_PATH, &["get", "post"]),
+    (DEVRAIL_PROJECT_PATH, &["get", "patch"]),
+    (DEVRAIL_PROJECT_ARCHIVE_PATH, &["post"]),
+    (DEVRAIL_REPOSITORIES_PATH, &["get", "post"]),
+    (DEVRAIL_REPOSITORY_PATH, &["get", "patch"]),
+    (DEVRAIL_ENVIRONMENTS_PATH, &["get", "post"]),
+    (DEVRAIL_ENVIRONMENT_PATH, &["get", "patch"]),
+    (DEVRAIL_TASKS_PATH, &["get", "post"]),
+    (DEVRAIL_TASK_PATH, &["get", "patch"]),
 ];
 
 #[derive(Clone)]
@@ -218,6 +236,42 @@ fn base_router(state: AppState) -> Router {
         .route(PERMISSION_GROUPS_PATH, get(handlers::permissions::groups))
         .route(DASHBOARD_STATS_PATH, get(handlers::dashboard::stats))
         .route(AUDIT_LOGS_PATH, get(handlers::audit_logs::list))
+        .route(
+            DEVRAIL_PROJECTS_PATH,
+            get(handlers::devrail::list_projects).post(handlers::devrail::create_project),
+        )
+        .route(
+            DEVRAIL_PROJECT_PATH,
+            get(handlers::devrail::get_project).patch(handlers::devrail::update_project),
+        )
+        .route(
+            DEVRAIL_PROJECT_ARCHIVE_PATH,
+            post(handlers::devrail::archive_project),
+        )
+        .route(
+            DEVRAIL_REPOSITORIES_PATH,
+            get(handlers::devrail::list_repositories).post(handlers::devrail::create_repository),
+        )
+        .route(
+            DEVRAIL_REPOSITORY_PATH,
+            get(handlers::devrail::get_repository).patch(handlers::devrail::update_repository),
+        )
+        .route(
+            DEVRAIL_ENVIRONMENTS_PATH,
+            get(handlers::devrail::list_environments).post(handlers::devrail::create_environment),
+        )
+        .route(
+            DEVRAIL_ENVIRONMENT_PATH,
+            get(handlers::devrail::get_environment).patch(handlers::devrail::update_environment),
+        )
+        .route(
+            DEVRAIL_TASKS_PATH,
+            get(handlers::devrail::list_tasks).post(handlers::devrail::create_task),
+        )
+        .route(
+            DEVRAIL_TASK_PATH,
+            get(handlers::devrail::get_task).patch(handlers::devrail::update_task),
+        )
         .with_state(state)
 }
 

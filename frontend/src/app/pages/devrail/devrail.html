@@ -1,0 +1,104 @@
+<div class="page devrail-page">
+  <div class="page-header">
+    <div>
+      <h1>DevRail 项目</h1>
+      <p>管理受控工作区中的项目、代码仓库、运行环境和开发任务。</p>
+    </div>
+  </div>
+  @if (canWrite()) {
+    <section class="create-panel" aria-labelledby="create-project-title">
+      <h2 id="create-project-title">新建项目</h2>
+      <div class="create-grid">
+        <label
+          >项目标识<input
+            [value]="draft().slug"
+            (input)="setDraft('slug', $any($event.target).value)"
+            placeholder="例如 devrail-core"
+        /></label>
+        <label
+          >项目名称<input
+            [value]="draft().name"
+            (input)="setDraft('name', $any($event.target).value)"
+            placeholder="项目名称"
+        /></label>
+        <label class="wide"
+          >描述<textarea
+            [value]="draft().description"
+            (input)="setDraft('description', $any($event.target).value)"
+            rows="2"
+          ></textarea>
+        </label>
+      </div>
+      <button class="btn-primary" type="button" (click)="create()" [disabled]="busy()">
+        <mat-icon>add</mat-icon>创建项目
+      </button>
+    </section>
+  }
+  @if (error()) {
+    <div class="empty-state" role="alert">
+      <mat-icon>error</mat-icon>
+      <p>{{ error() }}</p>
+      <button class="btn-outline" type="button" (click)="retry()">重新加载</button>
+    </div>
+  } @else if (loading()) {
+    <div class="loading-wrap" role="status" aria-label="正在加载项目">
+      <mat-progress-spinner diameter="32" />
+    </div>
+  } @else {
+    <section class="table-card">
+      <div class="table-scroll">
+        <table class="data-table">
+          <caption class="visually-hidden">
+            DevRail 项目列表
+          </caption>
+          <thead>
+            <tr>
+              <th>项目</th>
+              <th>状态</th>
+              <th>仓库</th>
+              <th>环境</th>
+              <th>更新时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (project of projects(); track project.id) {
+              <tr>
+                <td>
+                  <strong>{{ project.name }}</strong
+                  ><small>{{ project.slug }}</small>
+                </td>
+                <td>
+                  <span class="status-badge" [class.st-active]="project.status === 'active'">{{
+                    project.status === 'active' ? '启用' : '已归档'
+                  }}</span>
+                </td>
+                <td>{{ project.defaultRepositoryId ? '已配置' : '未配置' }}</td>
+                <td>{{ project.defaultEnvironmentId ? '已配置' : '未配置' }}</td>
+                <td>{{ project.updatedAt | date: 'yyyy-MM-dd HH:mm' }}</td>
+                <td>
+                  @if (canWrite() && project.status === 'active') {
+                    <button
+                      class="row-btn danger"
+                      type="button"
+                      (click)="archive(project)"
+                      [disabled]="busy()"
+                      title="归档项目"
+                      aria-label="归档项目"
+                    >
+                      <mat-icon>archive</mat-icon>
+                    </button>
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="6" class="table-empty">暂无项目</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+</div>

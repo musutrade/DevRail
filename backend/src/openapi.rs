@@ -7,17 +7,23 @@
 use crate::error::ErrorEnvelope;
 use crate::models::{
     AssignRolesRequest, AuditLogQuery, BatchAssignRolesRequest, BatchUserIdsRequest,
-    ChangePasswordRequest, CreateDepartmentRequest, CreateRoleRequest, CreateUserRequest,
-    DashboardStats, DataScopeSchema, DepartmentResponse, DepartmentStatusSchema, HealthResponse,
-    LoginRequest, LoginResponse, LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest,
-    MfaMethodSchema, MfaPasskeyAuthenticationFinishRequest, MfaPasskeyAuthenticationStartRequest,
+    ChangePasswordRequest, CreateDepartmentRequest, CreateDevRailEnvironmentRequest,
+    CreateDevRailProjectRequest, CreateDevRailRepositoryRequest, CreateDevRailTaskRequest,
+    CreateRoleRequest, CreateUserRequest, DashboardStats, DataScopeSchema, DepartmentResponse,
+    DepartmentStatusSchema, DevRailEnvironmentPage, DevRailEnvironmentResponse, DevRailListQuery,
+    DevRailProjectPage, DevRailProjectResponse, DevRailRepositoryPage, DevRailRepositoryResponse,
+    DevRailTaskPage, DevRailTaskResponse, HealthResponse, LoginRequest, LoginResponse,
+    LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest, MfaMethodSchema,
+    MfaPasskeyAuthenticationFinishRequest, MfaPasskeyAuthenticationStartRequest,
     MfaPasskeyRegistrationFinishRequest, MfaPasskeyRegistrationStartRequest, MfaPasskeyResponse,
     MfaStatusResponse, MfaWebauthnChallengeResponse, ModuleUnlockRequest, ModuleUnlockScopeSchema,
     ModuleUnlockStatusResponse, PageAuditLog, PageQuery, PageUser, PermissionCodes,
     PermissionGroupResponse, PermissionResponse, PermissionTypeSchema, ReadinessResponse,
     RecoveryCodesResponse, RoleColorSchema, RolePermissions, RoleResponse, SortDirectionSchema,
-    StepUpRequest, StepUpResponse, UpdateDepartmentRequest, UpdateRolePermissionsRequest,
-    UpdateRoleRequest, UpdateUserRequest, UserResponse, UserSortBySchema, UserStatusSchema,
+    StepUpRequest, StepUpResponse, UpdateDepartmentRequest, UpdateDevRailEnvironmentRequest,
+    UpdateDevRailProjectRequest, UpdateDevRailRepositoryRequest, UpdateDevRailTaskRequest,
+    UpdateRolePermissionsRequest, UpdateRoleRequest, UpdateUserRequest, UserResponse,
+    UserSortBySchema, UserStatusSchema,
 };
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::openapi::OpenApi as OpenApiDocument;
@@ -694,6 +700,44 @@ fn dashboard_stats() {}
 )]
 fn list_audit_logs() {}
 
+#[utoipa::path(get, path = "/projects", operation_id = "listDevRailProjects", tag = "devrail", security(("cookieAuth" = [])), params(DevRailListQuery), responses((status = 200, body = DevRailProjectPage), (status = 403, body = ErrorEnvelope)))]
+fn list_devrail_projects() {}
+#[utoipa::path(post, path = "/projects", operation_id = "createDevRailProject", tag = "devrail", security(("cookieAuth" = [])), request_body = CreateDevRailProjectRequest, responses((status = 201, body = DevRailProjectResponse), (status = 422, body = ErrorEnvelope)))]
+fn create_devrail_project() {}
+#[utoipa::path(get, path = "/projects/{id}", operation_id = "getDevRailProject", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 200, body = DevRailProjectResponse), (status = 404, body = ErrorEnvelope)))]
+fn get_devrail_project() {}
+#[utoipa::path(patch, path = "/projects/{id}", operation_id = "updateDevRailProject", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), request_body = UpdateDevRailProjectRequest, responses((status = 200, body = DevRailProjectResponse), (status = 404, body = ErrorEnvelope)))]
+fn update_devrail_project() {}
+#[utoipa::path(post, path = "/projects/{id}/archive", operation_id = "archiveDevRailProject", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 204), (status = 404, body = ErrorEnvelope)))]
+fn archive_devrail_project() {}
+
+#[utoipa::path(get, path = "/projects/{project_id}/repositories", operation_id = "listDevRailRepositories", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), DevRailListQuery), responses((status = 200, body = DevRailRepositoryPage)))]
+fn list_devrail_repositories() {}
+#[utoipa::path(post, path = "/projects/{project_id}/repositories", operation_id = "createDevRailRepository", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path)), request_body = CreateDevRailRepositoryRequest, responses((status = 201, body = DevRailRepositoryResponse)))]
+fn create_devrail_repository() {}
+#[utoipa::path(get, path = "/projects/{project_id}/repositories/{id}", operation_id = "getDevRailRepository", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), ("id" = i64, Path)), responses((status = 200, body = DevRailRepositoryResponse)))]
+fn get_devrail_repository() {}
+#[utoipa::path(patch, path = "/projects/{project_id}/repositories/{id}", operation_id = "updateDevRailRepository", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), ("id" = i64, Path)), request_body = UpdateDevRailRepositoryRequest, responses((status = 200, body = DevRailRepositoryResponse)))]
+fn update_devrail_repository() {}
+
+#[utoipa::path(get, path = "/projects/{project_id}/environments", operation_id = "listDevRailEnvironments", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), DevRailListQuery), responses((status = 200, body = DevRailEnvironmentPage)))]
+fn list_devrail_environments() {}
+#[utoipa::path(post, path = "/projects/{project_id}/environments", operation_id = "createDevRailEnvironment", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path)), request_body = CreateDevRailEnvironmentRequest, responses((status = 201, body = DevRailEnvironmentResponse)))]
+fn create_devrail_environment() {}
+#[utoipa::path(get, path = "/projects/{project_id}/environments/{id}", operation_id = "getDevRailEnvironment", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), ("id" = i64, Path)), responses((status = 200, body = DevRailEnvironmentResponse)))]
+fn get_devrail_environment() {}
+#[utoipa::path(patch, path = "/projects/{project_id}/environments/{id}", operation_id = "updateDevRailEnvironment", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), ("id" = i64, Path)), request_body = UpdateDevRailEnvironmentRequest, responses((status = 200, body = DevRailEnvironmentResponse)))]
+fn update_devrail_environment() {}
+
+#[utoipa::path(get, path = "/projects/{project_id}/tasks", operation_id = "listDevRailTasks", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), DevRailListQuery), responses((status = 200, body = DevRailTaskPage)))]
+fn list_devrail_tasks() {}
+#[utoipa::path(post, path = "/projects/{project_id}/tasks", operation_id = "createDevRailTask", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path)), request_body = CreateDevRailTaskRequest, responses((status = 201, body = DevRailTaskResponse)))]
+fn create_devrail_task() {}
+#[utoipa::path(get, path = "/projects/{project_id}/tasks/{id}", operation_id = "getDevRailTask", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), ("id" = i64, Path)), responses((status = 200, body = DevRailTaskResponse)))]
+fn get_devrail_task() {}
+#[utoipa::path(patch, path = "/projects/{project_id}/tasks/{id}", operation_id = "updateDevRailTask", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), ("id" = i64, Path)), request_body = UpdateDevRailTaskRequest, responses((status = 200, body = DevRailTaskResponse)))]
+fn update_devrail_task() {}
+
 #[derive(OpenApi)]
 #[openapi(
     info(
@@ -744,6 +788,12 @@ fn list_audit_logs() {}
         list_permission_groups,
         dashboard_stats,
         list_audit_logs
+        ,list_devrail_projects, create_devrail_project, get_devrail_project,
+        update_devrail_project, archive_devrail_project, list_devrail_repositories,
+        create_devrail_repository, get_devrail_repository, update_devrail_repository,
+        list_devrail_environments, create_devrail_environment, get_devrail_environment,
+        update_devrail_environment, list_devrail_tasks, create_devrail_task,
+        get_devrail_task, update_devrail_task
     ),
     components(schemas(
         ErrorEnvelope,
@@ -795,7 +845,14 @@ fn list_audit_logs() {}
         RolePermissions,
         UpdateRolePermissionsRequest,
         PermissionCodes,
-        DashboardStats
+        DashboardStats,
+        DevRailProjectResponse, DevRailProjectPage, DevRailRepositoryResponse,
+        DevRailRepositoryPage, DevRailEnvironmentResponse, DevRailEnvironmentPage,
+        DevRailTaskResponse, DevRailTaskPage, CreateDevRailProjectRequest,
+        UpdateDevRailProjectRequest, CreateDevRailRepositoryRequest,
+        UpdateDevRailRepositoryRequest, CreateDevRailEnvironmentRequest,
+        UpdateDevRailEnvironmentRequest, CreateDevRailTaskRequest,
+        UpdateDevRailTaskRequest
     )),
     servers((url = "/api/v1", description = "默认 API 根路径")),
     modifiers(&SecurityAddon),
@@ -807,6 +864,7 @@ fn list_audit_logs() {}
         (name = "permissions", description = "权限目录"),
         (name = "dashboard", description = "仪表盘"),
         (name = "audit", description = "安全审计")
+        ,(name = "devrail", description = "DevRail Harness 项目与任务")
     )
 )]
 struct ApiDoc;

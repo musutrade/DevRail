@@ -136,6 +136,85 @@ pub struct AuditArchiveRow {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, FromRow)]
+pub struct DevRailProjectRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub slug: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub status: String,
+    pub default_repository_id: Option<i64>,
+    pub default_environment_id: Option<i64>,
+    pub notification_policy: Value,
+    pub quality_gate_template: Value,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub archived_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct DevRailRepositoryRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub project_id: i64,
+    pub name: String,
+    pub remote_url: String,
+    pub protocol: String,
+    pub default_branch: String,
+    pub credential_ref: Option<String>,
+    pub last_sync_status: String,
+    pub last_head_sha: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub archived_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct DevRailEnvironmentRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub project_id: i64,
+    pub name: String,
+    pub workspace_root: String,
+    pub network_mode: String,
+    pub tool_policy: Value,
+    pub secret_refs: Value,
+    pub max_duration_secs: i64,
+    pub enabled: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub archived_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct DevRailTaskRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub project_id: i64,
+    pub assignee_user_id: Option<i64>,
+    pub title: String,
+    pub goal: String,
+    pub background: Option<String>,
+    pub acceptance_criteria: Option<String>,
+    pub constraints: Option<String>,
+    pub priority: String,
+    pub status: String,
+    pub labels: Value,
+    pub due_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub archived_at: Option<DateTime<Utc>>,
+}
+
 // ===== API DTO =====
 
 #[derive(Debug, utoipa::ToSchema)]
@@ -584,7 +663,7 @@ pub struct RecoveryCodesResponse {
     pub codes: Vec<String>,
 }
 
-#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[derive(Debug, Clone, Deserialize, utoipa::IntoParams)]
 #[serde(rename_all = "camelCase")]
 #[into_params(parameter_in = Query)]
 pub struct PageQuery {
@@ -629,6 +708,248 @@ pub struct PageAuditLog {
     pub page: i64,
     pub page_size: i64,
     pub next_cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Query)]
+pub struct DevRailListQuery {
+    pub page: Option<i64>,
+    pub page_size: Option<i64>,
+    pub keyword: Option<String>,
+    pub status: Option<String>,
+    pub project_id: Option<i64>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailProjectResponse {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub slug: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub status: String,
+    pub default_repository_id: Option<i64>,
+    pub default_environment_id: Option<i64>,
+    pub notification_policy: Value,
+    pub quality_gate_template: Value,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub archived_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailRepositoryResponse {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub project_id: i64,
+    pub name: String,
+    pub remote_url: String,
+    pub protocol: String,
+    pub default_branch: String,
+    pub credential_configured: bool,
+    pub last_sync_status: String,
+    pub last_head_sha: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub archived_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailEnvironmentResponse {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub project_id: i64,
+    pub name: String,
+    pub workspace_root: String,
+    pub network_mode: String,
+    pub tool_policy: Value,
+    pub secret_ref_names: Vec<String>,
+    pub max_duration_secs: i64,
+    pub enabled: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub archived_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailTaskResponse {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub project_id: i64,
+    pub assignee_user_id: Option<i64>,
+    pub title: String,
+    pub goal: String,
+    pub background: Option<String>,
+    pub acceptance_criteria: Option<String>,
+    pub constraints: Option<String>,
+    pub priority: String,
+    pub status: String,
+    pub labels: Value,
+    pub due_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub archived_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailProjectPage {
+    pub items: Vec<DevRailProjectResponse>,
+    pub total: i64,
+    pub page: i64,
+    pub page_size: i64,
+}
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailRepositoryPage {
+    pub items: Vec<DevRailRepositoryResponse>,
+    pub total: i64,
+    pub page: i64,
+    pub page_size: i64,
+}
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailEnvironmentPage {
+    pub items: Vec<DevRailEnvironmentResponse>,
+    pub total: i64,
+    pub page: i64,
+    pub page_size: i64,
+}
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailTaskPage {
+    pub items: Vec<DevRailTaskResponse>,
+    pub total: i64,
+    pub page: i64,
+    pub page_size: i64,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateDevRailProjectRequest {
+    pub slug: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub department_id: Option<i64>,
+    pub notification_policy: Option<Value>,
+    pub quality_gate_template: Option<Value>,
+}
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateDevRailProjectRequest {
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    #[schema(value_type = Option<String>, nullable = true)]
+    pub description: NullablePatch<String>,
+    #[serde(default)]
+    #[schema(value_type = Option<i64>, nullable = true)]
+    pub department_id: NullablePatch<i64>,
+    pub status: Option<String>,
+    #[serde(default)]
+    #[schema(value_type = Option<i64>, nullable = true)]
+    pub default_repository_id: NullablePatch<i64>,
+    #[serde(default)]
+    #[schema(value_type = Option<i64>, nullable = true)]
+    pub default_environment_id: NullablePatch<i64>,
+    pub notification_policy: Option<Value>,
+    pub quality_gate_template: Option<Value>,
+}
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateDevRailRepositoryRequest {
+    pub name: String,
+    pub remote_url: String,
+    pub default_branch: Option<String>,
+    pub credential_ref: Option<String>,
+    pub department_id: Option<i64>,
+}
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateDevRailRepositoryRequest {
+    pub name: Option<String>,
+    pub remote_url: Option<String>,
+    pub default_branch: Option<String>,
+    #[serde(default)]
+    #[schema(value_type = Option<String>, nullable = true)]
+    pub credential_ref: NullablePatch<String>,
+    pub status: Option<String>,
+}
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateDevRailEnvironmentRequest {
+    pub name: String,
+    pub workspace_root: String,
+    pub network_mode: Option<String>,
+    pub tool_policy: Option<Value>,
+    pub secret_ref_names: Option<Vec<String>>,
+    pub max_duration_secs: Option<i64>,
+    pub enabled: Option<bool>,
+    pub department_id: Option<i64>,
+}
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateDevRailEnvironmentRequest {
+    pub name: Option<String>,
+    pub workspace_root: Option<String>,
+    pub network_mode: Option<String>,
+    pub tool_policy: Option<Value>,
+    pub secret_ref_names: Option<Vec<String>>,
+    pub max_duration_secs: Option<i64>,
+    pub enabled: Option<bool>,
+}
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateDevRailTaskRequest {
+    pub title: String,
+    pub goal: String,
+    pub background: Option<String>,
+    pub acceptance_criteria: Option<String>,
+    pub constraints: Option<String>,
+    pub priority: Option<String>,
+    pub assignee_user_id: Option<i64>,
+    pub labels: Option<Vec<String>>,
+    pub due_at: Option<DateTime<Utc>>,
+    pub department_id: Option<i64>,
+}
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateDevRailTaskRequest {
+    pub title: Option<String>,
+    pub goal: Option<String>,
+    #[serde(default)]
+    #[schema(value_type = Option<String>, nullable = true)]
+    pub background: NullablePatch<String>,
+    #[serde(default)]
+    #[schema(value_type = Option<String>, nullable = true)]
+    pub acceptance_criteria: NullablePatch<String>,
+    #[serde(default)]
+    #[schema(value_type = Option<String>, nullable = true)]
+    pub constraints: NullablePatch<String>,
+    #[serde(default)]
+    pub priority: Option<String>,
+    pub status: Option<String>,
+    #[serde(default)]
+    #[schema(value_type = Option<i64>, nullable = true)]
+    pub assignee_user_id: NullablePatch<i64>,
+    #[serde(default)]
+    pub labels: Option<Vec<String>>,
+    #[serde(default)]
+    #[schema(value_type = Option<String>, nullable = true)]
+    pub due_at: NullablePatch<DateTime<Utc>>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
