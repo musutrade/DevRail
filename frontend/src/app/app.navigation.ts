@@ -1,4 +1,5 @@
 import { DEPARTMENT_ROUTE_ACCESS } from './features/departments/departments.permissions';
+import { DEVRAIL_ROUTE_ACCESS } from './features/devrail/devrail.permissions';
 
 export const ROUTE_ACCESS = {
   permissionDirectory: ['permission:directory:read'],
@@ -7,6 +8,7 @@ export const ROUTE_ACCESS = {
   roles: ['role:directory:read'],
   rolePermissions: ['role:permissions:write', 'role:directory:read', 'permission:directory:read'],
   auditLogs: ['audit:logs:read'],
+  devrail: DEVRAIL_ROUTE_ACCESS,
 } as const satisfies Record<string, readonly string[]>;
 
 export interface NavigationLink {
@@ -85,5 +87,13 @@ export const APP_NAVIGATION = [
     icon: 'fact_check',
     route: '/audit-logs',
     permissions: ROUTE_ACCESS.auditLogs,
+  },
+  {
+    kind: 'link',
+    id: 'devrail-projects',
+    label: 'DevRail 项目',
+    icon: 'terminal',
+    route: '/devrail/projects',
+    permissions: ROUTE_ACCESS.devrail,
   },
 ] as const satisfies readonly NavigationItem[];

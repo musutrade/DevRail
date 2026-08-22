@@ -84,6 +84,12 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/audit-logs/audit-logs').then((m) => m.AuditLogs),
       },
       {
+        path: 'devrail/projects',
+        canActivate: [permissionGuard],
+        data: { permissions: ROUTE_ACCESS.devrail },
+        loadComponent: () => import('./pages/devrail/devrail').then((m) => m.DevRailPage),
+      },
+      {
         path: 'security',
         canActivate: [authGuard],
         loadComponent: () => import('./pages/security/security').then((m) => m.SecurityPage),

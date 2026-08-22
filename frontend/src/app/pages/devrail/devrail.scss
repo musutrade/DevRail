@@ -1,0 +1,51 @@
+.devrail-page .create-panel {
+  margin-bottom: 24px;
+  padding: 20px;
+  border: 1px solid var(--border-color, #d9dee7);
+  background: var(--surface, #fff);
+}
+.create-panel h2 {
+  margin: 0 0 16px;
+  font-size: 18px;
+}
+.create-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.create-grid label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.create-grid .wide {
+  grid-column: 1 / -1;
+}
+.create-grid input,
+.create-grid textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  border: 1px solid #c7ced8;
+  border-radius: 4px;
+  font: inherit;
+  font-weight: 400;
+}
+.devrail-page td strong,
+.devrail-page td small {
+  display: block;
+}
+.devrail-page td small {
+  color: #687386;
+  margin-top: 3px;
+}
+@media (max-width: 720px) {
+  .create-grid {
+    grid-template-columns: 1fr;
+  }
+  .create-grid .wide {
+    grid-column: auto;
+  }
+}

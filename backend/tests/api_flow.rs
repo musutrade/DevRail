@@ -966,14 +966,14 @@ async fn login_and_user_crud_flow() {
     assert_eq!(groups[0]["name"], "仪表盘模块");
     assert_eq!(groups[1]["name"], "身份与访问模块");
     assert_eq!(groups[2]["name"], "审计与合规模块");
-    assert_eq!(groups[3]["name"], "组织管理");
+    assert_eq!(groups[3]["name"], "DevRail Harness");
     let group_codes = groups
         .iter()
         .filter_map(|group| group["code"].as_str())
         .collect::<Vec<_>>();
     assert_eq!(
         group_codes,
-        vec!["dashboard", "identity", "audit", "organization"]
+        vec!["dashboard", "identity", "audit", "devrail", "organization"]
     );
     let view_permissions = groups
         .iter()
@@ -1008,6 +1008,14 @@ async fn login_and_user_crud_flow() {
             "user:roles:write",
             "user:super_admin:grant",
             "user:write",
+            "devrail:project:read",
+            "devrail:project:write",
+            "devrail:repository:read",
+            "devrail:repository:write",
+            "devrail:environment:read",
+            "devrail:environment:write",
+            "devrail:task:read",
+            "devrail:task:write",
         ])
     );
     let permission_id = |code: &str| {
