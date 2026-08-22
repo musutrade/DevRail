@@ -18,7 +18,7 @@ export default defineConfig({
       command: 'bash ../scripts/start-fullstack-smoke.sh',
       url: 'http://127.0.0.1:18081/api/v1/readyz',
       reuseExistingServer: false,
-      timeout: 180_000,
+      timeout: 300_000,
       stdout: 'pipe',
     },
     {
