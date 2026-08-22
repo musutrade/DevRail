@@ -4,6 +4,8 @@
 基于 arc-admin v2.3.0 权限框架构建。项目标识：`devrail`。
 <!-- ARC_PROJECT_HEADER_END -->
 
+> 状态说明：本仓库当前包含 arc-admin 基线、`arc-flow` 审计工具生产化和工程治理配套；`docs/requirements.md` 定义的完整 Codex Harness 产品 MVP 尚未实现。请以 [DevRail 实现状态](docs/devrail-implementation-status.md) 为当前完成范围的唯一口径。
+
 当前框架版本为 `v2.3.0`。仓库内置身份认证、组织与部门、用户、角色、权限目录、权限分配、审计日志、`super_admin` MFA，以及开发、测试、部署和可观测性工具链。
 
 ## 核心能力
@@ -177,6 +179,7 @@ window.__ARC_ADMIN_CONFIG__ = {
 - [高合规部署基线](docs/high-compliance.md)：需要在项目层补齐的独立控制；
 - [框架版本与派生项目升级](docs/framework-upgrades.md)：版本标签、三方合并和冲突处理；
 - [当前项目状态](docs/HANDOFF.md)：最新能力、验证基线和剩余生产事项；
+- [DevRail 实现状态](docs/devrail-implementation-status.md)：产品 MVP 与审计工具的明确覆盖矩阵；
 - [DevRail 需求文档](docs/requirements.md)：产品范围、Agent 运行、审批和手机推送需求；
 - [DevRail 项目公约](docs/devrail-governance.md)：业务边界、Harness、数据和 PR 约定；
 - [DevRail 审计与门禁](docs/devrail-audit-and-gates.md)：本地、CI 和发布检查清单；

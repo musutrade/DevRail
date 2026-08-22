@@ -6,7 +6,7 @@
 | --- | --- |
 | 产品名称 | DevRail（开发轨道） |
 | 文档版本 | 0.1.0 |
-| 文档状态 | MVP 需求基线（待评审） |
+| 文档状态 | MVP 需求基线（未实现，待评审） |
 | 编写日期 | 2026-08-21 |
 | 基础项目 | [`musutrade/arc-admin`](https://github.com/musutrade/arc-admin) |
 | 后端 | Rust + Axum + SQLx + PostgreSQL |
@@ -15,6 +15,8 @@
 | 目标用户 | 使用 AI 辅助开发的个人开发者、团队和平台管理员 |
 
 本文件是 DevRail 的第一版产品、架构和验收基线。实现时应继续遵循 arc-admin 的项目公约：
+
+> 实现状态声明：本文件描述的是完整 Codex Harness 开发系统 MVP 的目标，不是当前已交付能力清单。截至 2026-08-22，仓库已完成 arc-admin 基线、`arc-flow` 审计工具生产化、治理文档和 CI 配套，但 DevRail 项目/任务/run/Harness/审批/通知/Web Push 等业务 MVP 尚未实现。详见 [DevRail 实现状态](devrail-implementation-status.md)。
 
 - 后端调用链固定为 `Router -> Handler -> Service -> Repository -> PostgreSQL`；SQL 写入只允许在 Repository、migration、测试或 seed 层。
 - 前端业务代码放在 `features/<domain>`，共享认证、配置和权限能力放在 `core`。
@@ -828,6 +830,8 @@ npm run e2e
 ---
 
 ## 16. MVP 完成定义（Definition of Done）
+
+以下复选框是最终验收条件，不表示当前已经完成。当前 MVP 状态为“未完成”；只有所有条件均经代码、自动化测试和运行验收证明后，才能更新为完成。
 
 以下条件全部满足，DevRail MVP 才能标记为完成：
 
