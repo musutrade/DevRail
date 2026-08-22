@@ -18,6 +18,8 @@
 
 ### 改进
 
+- arc-flow auditor 增加 Rust 任意 raw-string、TypeScript/JavaScript 正则与嵌套模板、PostgreSQL dollar-quote 和转义字符串的词法边界，缓存文件内容/行索引/注释区间与 allowlist 正则，并增加随机稳健性测试；
+- 增加 10,000 文件审计 benchmark（含单线程/并行一致性、峰值 RSS 与 CI JSON artifact）、临时仓库初始化/迁移/失败恢复演练、Linux/Windows workflow 矩阵、SPDX 2.3 SBOM 和 SHA-256 发布证据；
 - 项目初始化同步开发、可观测性与生产部署的数据库、服务、镜像、监控网络和 WebAuthn 标识，并加强 API 基址与框架源仓库保护；
 - 前端补齐键盘跳转、移动导航焦点、加载状态、表格与筛选控件的无障碍语义，统一焦点样式并优化移动端交互。
 - 用户、权限、部门、角色、权限分配、审计、安全与错误页统一页面结构、筛选、表格、状态和统计卡样式；审计日志增加移动端卡片视图；
