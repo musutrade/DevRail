@@ -10,6 +10,7 @@ export type { CreateDepartmentRequest } from './models/create-department-request
 export type { CreateDevRailEnvironmentRequest } from './models/create-dev-rail-environment-request';
 export type { CreateDevRailProjectRequest } from './models/create-dev-rail-project-request';
 export type { CreateDevRailRepositoryRequest } from './models/create-dev-rail-repository-request';
+export type { CreateDevRailRunRequest } from './models/create-dev-rail-run-request';
 export type { CreateDevRailTaskRequest } from './models/create-dev-rail-task-request';
 export type { CreateRoleRequest } from './models/create-role-request';
 export type { CreateUserRequest } from './models/create-user-request';
@@ -23,6 +24,10 @@ export type { DevRailProjectPage } from './models/dev-rail-project-page';
 export type { DevRailProjectResponse } from './models/dev-rail-project-response';
 export type { DevRailRepositoryPage } from './models/dev-rail-repository-page';
 export type { DevRailRepositoryResponse } from './models/dev-rail-repository-response';
+export type { DevRailRunEventPage } from './models/dev-rail-run-event-page';
+export type { DevRailRunEventResponse } from './models/dev-rail-run-event-response';
+export type { DevRailRunPage } from './models/dev-rail-run-page';
+export type { DevRailRunResponse } from './models/dev-rail-run-response';
 export type { DevRailTaskPage } from './models/dev-rail-task-page';
 export type { DevRailTaskResponse } from './models/dev-rail-task-response';
 export type { ErrorBody } from './models/error-body';

@@ -8,12 +8,13 @@ use crate::error::ErrorEnvelope;
 use crate::models::{
     AssignRolesRequest, AuditLogQuery, BatchAssignRolesRequest, BatchUserIdsRequest,
     ChangePasswordRequest, CreateDepartmentRequest, CreateDevRailEnvironmentRequest,
-    CreateDevRailProjectRequest, CreateDevRailRepositoryRequest, CreateDevRailTaskRequest,
-    CreateRoleRequest, CreateUserRequest, DashboardStats, DataScopeSchema, DepartmentResponse,
-    DepartmentStatusSchema, DevRailEnvironmentPage, DevRailEnvironmentResponse, DevRailListQuery,
-    DevRailProjectPage, DevRailProjectResponse, DevRailRepositoryPage, DevRailRepositoryResponse,
-    DevRailTaskPage, DevRailTaskResponse, HealthResponse, LoginRequest, LoginResponse,
-    LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest, MfaMethodSchema,
+    CreateDevRailProjectRequest, CreateDevRailRepositoryRequest, CreateDevRailRunRequest,
+    CreateDevRailTaskRequest, CreateRoleRequest, CreateUserRequest, DashboardStats,
+    DataScopeSchema, DepartmentResponse, DepartmentStatusSchema, DevRailEnvironmentPage,
+    DevRailEnvironmentResponse, DevRailListQuery, DevRailProjectPage, DevRailProjectResponse,
+    DevRailRepositoryPage, DevRailRepositoryResponse, DevRailRunEventPage, DevRailRunPage,
+    DevRailRunResponse, DevRailTaskPage, DevRailTaskResponse, HealthResponse, LoginRequest,
+    LoginResponse, LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest, MfaMethodSchema,
     MfaPasskeyAuthenticationFinishRequest, MfaPasskeyAuthenticationStartRequest,
     MfaPasskeyRegistrationFinishRequest, MfaPasskeyRegistrationStartRequest, MfaPasskeyResponse,
     MfaStatusResponse, MfaWebauthnChallengeResponse, ModuleUnlockRequest, ModuleUnlockScopeSchema,
@@ -738,6 +739,19 @@ fn get_devrail_task() {}
 #[utoipa::path(patch, path = "/projects/{project_id}/tasks/{id}", operation_id = "updateDevRailTask", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), ("id" = i64, Path)), request_body = UpdateDevRailTaskRequest, responses((status = 200, body = DevRailTaskResponse)))]
 fn update_devrail_task() {}
 
+#[utoipa::path(post, path = "/tasks/{task_id}/runs", operation_id = "createDevRailRun", tag = "devrail", security(("cookieAuth" = [])), params(("task_id" = i64, Path)), request_body = CreateDevRailRunRequest, responses((status = 202, body = DevRailRunResponse)))]
+fn create_devrail_run() {}
+#[utoipa::path(get, path = "/tasks/{task_id}/runs", operation_id = "listDevRailRuns", tag = "devrail", security(("cookieAuth" = [])), params(("task_id" = i64, Path), DevRailListQuery), responses((status = 200, body = DevRailRunPage)))]
+fn list_devrail_runs() {}
+#[utoipa::path(get, path = "/runs/{id}", operation_id = "getDevRailRun", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 200, body = DevRailRunResponse)))]
+fn get_devrail_run() {}
+#[utoipa::path(post, path = "/runs/{id}/interrupt", operation_id = "interruptDevRailRun", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 200, body = DevRailRunResponse)))]
+fn interrupt_devrail_run() {}
+#[utoipa::path(get, path = "/runs/{id}/events", operation_id = "listDevRailRunEvents", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 200, body = DevRailRunEventPage)))]
+fn list_devrail_run_events() {}
+#[utoipa::path(get, path = "/runs/{id}/events/stream", operation_id = "streamDevRailRunEvents", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 200, description = "运行事件 SSE 流")))]
+fn stream_devrail_run_events() {}
+
 #[derive(OpenApi)]
 #[openapi(
     info(
@@ -793,7 +807,9 @@ fn update_devrail_task() {}
         create_devrail_repository, get_devrail_repository, update_devrail_repository,
         list_devrail_environments, create_devrail_environment, get_devrail_environment,
         update_devrail_environment, list_devrail_tasks, create_devrail_task,
-        get_devrail_task, update_devrail_task
+        get_devrail_task, update_devrail_task, create_devrail_run, list_devrail_runs,
+        get_devrail_run, interrupt_devrail_run, list_devrail_run_events
+        ,stream_devrail_run_events
     ),
     components(schemas(
         ErrorEnvelope,
@@ -852,7 +868,8 @@ fn update_devrail_task() {}
         UpdateDevRailProjectRequest, CreateDevRailRepositoryRequest,
         UpdateDevRailRepositoryRequest, CreateDevRailEnvironmentRequest,
         UpdateDevRailEnvironmentRequest, CreateDevRailTaskRequest,
-        UpdateDevRailTaskRequest
+        UpdateDevRailTaskRequest, CreateDevRailRunRequest, DevRailRunResponse,
+        DevRailRunPage, DevRailRunEventPage
     )),
     servers((url = "/api/v1", description = "默认 API 根路径")),
     modifiers(&SecurityAddon),

@@ -4,6 +4,7 @@ use arc_admin_backend::auth::AuthSessionConfig;
 use arc_admin_backend::config::{AppConfig, AppEnvironment, LogFormat};
 use arc_admin_backend::mfa::MfaConfig;
 use arc_admin_backend::telemetry::{self, TelemetryMetadata};
+use arc_admin_backend::workers::harness_supervisor::HarnessSupervisor;
 use arc_admin_backend::{build_router_with_metadata_and_cors, db, AppState};
 use std::process::ExitCode;
 use std::{net::SocketAddr, sync::Arc};
@@ -83,6 +84,21 @@ async fn run(config: AppConfig, metadata: TelemetryMetadata) -> anyhow::Result<(
         tracing::info!("automatic database migrations disabled");
     }
 
+    let supervisor = Arc::new(HarnessSupervisor::new(
+        pool.clone(),
+        config.harness_command.clone(),
+        config.harness_max_concurrency,
+        config.run_max_duration_secs,
+        config.run_workspace_root.clone(),
+        config.run_graceful_interrupt_secs,
+    ));
+    let recovered = supervisor.recover_stale_runs().await?;
+    if recovered > 0 {
+        tracing::warn!(
+            recovered_runs = recovered,
+            "stale DevRail Harness runs marked failed after supervisor restart"
+        );
+    }
     let state = AppState {
         pool,
         auth: Arc::new(AuthSessionConfig {
@@ -105,6 +121,7 @@ async fn run(config: AppConfig, metadata: TelemetryMetadata) -> anyhow::Result<(
             &config.webauthn_rp_origin,
             &config.webauthn_rp_name,
         )?),
+        supervisor,
     };
     let app = build_router_with_metadata_and_cors(state, metadata, config.cors_layer());
 

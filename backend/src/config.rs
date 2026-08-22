@@ -74,6 +74,11 @@ pub struct AppConfig {
     pub webauthn_rp_id: String,
     pub webauthn_rp_origin: String,
     pub webauthn_rp_name: String,
+    pub harness_command: String,
+    pub harness_max_concurrency: usize,
+    pub run_max_duration_secs: i64,
+    pub run_workspace_root: String,
+    pub run_graceful_interrupt_secs: i64,
     allowed_origins: Vec<HeaderValue>,
 }
 
@@ -108,6 +113,11 @@ struct ConfigValues {
     webauthn_rp_id: Option<String>,
     webauthn_rp_origin: Option<String>,
     webauthn_rp_name: Option<String>,
+    harness_command: Option<String>,
+    harness_max_concurrency: Option<String>,
+    run_max_duration_secs: Option<String>,
+    run_workspace_root: Option<String>,
+    run_graceful_interrupt_secs: Option<String>,
 }
 
 impl AppConfig {
@@ -145,6 +155,11 @@ impl AppConfig {
             webauthn_rp_id: std::env::var("WEBAUTHN_RP_ID").ok(),
             webauthn_rp_origin: std::env::var("WEBAUTHN_RP_ORIGIN").ok(),
             webauthn_rp_name: std::env::var("WEBAUTHN_RP_NAME").ok(),
+            harness_command: std::env::var("DEVRAIL_HARNESS_COMMAND").ok(),
+            harness_max_concurrency: std::env::var("DEVRAIL_HARNESS_MAX_CONCURRENCY").ok(),
+            run_max_duration_secs: std::env::var("DEVRAIL_RUN_MAX_DURATION_SECS").ok(),
+            run_workspace_root: std::env::var("DEVRAIL_RUN_WORKSPACE_ROOT").ok(),
+            run_graceful_interrupt_secs: std::env::var("DEVRAIL_RUN_GRACEFUL_INTERRUPT_SECS").ok(),
         })
     }
 
@@ -179,6 +194,11 @@ impl AppConfig {
             webauthn_rp_id,
             webauthn_rp_origin,
             webauthn_rp_name,
+            harness_command,
+            harness_max_concurrency,
+            run_max_duration_secs,
+            run_workspace_root,
+            run_graceful_interrupt_secs,
         } = values;
         let database_url = database_url.context(
             "DATABASE_URL is required; configure it in backend/.env or the process environment",
@@ -290,6 +310,34 @@ impl AppConfig {
             bail!("WEBAUTHN_RP_ID, WEBAUTHN_RP_ORIGIN and WEBAUTHN_RP_NAME must not be empty");
         }
 
+        let harness_command = harness_command.unwrap_or_else(|| "codex".to_string());
+        if harness_command.is_empty()
+            || harness_command.len() > 256
+            || harness_command.contains('/')
+        {
+            bail!("DEVRAIL_HARNESS_COMMAND must be a non-empty executable name without path separators");
+        }
+        let harness_max_concurrency = positive_usize(
+            "DEVRAIL_HARNESS_MAX_CONCURRENCY",
+            harness_max_concurrency,
+            2,
+        )?;
+        let run_max_duration_secs =
+            positive_i64("DEVRAIL_RUN_MAX_DURATION_SECS", run_max_duration_secs, 3600)?;
+        let run_graceful_interrupt_secs = positive_i64(
+            "DEVRAIL_RUN_GRACEFUL_INTERRUPT_SECS",
+            run_graceful_interrupt_secs,
+            10,
+        )?;
+        let run_workspace_root =
+            run_workspace_root.unwrap_or_else(|| "/tmp/devrail-workspaces".to_string());
+        if !run_workspace_root.starts_with('/')
+            || run_workspace_root.contains("..")
+            || run_workspace_root.len() > 512
+        {
+            bail!("DEVRAIL_RUN_WORKSPACE_ROOT must be an absolute controlled path");
+        }
+
         Ok(Self {
             database_url,
             database_pool,
@@ -313,6 +361,11 @@ impl AppConfig {
             webauthn_rp_id,
             webauthn_rp_origin,
             webauthn_rp_name,
+            harness_command,
+            harness_max_concurrency,
+            run_max_duration_secs,
+            run_workspace_root,
+            run_graceful_interrupt_secs,
             allowed_origins,
         })
     }
@@ -358,6 +411,19 @@ fn positive_i32(name: &str, value: Option<String>, default: i32) -> anyhow::Resu
         .with_context(|| format!("{name} must be a positive integer"))?
         .unwrap_or(default);
     if value <= 0 {
+        bail!("{name} must be a positive integer");
+    }
+    Ok(value)
+}
+
+fn positive_usize(name: &str, value: Option<String>, default: usize) -> anyhow::Result<usize> {
+    let value = value
+        .as_deref()
+        .map(str::parse::<usize>)
+        .transpose()
+        .with_context(|| format!("{name} must be a positive integer"))?
+        .unwrap_or(default);
+    if value == 0 {
         bail!("{name} must be a positive integer");
     }
     Ok(value)

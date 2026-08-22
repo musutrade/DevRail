@@ -215,6 +215,50 @@ pub struct DevRailTaskRow {
     pub archived_at: Option<DateTime<Utc>>,
 }
 
+#[derive(Debug, Clone, FromRow)]
+pub struct DevRailRunRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub task_id: i64,
+    pub snapshot_id: i64,
+    pub idempotency_key: String,
+    pub status: String,
+    pub thread_id: Option<String>,
+    pub turn_id: Option<String>,
+    pub harness_version: Option<String>,
+    pub model_id: Option<String>,
+    pub cwd: String,
+    pub policy: Value,
+    pub startup_args_summary: Value,
+    pub exit_reason: Option<String>,
+    pub exit_code: Option<i32>,
+    pub stderr_summary: Option<String>,
+    pub trace_id: Option<String>,
+    pub recovery_suggestion: Option<String>,
+    pub started_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct DevRailRunEventRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub run_id: i64,
+    pub cursor: i64,
+    pub event_type: String,
+    pub source_event_id: Option<String>,
+    pub idempotency_key: String,
+    pub payload: Value,
+    pub summary: Option<String>,
+    pub occurred_at: DateTime<Utc>,
+}
+
 // ===== API DTO =====
 
 #[derive(Debug, utoipa::ToSchema)]
@@ -806,6 +850,59 @@ pub struct DevRailTaskResponse {
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct DevRailRunResponse {
+    pub id: i64,
+    pub task_id: i64,
+    pub snapshot_id: i64,
+    pub idempotency_key: String,
+    pub status: String,
+    pub thread_id: Option<String>,
+    pub turn_id: Option<String>,
+    pub harness_version: Option<String>,
+    pub model_id: Option<String>,
+    pub cwd: String,
+    pub policy: Value,
+    pub startup_args_summary: Value,
+    pub exit_reason: Option<String>,
+    pub exit_code: Option<i32>,
+    pub stderr_summary: Option<String>,
+    pub trace_id: Option<String>,
+    pub recovery_suggestion: Option<String>,
+    pub started_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailRunEventResponse {
+    pub cursor: i64,
+    pub event_type: String,
+    pub source_event_id: Option<String>,
+    pub payload: Value,
+    pub summary: Option<String>,
+    pub occurred_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailRunPage {
+    pub items: Vec<DevRailRunResponse>,
+    pub total: i64,
+    pub page: i64,
+    pub page_size: i64,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailRunEventPage {
+    pub items: Vec<DevRailRunEventResponse>,
+    pub next_cursor: Option<i64>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct DevRailProjectPage {
     pub items: Vec<DevRailProjectResponse>,
     pub total: i64,
@@ -950,6 +1047,15 @@ pub struct UpdateDevRailTaskRequest {
     #[serde(default)]
     #[schema(value_type = Option<String>, nullable = true)]
     pub due_at: NullablePatch<DateTime<Utc>>,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateDevRailRunRequest {
+    pub environment_id: i64,
+    pub idempotency_key: String,
+    pub model_id: Option<String>,
+    pub input: Option<String>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]

@@ -32,3 +32,19 @@ pub struct TaskWrite;
 impl PermissionRequirement for TaskWrite {
     const CODE: &'static str = "devrail:task:write";
 }
+pub struct RunRead;
+impl PermissionRequirement for RunRead {
+    const CODE: &'static str = "devrail:run:read";
+}
+pub struct RunExecute;
+impl PermissionRequirement for RunExecute {
+    const CODE: &'static str = "devrail:run:execute";
+}
+pub struct RunInterrupt;
+impl PermissionRequirement for RunInterrupt {
+    const CODE: &'static str = "devrail:run:interrupt";
+}
+pub struct RunRetry;
+impl PermissionRequirement for RunRetry {
+    const CODE: &'static str = "devrail:run:retry";
+}

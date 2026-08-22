@@ -28,7 +28,10 @@ sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio",
 subtle = "2"
 thiserror = "2"
 time = "0.3"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time", "process", "io-util"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+async-stream = "0.3"
+futures-core = "0.3"
 totp-rs = { version = "6.0.0", features = ["gen_secret", "otpauth", "qr"] }
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.7", features = ["catch-panic", "cors", "request-id", "trace"] }
