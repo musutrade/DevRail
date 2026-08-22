@@ -847,26 +847,14 @@ fn normalized_relative_path(path: &Path, project_root: &Path) -> String {
         .replace('\\', "/")
 }
 
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "kept as a focused unit-test helper for allowlist semantics"
-    )
-)]
+#[cfg(test)]
 fn is_allowlisted(path: &Path, project_root: &Path, allowlist: &[AllowlistEntry]) -> bool {
     compile_allowlist(allowlist)
         .map(|compiled| is_allowlisted_compiled(path, project_root, &compiled))
         .unwrap_or(false)
 }
 
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "kept as a focused unit-test helper for uncached scans"
-    )
-)]
+#[cfg(test)]
 fn scan_files(
     project_root: &Path,
     root_paths: &[PathBuf],
@@ -979,13 +967,7 @@ fn scan_files_cached(
     Ok(violations)
 }
 
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "kept as a focused unit-test helper for uncached scans"
-    )
-)]
+#[cfg(test)]
 fn scan_arch_rules(
     project_root: &Path,
     config: &Config,
@@ -1744,6 +1726,34 @@ exclude_patterns = []
             .expect("scan fixture");
 
         assert_eq!(violations.len(), 2);
+    }
+
+    #[test]
+    fn hard_rule_rejects_clippy_allow_attributes() {
+        let test_dir = TestDir::new("clippy-allow");
+        let source = test_dir.child("backend/src");
+        fs::write(
+            source.join("violation.rs"),
+            concat!(
+                "#[allow(\n    ",
+                "clippy::too_many_arguments",
+                ",\n)]\nfn violation() {}\n"
+            ),
+        )
+        .expect("write clippy allow fixture");
+        let rule = configured_hard_rule("产品后端禁止 Clippy allow 属性");
+
+        let violations = scan_files(
+            &test_dir.0,
+            &[source],
+            &[],
+            &rule,
+            &configured_audit().engine,
+        )
+        .expect("scan clippy allow fixture");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].line, 1);
     }
 
     #[test]

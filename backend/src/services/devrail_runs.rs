@@ -105,15 +105,17 @@ pub async fn create_run(
             .map_err(db_error)?;
     let row = devrail_runs::create_run(
         &mut tx,
-        actor,
-        task.id,
-        snapshot_id,
-        &idempotency_key,
-        &environment.workspace_root,
-        &policy,
-        &startup_args,
-        req.model_id.as_deref(),
-        task.department_id,
+        &devrail_runs::NewRun {
+            actor,
+            task_id: task.id,
+            snapshot_id,
+            idempotency_key: &idempotency_key,
+            cwd: &environment.workspace_root,
+            policy: &policy,
+            startup_args: &startup_args,
+            model_id: req.model_id.as_deref(),
+            department_id: task.department_id,
+        },
     )
     .await
     .map_err(|error| {
@@ -157,13 +159,15 @@ pub async fn create_run(
         let trace = uuid::Uuid::new_v4().to_string();
         devrail_runs::update_run_terminal(
             &mut cleanup,
-            row.id,
-            "failed",
-            "launch_failed",
-            None,
-            None,
-            &trace,
-            Some("Harness 进程未能启动；检查命令配置和受控工作区"),
+            &devrail_runs::TerminalRunUpdate {
+                run_id: row.id,
+                status: "failed",
+                exit_reason: "launch_failed",
+                exit_code: None,
+                stderr_summary: None,
+                trace_id: &trace,
+                recovery_suggestion: Some("Harness 进程未能启动；检查命令配置和受控工作区"),
+            },
         )
         .await
         .map_err(db_error)?;
@@ -223,6 +227,46 @@ pub async fn interrupt_run(
         .await
         .map_err(|e| ApiError::conflict(e.to_string()))?;
     get_run(pool, actor, id).await
+}
+
+pub async fn retry_run(
+    pool: &PgPool,
+    actor: &ActorContext,
+    supervisor: &HarnessSupervisor,
+    id: i64,
+    req: &RetryDevRailRunRequest,
+) -> Result<DevRailRunResponse, ApiError> {
+    let previous = devrail_runs::find_run(pool, actor, id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("运行不存在或超出数据范围"))?;
+    if !matches!(
+        previous.status.as_str(),
+        "completed" | "failed" | "cancelled"
+    ) {
+        return Err(ApiError::conflict("只有已结束的运行可以重试"));
+    }
+    let snapshot = devrail_runs::find_snapshot(pool, actor, previous.snapshot_id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("运行快照不存在"))?;
+    let environment_id = snapshot
+        .get("environmentId")
+        .and_then(serde_json::Value::as_i64)
+        .ok_or_else(|| ApiError::conflict("运行快照缺少环境信息"))?;
+    create_run(
+        pool,
+        actor,
+        supervisor,
+        previous.task_id,
+        &CreateDevRailRunRequest {
+            environment_id,
+            idempotency_key: req.idempotency_key.clone(),
+            model_id: previous.model_id,
+            input: req.input.clone(),
+        },
+    )
+    .await
 }
 pub async fn list_events(
     pool: &PgPool,

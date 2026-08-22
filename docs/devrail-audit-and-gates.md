@@ -65,6 +65,12 @@ npm run build
 - app-server JSONL 解析失败、事件乱序、超时和异常退出必须产生明确失败状态，不能静默继续。
 - 事件和日志必须脱敏；不得将完整命令、环境变量、模型隐藏推理或凭据写入推送。
 
+### 4.2.1 Rust Clippy 例外禁止
+
+- `backend/src` 禁止 `#[allow(clippy::...)]` 和条件形式的 Clippy allow 属性；命中即为 blocker。
+- 后端 Clippy 以 `-D clippy::allow_attributes` 执行，禁止通过 allow、降级 lint 或扩大阈值隐藏诊断。
+- 复杂函数必须通过参数对象、上下文结构体或职责拆分修复；临时例外不适用于 Clippy。
+
 ### 4.3 推送可靠性和隐私
 
 - 业务事件、站内通知和 outbox 必须同事务提交。

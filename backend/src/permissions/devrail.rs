@@ -48,3 +48,15 @@ pub struct RunRetry;
 impl PermissionRequirement for RunRetry {
     const CODE: &'static str = "devrail:run:retry";
 }
+pub struct ApprovalRead;
+impl PermissionRequirement for ApprovalRead {
+    const CODE: &'static str = "devrail:approval:read";
+}
+pub struct ApprovalApprove;
+impl PermissionRequirement for ApprovalApprove {
+    const CODE: &'static str = "devrail:approval:approve";
+}
+pub struct ApprovalReject;
+impl PermissionRequirement for ApprovalReject {
+    const CODE: &'static str = "devrail:approval:reject";
+}

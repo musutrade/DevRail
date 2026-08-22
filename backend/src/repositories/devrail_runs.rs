@@ -14,6 +14,40 @@ fn scope(alias: &str) -> String {
     )
 }
 
+pub(crate) struct NewRun<'a> {
+    pub actor: &'a ActorContext,
+    pub task_id: i64,
+    pub snapshot_id: i64,
+    pub idempotency_key: &'a str,
+    pub cwd: &'a str,
+    pub policy: &'a Value,
+    pub startup_args: &'a Value,
+    pub model_id: Option<&'a str>,
+    pub department_id: Option<i64>,
+}
+
+pub(crate) struct TerminalRunUpdate<'a> {
+    pub run_id: i64,
+    pub status: &'a str,
+    pub exit_reason: &'a str,
+    pub exit_code: Option<i32>,
+    pub stderr_summary: Option<&'a str>,
+    pub trace_id: &'a str,
+    pub recovery_suggestion: Option<&'a str>,
+}
+
+pub(crate) struct NewRunEvent<'a> {
+    pub run_id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub event_type: &'a str,
+    pub source_event_id: Option<&'a str>,
+    pub idempotency_key: &'a str,
+    pub payload: &'a Value,
+    pub summary: Option<&'a str>,
+}
+
 pub(crate) async fn create_snapshot(
     c: &mut PgConnection,
     actor: &ActorContext,
@@ -26,34 +60,22 @@ pub(crate) async fn create_snapshot(
         .fetch_one(c).await
 }
 
-#[allow(
-    clippy::too_many_arguments,
-    reason = "Repository input mirrors the scoped run record"
-)]
 pub(crate) async fn create_run(
     c: &mut PgConnection,
-    actor: &ActorContext,
-    task_id: i64,
-    snapshot_id: i64,
-    idempotency_key: &str,
-    cwd: &str,
-    policy: &Value,
-    startup_args: &Value,
-    model_id: Option<&str>,
-    department_id: Option<i64>,
+    input: &NewRun<'_>,
 ) -> Result<DevRailRunRow, sqlx::Error> {
     let sql = format!("INSERT INTO devrail_runs (organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, status, cwd, policy, startup_args_summary, model_id) VALUES ($1,$2,$3,$4,$5,$6,'starting',$7,$8,$9,$10) ON CONFLICT (organization_id, task_id, idempotency_key) DO UPDATE SET updated_at=devrail_runs.updated_at RETURNING {RUN_COLUMNS}");
     sqlx::query_as::<_, DevRailRunRow>(AssertSqlSafe(sql))
-        .bind(actor.organization_id)
-        .bind(department_id)
-        .bind(actor.user_id)
-        .bind(task_id)
-        .bind(snapshot_id)
-        .bind(idempotency_key)
-        .bind(cwd)
-        .bind(policy)
-        .bind(startup_args)
-        .bind(model_id)
+        .bind(input.actor.organization_id)
+        .bind(input.department_id)
+        .bind(input.actor.user_id)
+        .bind(input.task_id)
+        .bind(input.snapshot_id)
+        .bind(input.idempotency_key)
+        .bind(input.cwd)
+        .bind(input.policy)
+        .bind(input.startup_args)
+        .bind(input.model_id)
         .fetch_one(c)
         .await
 }
@@ -69,22 +91,12 @@ pub(crate) async fn update_run_started(
         .bind(run_id).bind(thread_id).bind(turn_id).bind(harness_version).execute(c).await.map(|_| ())
 }
 
-#[allow(
-    clippy::too_many_arguments,
-    reason = "Repository input mirrors terminal run metadata"
-)]
 pub(crate) async fn update_run_terminal(
     c: &mut PgConnection,
-    run_id: i64,
-    status: &str,
-    exit_reason: &str,
-    exit_code: Option<i32>,
-    stderr_summary: Option<&str>,
-    trace_id: &str,
-    recovery_suggestion: Option<&str>,
-) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE devrail_runs SET status=$2, exit_reason=$3, exit_code=$4, stderr_summary=$5, trace_id=$6, recovery_suggestion=$7, completed_at=COALESCE(completed_at,now()), updated_at=now() WHERE id=$1")
-        .bind(run_id).bind(status).bind(exit_reason).bind(exit_code).bind(stderr_summary).bind(trace_id).bind(recovery_suggestion).execute(c).await.map(|_| ())
+    input: &TerminalRunUpdate<'_>,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query("UPDATE devrail_runs SET status=$2, exit_reason=$3, exit_code=$4, stderr_summary=$5, trace_id=$6, recovery_suggestion=$7, completed_at=COALESCE(completed_at,now()), updated_at=now() WHERE id=$1 AND status NOT IN ('completed','failed','cancelled')")
+        .bind(input.run_id).bind(input.status).bind(input.exit_reason).bind(input.exit_code).bind(input.stderr_summary).bind(input.trace_id).bind(input.recovery_suggestion).execute(c).await.map(|result| result.rows_affected() == 1)
 }
 
 pub(crate) async fn update_task_status(
@@ -141,6 +153,22 @@ pub async fn find_run_by_idempotency(
         .await
 }
 
+pub(crate) async fn task_id_for_run(pool: &PgPool, run_id: i64) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar("SELECT task_id FROM devrail_runs WHERE id=$1")
+        .bind(run_id)
+        .fetch_one(pool)
+        .await
+}
+
+pub(crate) async fn find_snapshot(
+    pool: &PgPool,
+    actor: &ActorContext,
+    snapshot_id: i64,
+) -> Result<Option<Value>, sqlx::Error> {
+    sqlx::query_scalar("SELECT s.snapshot FROM devrail_task_snapshots s WHERE s.id=$1 AND s.organization_id=$2 AND ($3='all' OR $3='organization' OR ($3='self' AND s.owner_user_id=$4) OR ($3='department' AND s.department_id=$5) OR ($3='department_and_children' AND s.department_id IN (SELECT id FROM departments WHERE organization_id=$2)))")
+        .bind(snapshot_id).bind(actor.organization_id).bind(actor.data_scope.as_str()).bind(actor.user_id).bind(actor.department_id).fetch_optional(pool).await
+}
+
 pub async fn list_runs(
     pool: &PgPool,
     actor: &ActorContext,
@@ -177,37 +205,25 @@ pub async fn count_runs(
         .await
 }
 
-#[allow(
-    clippy::too_many_arguments,
-    reason = "Repository input mirrors the append-only event record"
-)]
 pub(crate) async fn append_event(
     c: &mut PgConnection,
-    run_id: i64,
-    organization_id: i64,
-    department_id: Option<i64>,
-    owner_user_id: i64,
-    event_type: &str,
-    source_event_id: Option<&str>,
-    idempotency_key: &str,
-    payload: &Value,
-    summary: Option<&str>,
+    input: &NewRunEvent<'_>,
 ) -> Result<DevRailRunEventRow, sqlx::Error> {
     sqlx::query("SELECT id FROM devrail_runs WHERE id=$1 FOR UPDATE")
-        .bind(run_id)
+        .bind(input.run_id)
         .execute(&mut *c)
         .await?;
     let sql = format!("INSERT INTO devrail_run_events (organization_id, department_id, owner_user_id, run_id, cursor, event_type, source_event_id, idempotency_key, payload, summary) VALUES ($1,$2,$3,$4,COALESCE((SELECT max(cursor)+1 FROM devrail_run_events WHERE run_id=$4),1),$5,$6,$7,$8,$9) ON CONFLICT (run_id,idempotency_key) DO UPDATE SET idempotency_key=EXCLUDED.idempotency_key RETURNING {EVENT_COLUMNS}");
     sqlx::query_as::<_, DevRailRunEventRow>(AssertSqlSafe(sql))
-        .bind(organization_id)
-        .bind(department_id)
-        .bind(owner_user_id)
-        .bind(run_id)
-        .bind(event_type)
-        .bind(source_event_id)
-        .bind(idempotency_key)
-        .bind(payload)
-        .bind(summary)
+        .bind(input.organization_id)
+        .bind(input.department_id)
+        .bind(input.owner_user_id)
+        .bind(input.run_id)
+        .bind(input.event_type)
+        .bind(input.source_event_id)
+        .bind(input.idempotency_key)
+        .bind(input.payload)
+        .bind(input.summary)
         .fetch_one(c)
         .await
 }
