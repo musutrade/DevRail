@@ -16,7 +16,7 @@ DevRail 的 Codex Harness 开发系统 MVP **尚未实现完成**，因此不能
 - Phase 0 首批产品骨架：`devrail` 业务权限、项目/仓库/环境/任务迁移、受数据范围约束的 Rust CRUD API、OpenAPI/Angular 客户端生成和 `/devrail/projects` 基础页面；
 - Phase 1 Harness 基础闭环：后端 `HarnessSupervisor` 受控启动 `codex app-server`，清空环境变量并限制工作区/并发/时限；运行快照、运行元数据、脱敏 JSONL 事件、单调游标、幂等键、异常退出摘要、优雅中断/强制终止、运行查询和 SSE API 已加入；
 - Phase 1 审批与重试基础闭环：审批迁移、数据范围查询、决策追加审计、Supervisor resolve 控制消息和终态 run 重试 API 已加入；审批中心 UI、过期 worker、通知和真正的 thread/resume 恢复仍未完成；
-- PR #10 已合并到 `main`，合并提交为 `9ef8950`，合并后的主 CI、`arc-flow platform` 和供应链检查均成功。
+- PR #13 已合并到 `main`，合并提交为 `2b7d36c`，合并后的主 CI、`arc-flow platform` 和供应链检查均成功。
 
 这些内容是产品 MVP 的工程基础或配套能力，不等于需求文档第 2.1 节和第 16 节定义的 DevRail 业务系统已经交付。
 
