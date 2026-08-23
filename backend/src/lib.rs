@@ -150,6 +150,7 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_APPROVAL_REJECT_PATH, &["post"]),
     (DEVRAIL_APPROVAL_WITHDRAW_PATH, &["post"]),
     (DEVRAIL_NOTIFICATIONS_PATH, &["get"]),
+    (DEVRAIL_NOTIFICATION_PREFERENCES_PATH, &["get", "patch"]),
     (DEVRAIL_NOTIFICATION_READ_PATH, &["post"]),
     (DEVRAIL_NOTIFICATIONS_READ_ALL_PATH, &["post"]),
 ];
