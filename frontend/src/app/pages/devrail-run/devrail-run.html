@@ -14,6 +14,14 @@
             <mat-icon>stop_circle</mat-icon>中断运行
           </button>
         } @else {
+          <button
+            class="btn-outline"
+            type="button"
+            (click)="executeQualityGates()"
+            [disabled]="busy()"
+          >
+            <mat-icon>verified</mat-icon>执行质量门禁
+          </button>
           <button class="btn-primary" type="button" (click)="retry()" [disabled]="busy()">
             <mat-icon>replay</mat-icon>重试运行
           </button>

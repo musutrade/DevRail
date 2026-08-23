@@ -71,6 +71,20 @@ export class DevRailRunPage implements OnInit, OnDestroy {
     await this.performRetry(true);
   }
 
+  async executeQualityGates(): Promise<void> {
+    if (this.busy()) return;
+    this.busy.set(true);
+    try {
+      this.qualityGates.set((await this.api.executeRunQualityGates(this.runId)).items);
+      this.run.set(await this.api.getRun(this.runId));
+      this.snack.open('质量门禁执行完成', '关闭', { duration: 2500 });
+    } catch (error) {
+      this.snack.open(apiErrorMessage(error, '质量门禁执行失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
   private async performRetry(resume: boolean): Promise<void> {
     const current = this.run();
     if (!current || this.busy()) return;
