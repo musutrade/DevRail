@@ -11,6 +11,10 @@
       @if (kind() === 'repositories') {
         <label>远端 URL<input name="remoteUrl" [value]="$any(item).remoteUrl" required /></label
         ><label>默认分支<input name="defaultBranch" [value]="$any(item).defaultBranch" /></label>
+        <div class="sync-summary">
+          <span>最近远端分支：{{ $any(item).lastRemoteBranch || '未同步' }}</span>
+          <span>远端分支数：{{ $any(item).lastRemoteBranchCount ?? '未同步' }}</span>
+        </div>
       } @else {
         <label
           >工作区根目录<input
