@@ -106,6 +106,15 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'devrail/settings/notifications',
+        canActivate: [permissionGuard],
+        data: { permissions: ROUTE_ACCESS.devrail },
+        loadComponent: () =>
+          import('./pages/devrail-notification-settings/devrail-notification-settings').then(
+            (m) => m.DevRailNotificationSettingsPage,
+          ),
+      },
+      {
         path: 'devrail/approvals/:id',
         canActivate: [permissionGuard],
         data: { permissions: ROUTE_ACCESS.devrail },

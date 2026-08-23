@@ -1,0 +1,38 @@
+.notification-settings-page {
+  max-width: 760px;
+  margin: 0 auto;
+}
+.settings-form {
+  display: grid;
+  gap: 1rem;
+  max-width: 680px;
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+}
+.settings-form label:not(.check-row) {
+  display: grid;
+  gap: 0.4rem;
+  color: var(--text-secondary);
+}
+.settings-form textarea {
+  padding: 0.65rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--text-primary);
+  resize: vertical;
+}
+.check-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  color: var(--text-primary);
+}
+.disabled-row {
+  color: var(--text-secondary);
+}
+.primary-btn {
+  justify-self: start;
+}
+.saved {
+  color: var(--success-color, #247a45);
+}

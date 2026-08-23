@@ -1664,6 +1664,64 @@
         }
       }
     },
+    "/notification-preferences": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "getDevRailNotificationPreferences",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailNotificationPreferencesResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "updateDevRailNotificationPreferences",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDevRailNotificationPreferencesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailNotificationPreferencesResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/notifications": {
       "get": {
         "tags": [
@@ -5497,6 +5555,39 @@
           }
         }
       },
+      "DevRailNotificationPreferencesResponse": {
+        "type": "object",
+        "required": [
+          "inAppEnabled",
+          "pushEnabled",
+          "pushSupported",
+          "eventTypes",
+          "quietHours",
+          "updatedAt"
+        ],
+        "properties": {
+          "eventTypes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "inAppEnabled": {
+            "type": "boolean"
+          },
+          "pushEnabled": {
+            "type": "boolean"
+          },
+          "pushSupported": {
+            "type": "boolean"
+          },
+          "quietHours": {},
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "DevRailNotificationResponse": {
         "type": "object",
         "required": [
@@ -7006,6 +7097,33 @@
               "null"
             ]
           }
+        }
+      },
+      "UpdateDevRailNotificationPreferencesRequest": {
+        "type": "object",
+        "properties": {
+          "eventTypes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "inAppEnabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "pushEnabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "quietHours": {}
         }
       },
       "UpdateDevRailProjectPolicyRequest": {

@@ -13,12 +13,12 @@ use crate::models::{
     DashboardStats, DataScopeSchema, DepartmentResponse, DepartmentStatusSchema,
     DevRailApprovalDecisionRequest, DevRailApprovalPage, DevRailApprovalResponse,
     DevRailChangesetResponse, DevRailEnvironmentPage, DevRailEnvironmentResponse, DevRailListQuery,
-    DevRailNotificationPage, DevRailNotificationResponse, DevRailProjectMemberPage,
-    DevRailProjectMemberResponse, DevRailProjectPage, DevRailProjectPolicyResponse,
-    DevRailProjectResponse, DevRailQualityGatePage, DevRailRepositoryPage,
-    DevRailRepositoryResponse, DevRailRunEventPage, DevRailRunPage, DevRailRunResponse,
-    DevRailTaskPage, DevRailTaskResponse, HealthResponse, LoginRequest, LoginResponse,
-    LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest, MfaMethodSchema,
+    DevRailNotificationPage, DevRailNotificationPreferencesResponse, DevRailNotificationResponse,
+    DevRailProjectMemberPage, DevRailProjectMemberResponse, DevRailProjectPage,
+    DevRailProjectPolicyResponse, DevRailProjectResponse, DevRailQualityGatePage,
+    DevRailRepositoryPage, DevRailRepositoryResponse, DevRailRunEventPage, DevRailRunPage,
+    DevRailRunResponse, DevRailTaskPage, DevRailTaskResponse, HealthResponse, LoginRequest,
+    LoginResponse, LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest, MfaMethodSchema,
     MfaPasskeyAuthenticationFinishRequest, MfaPasskeyAuthenticationStartRequest,
     MfaPasskeyRegistrationFinishRequest, MfaPasskeyRegistrationStartRequest, MfaPasskeyResponse,
     MfaStatusResponse, MfaWebauthnChallengeResponse, ModuleUnlockRequest, ModuleUnlockScopeSchema,
@@ -26,10 +26,10 @@ use crate::models::{
     PermissionGroupResponse, PermissionResponse, PermissionTypeSchema, ReadinessResponse,
     RecoveryCodesResponse, RetryDevRailRunRequest, RoleColorSchema, RolePermissions, RoleResponse,
     SortDirectionSchema, StepUpRequest, StepUpResponse, UpdateDepartmentRequest,
-    UpdateDevRailEnvironmentRequest, UpdateDevRailProjectPolicyRequest,
-    UpdateDevRailProjectRequest, UpdateDevRailRepositoryRequest, UpdateDevRailTaskRequest,
-    UpdateRolePermissionsRequest, UpdateRoleRequest, UpdateUserRequest, UserResponse,
-    UserSortBySchema, UserStatusSchema,
+    UpdateDevRailEnvironmentRequest, UpdateDevRailNotificationPreferencesRequest,
+    UpdateDevRailProjectPolicyRequest, UpdateDevRailProjectRequest, UpdateDevRailRepositoryRequest,
+    UpdateDevRailTaskRequest, UpdateRolePermissionsRequest, UpdateRoleRequest, UpdateUserRequest,
+    UserResponse, UserSortBySchema, UserStatusSchema,
 };
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::openapi::OpenApi as OpenApiDocument;
@@ -780,6 +780,10 @@ fn list_devrail_notifications() {}
 fn mark_devrail_notification_read() {}
 #[utoipa::path(post, path = "/notifications/read-all", operation_id = "markAllDevRailNotificationsRead", tag = "devrail", security(("cookieAuth" = [])), responses((status = 204)))]
 fn mark_all_devrail_notifications_read() {}
+#[utoipa::path(get, path = "/notification-preferences", operation_id = "getDevRailNotificationPreferences", tag = "devrail", security(("cookieAuth" = [])), responses((status = 200, body = DevRailNotificationPreferencesResponse)))]
+fn get_devrail_notification_preferences() {}
+#[utoipa::path(patch, path = "/notification-preferences", operation_id = "updateDevRailNotificationPreferences", tag = "devrail", security(("cookieAuth" = [])), request_body = UpdateDevRailNotificationPreferencesRequest, responses((status = 200, body = DevRailNotificationPreferencesResponse)))]
+fn update_devrail_notification_preferences() {}
 #[utoipa::path(get, path = "/approvals/{id}", operation_id = "getDevRailApproval", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 200, body = DevRailApprovalResponse)))]
 fn get_devrail_approval() {}
 #[utoipa::path(post, path = "/approvals/{id}/approve", operation_id = "approveDevRailApproval", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), request_body = DevRailApprovalDecisionRequest, responses((status = 200, body = DevRailApprovalResponse)))]
@@ -849,7 +853,7 @@ fn withdraw_devrail_approval() {}
         get_devrail_task, update_devrail_task, create_devrail_run, list_devrail_runs,
         get_devrail_run, interrupt_devrail_run, list_devrail_run_events, get_devrail_run_changeset, get_devrail_run_quality_gates
         ,stream_devrail_run_events, retry_devrail_run, list_devrail_approvals,
-        get_devrail_approval, approve_devrail_approval, reject_devrail_approval, withdraw_devrail_approval, list_devrail_notifications, mark_devrail_notification_read, mark_all_devrail_notifications_read
+        get_devrail_approval, approve_devrail_approval, reject_devrail_approval, withdraw_devrail_approval, list_devrail_notifications, mark_devrail_notification_read, mark_all_devrail_notifications_read, get_devrail_notification_preferences, update_devrail_notification_preferences
     ),
     components(schemas(
         ErrorEnvelope,
@@ -909,7 +913,7 @@ fn withdraw_devrail_approval() {}
         UpdateDevRailRepositoryRequest, CreateDevRailEnvironmentRequest,
         UpdateDevRailEnvironmentRequest, CreateDevRailTaskRequest,
         UpdateDevRailTaskRequest, CreateDevRailRunRequest, DevRailRunResponse,
-        DevRailRunPage, DevRailRunEventPage, DevRailChangesetResponse, DevRailQualityGatePage, DevRailNotificationPage, DevRailNotificationResponse, RetryDevRailRunRequest,
+        DevRailRunPage, DevRailRunEventPage, DevRailChangesetResponse, DevRailQualityGatePage, DevRailNotificationPage, DevRailNotificationResponse, DevRailNotificationPreferencesResponse, UpdateDevRailNotificationPreferencesRequest, RetryDevRailRunRequest,
         DevRailApprovalResponse, DevRailApprovalPage, DevRailApprovalDecisionRequest
     )),
     servers((url = "/api/v1", description = "默认 API 根路径")),

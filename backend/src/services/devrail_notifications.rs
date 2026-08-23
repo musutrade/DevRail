@@ -4,6 +4,56 @@ use crate::models::*;
 use crate::repositories::devrail_notifications;
 use sqlx::PgPool;
 
+fn preferences_response(
+    row: DevRailNotificationPreferencesRow,
+) -> DevRailNotificationPreferencesResponse {
+    DevRailNotificationPreferencesResponse {
+        in_app_enabled: row.in_app_enabled,
+        push_enabled: false,
+        push_supported: false,
+        event_types: row
+            .event_types
+            .as_array()
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|v| v.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default(),
+        quiet_hours: row.quiet_hours,
+        updated_at: row.updated_at,
+    }
+}
+
+pub async fn get_preferences(
+    pool: &PgPool,
+    actor: &ActorContext,
+) -> Result<DevRailNotificationPreferencesResponse, ApiError> {
+    devrail_notifications::preferences(pool, actor)
+        .await
+        .map(preferences_response)
+        .map_err(ApiError::internal)
+}
+
+pub async fn update_preferences(
+    pool: &PgPool,
+    actor: &ActorContext,
+    request: &UpdateDevRailNotificationPreferencesRequest,
+) -> Result<DevRailNotificationPreferencesResponse, ApiError> {
+    if request
+        .event_types
+        .as_ref()
+        .is_some_and(|items| items.len() > 32 || items.iter().any(|item| item.len() > 96))
+    {
+        return Err(ApiError::validation("通知类型设置超出范围"));
+    }
+    devrail_notifications::update_preferences(pool, actor, request)
+        .await
+        .map(preferences_response)
+        .map_err(ApiError::internal)
+}
+
 fn response(row: DevRailNotificationRow) -> DevRailNotificationResponse {
     DevRailNotificationResponse {
         id: row.id,

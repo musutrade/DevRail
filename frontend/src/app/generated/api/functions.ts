@@ -11,6 +11,10 @@ export type { RejectDevRailApproval$Params as RejectDevRailApproval$Params } fro
 export { rejectDevRailApproval as rejectDevRailApproval } from './fn/devrail/reject-dev-rail-approval';
 export type { WithdrawDevRailApproval$Params as WithdrawDevRailApproval$Params } from './fn/devrail/withdraw-dev-rail-approval';
 export { withdrawDevRailApproval as withdrawDevRailApproval } from './fn/devrail/withdraw-dev-rail-approval';
+export type { GetDevRailNotificationPreferences$Params as GetDevRailNotificationPreferences$Params } from './fn/devrail/get-dev-rail-notification-preferences';
+export { getDevRailNotificationPreferences as getDevRailNotificationPreferences } from './fn/devrail/get-dev-rail-notification-preferences';
+export type { UpdateDevRailNotificationPreferences$Params as UpdateDevRailNotificationPreferences$Params } from './fn/devrail/update-dev-rail-notification-preferences';
+export { updateDevRailNotificationPreferences as updateDevRailNotificationPreferences } from './fn/devrail/update-dev-rail-notification-preferences';
 export type { ListDevRailNotifications$Params as ListDevRailNotifications$Params } from './fn/devrail/list-dev-rail-notifications';
 export { listDevRailNotifications as listDevRailNotifications } from './fn/devrail/list-dev-rail-notifications';
 export type { MarkAllDevRailNotificationsRead$Params as MarkAllDevRailNotificationsRead$Params } from './fn/devrail/mark-all-dev-rail-notifications-read';

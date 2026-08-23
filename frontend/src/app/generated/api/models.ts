@@ -27,6 +27,7 @@ export type { DevRailChangesetResponse } from './models/dev-rail-changeset-respo
 export type { DevRailEnvironmentPage } from './models/dev-rail-environment-page';
 export type { DevRailEnvironmentResponse } from './models/dev-rail-environment-response';
 export type { DevRailNotificationPage } from './models/dev-rail-notification-page';
+export type { DevRailNotificationPreferencesResponse } from './models/dev-rail-notification-preferences-response';
 export type { DevRailNotificationResponse } from './models/dev-rail-notification-response';
 export type { DevRailProjectMemberPage } from './models/dev-rail-project-member-page';
 export type { DevRailProjectMemberResponse } from './models/dev-rail-project-member-response';
@@ -79,6 +80,7 @@ export type { StepUpRequest } from './models/step-up-request';
 export type { StepUpResponse } from './models/step-up-response';
 export type { UpdateDepartmentRequest } from './models/update-department-request';
 export type { UpdateDevRailEnvironmentRequest } from './models/update-dev-rail-environment-request';
+export type { UpdateDevRailNotificationPreferencesRequest } from './models/update-dev-rail-notification-preferences-request';
 export type { UpdateDevRailProjectPolicyRequest } from './models/update-dev-rail-project-policy-request';
 export type { UpdateDevRailProjectRequest } from './models/update-dev-rail-project-request';
 export type { UpdateDevRailRepositoryRequest } from './models/update-dev-rail-repository-request';
