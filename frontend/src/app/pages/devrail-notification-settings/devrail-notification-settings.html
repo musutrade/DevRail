@@ -33,5 +33,30 @@
         <div class="empty-state" role="alert">{{ error() }}</div>
       }
     </form>
+    <section class="device-section" aria-labelledby="push-devices-title">
+      <h2 id="push-devices-title">已注册推送设备</h2>
+      <p>设备端点和密钥由服务端加密保存；当前浏览器尚未配置 VAPID 订阅初始化。</p>
+      @if (devices().length === 0) {
+        <div class="empty-state">暂无已注册设备</div>
+      } @else {
+        @for (device of devices(); track device.id) {
+          <div class="device-row">
+            <div>
+              <strong>{{ device.deviceName }}</strong>
+              <span>{{ device.platform }} · {{ device.status }}</span>
+            </div>
+            <button
+              class="row-btn"
+              type="button"
+              (click)="revokeDevice(device.id)"
+              [disabled]="revoking() === device.id"
+            >
+              <mat-icon>delete</mat-icon
+              ><span>{{ revoking() === device.id ? '撤销中' : '撤销' }}</span>
+            </button>
+          </div>
+        }
+      }
+    </section>
   }
 </div>

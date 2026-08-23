@@ -66,9 +66,13 @@ impl MfaConfig {
     }
 
     pub fn encrypt_totp_secret(&self, user_id: i64, secret: &[u8]) -> anyhow::Result<Vec<u8>> {
+        self.encrypt_value(user_id, secret)
+    }
+
+    pub fn encrypt_value(&self, owner_id: i64, secret: &[u8]) -> anyhow::Result<Vec<u8>> {
         let mut nonce_bytes = [0_u8; NONCE_LENGTH];
         getrandom::fill(&mut nonce_bytes).context("failed to generate MFA nonce")?;
-        let aad = user_id.to_be_bytes();
+        let aad = owner_id.to_be_bytes();
         let ciphertext = self
             .cipher
             .encrypt(
@@ -88,10 +92,14 @@ impl MfaConfig {
     }
 
     pub fn decrypt_totp_secret(&self, user_id: i64, encoded: &[u8]) -> anyhow::Result<Vec<u8>> {
+        self.decrypt_value(user_id, encoded)
+    }
+
+    pub fn decrypt_value(&self, owner_id: i64, encoded: &[u8]) -> anyhow::Result<Vec<u8>> {
         if encoded.len() <= 1 + NONCE_LENGTH || encoded[0] != CIPHERTEXT_VERSION {
             bail!("invalid encrypted MFA secret");
         }
-        let aad = user_id.to_be_bytes();
+        let aad = owner_id.to_be_bytes();
         self.cipher
             .decrypt(
                 &Nonce::try_from(&encoded[1..1 + NONCE_LENGTH])

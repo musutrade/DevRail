@@ -39,6 +39,9 @@ import { markDevRailNotificationRead } from '../../../generated/api/fn/devrail/m
 import { markAllDevRailNotificationsRead } from '../../../generated/api/fn/devrail/mark-all-dev-rail-notifications-read';
 import { getDevRailNotificationPreferences } from '../../../generated/api/fn/devrail/get-dev-rail-notification-preferences';
 import { updateDevRailNotificationPreferences } from '../../../generated/api/fn/devrail/update-dev-rail-notification-preferences';
+import { listDevRailPushDevices } from '../../../generated/api/fn/devrail/list-dev-rail-push-devices';
+import { registerDevRailPushDevice } from '../../../generated/api/fn/devrail/register-dev-rail-push-device';
+import { revokeDevRailPushDevice } from '../../../generated/api/fn/devrail/revoke-dev-rail-push-device';
 import { syncDevRailRepository } from '../../../generated/api/fn/devrail/sync-dev-rail-repository';
 import { healthCheckDevRailEnvironment } from '../../../generated/api/fn/devrail/health-check-dev-rail-environment';
 import type {
@@ -70,6 +73,8 @@ import type {
   DevRailNotificationPage,
   DevRailNotificationPreferencesResponse,
   UpdateDevRailNotificationPreferencesRequest,
+  DevRailPushDeviceResponse,
+  RegisterDevRailPushDeviceRequest,
 } from '../../../generated/api/models';
 
 @Injectable({ providedIn: 'root' })
@@ -151,6 +156,15 @@ export class DevRailApiService {
     body: UpdateDevRailNotificationPreferencesRequest,
   ): Promise<DevRailNotificationPreferencesResponse> {
     return this.api.invoke(updateDevRailNotificationPreferences, { body });
+  }
+  listPushDevices(): Promise<DevRailPushDeviceResponse[]> {
+    return this.api.invoke(listDevRailPushDevices, {});
+  }
+  registerPushDevice(body: RegisterDevRailPushDeviceRequest): Promise<DevRailPushDeviceResponse> {
+    return this.api.invoke(registerDevRailPushDevice, { body });
+  }
+  revokePushDevice(id: number): Promise<void> {
+    return this.api.invoke(revokeDevRailPushDevice, { id });
   }
 
   listRepositories(projectId: number, page = 1, pageSize = 20): Promise<DevRailRepositoryPage> {

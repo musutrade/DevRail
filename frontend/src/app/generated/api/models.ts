@@ -35,6 +35,7 @@ export type { DevRailProjectMemberResponse } from './models/dev-rail-project-mem
 export type { DevRailProjectPage } from './models/dev-rail-project-page';
 export type { DevRailProjectPolicyResponse } from './models/dev-rail-project-policy-response';
 export type { DevRailProjectResponse } from './models/dev-rail-project-response';
+export type { DevRailPushDeviceResponse } from './models/dev-rail-push-device-response';
 export type { DevRailQualityGatePage } from './models/dev-rail-quality-gate-page';
 export type { DevRailQualityGateResponse } from './models/dev-rail-quality-gate-response';
 export type { DevRailRepositoryPage } from './models/dev-rail-repository-page';
@@ -72,6 +73,7 @@ export type { PermissionResponse } from './models/permission-response';
 export type { PermissionType } from './models/permission-type';
 export type { ReadinessResponse } from './models/readiness-response';
 export type { RecoveryCodesResponse } from './models/recovery-codes-response';
+export type { RegisterDevRailPushDeviceRequest } from './models/register-dev-rail-push-device-request';
 export type { RetryDevRailRunRequest } from './models/retry-dev-rail-run-request';
 export type { RoleColor } from './models/role-color';
 export type { RolePermissions } from './models/role-permissions';

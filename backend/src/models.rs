@@ -1107,6 +1107,54 @@ pub struct UpdateDevRailNotificationPreferencesRequest {
     pub quiet_hours: Option<Value>,
 }
 
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct DevRailPushDeviceRow {
+    pub id: i64,
+    pub device_name: String,
+    pub platform: String,
+    pub browser: Option<String>,
+    pub timezone: Option<String>,
+    pub client_version: Option<String>,
+    pub endpoint_fingerprint: String,
+    pub status: String,
+    pub last_active_at: DateTime<Utc>,
+    pub last_error: Option<String>,
+    pub revoked_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailPushDeviceResponse {
+    pub id: i64,
+    pub device_name: String,
+    pub platform: String,
+    pub browser: Option<String>,
+    pub timezone: Option<String>,
+    pub client_version: Option<String>,
+    pub endpoint_fingerprint: String,
+    pub status: String,
+    pub last_active_at: DateTime<Utc>,
+    pub last_error: Option<String>,
+    pub revoked_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisterDevRailPushDeviceRequest {
+    pub device_name: String,
+    pub platform: String,
+    pub browser: Option<String>,
+    pub timezone: Option<String>,
+    pub client_version: Option<String>,
+    pub endpoint: String,
+    pub p256dh: String,
+    pub auth: String,
+}
+
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DevRailApprovalResponse {

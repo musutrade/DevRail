@@ -71,6 +71,30 @@ pub async fn update_notification_preferences(
         .await
         .map(Json)
 }
+pub async fn list_push_devices(
+    State(s): State<AppState>,
+    auth: RequirePermission<PushDeviceRead>,
+) -> Result<Json<Vec<DevRailPushDeviceResponse>>, ApiError> {
+    services::devrail_push::list(&s.pool, &auth).await.map(Json)
+}
+pub async fn register_push_device(
+    State(s): State<AppState>,
+    auth: RequirePermission<PushDeviceWrite>,
+    Json(request): Json<RegisterDevRailPushDeviceRequest>,
+) -> Result<Json<DevRailPushDeviceResponse>, ApiError> {
+    services::devrail_push::register(&s.pool, &auth, &s.mfa, &request)
+        .await
+        .map(Json)
+}
+pub async fn revoke_push_device(
+    State(s): State<AppState>,
+    auth: RequirePermission<PushDeviceRevoke>,
+    Path(id): Path<i64>,
+) -> Result<StatusCode, ApiError> {
+    services::devrail_push::revoke(&s.pool, &auth, id)
+        .await
+        .map(|_| StatusCode::NO_CONTENT)
+}
 pub async fn get_project(
     State(s): State<AppState>,
     auth: RequirePermission<ProjectRead>,
