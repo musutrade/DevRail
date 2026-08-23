@@ -29,8 +29,8 @@ DevRail 的 Codex Harness 开发系统 MVP **尚未实现完成**，因此不能
 | 任务、快照和运行 | 部分实现 | 已有任务详情页、服务端关键词/状态/负责人/标签筛选、分页、不可变任务快照、run 生命周期字段、单任务活动运行唯一约束、幂等创建、终态重试、指定 turn 恢复和运行详情页；仓库环境关联和完整状态验收仍待补齐。 |
 | Codex `app-server` Harness Supervisor | 基础实现 | 后端独占启动受控 `codex app-server`，完成初始化等待、thread/turn 启动、thread/resume、活动 run 数据库重启恢复、超时、stderr 摘要、恢复建议和优雅中断；审批等待状态仍需通知与人工恢复验收。 |
 | thread/turn/item 事件与 SSE | 基础实现 | JSONL 事件按安全类型脱敏持久化，提供 cursor 补拉、Last-Event-ID SSE、质量门禁事件映射和运行详情展示。 |
-| 工具命令审批 | 部分实现 | 已有审批表、数据范围 API、审批中心列表/详情、批准/拒绝/撤回决策、过期时间、过期 worker、追加决策审计和 Supervisor resolve；通知和策略版本强校验仍待补齐。 |
-| 变更集与质量门禁 | 部分实现 | 运行详情可从脱敏文件变更事件生成 changeset，并查询质量门禁事件；门禁实际执行器、任务状态联动仍待补齐。 |
+| 工具命令审批 | 部分实现 | 已有审批表、数据范围 API、审批中心列表/详情、批准/拒绝/撤回决策、过期时间、过期 worker、追加决策审计、策略版本强校验和 Supervisor resolve；通知仍待补齐。 |
+| 变更集与质量门禁 | 部分实现 | 运行详情可从脱敏文件变更事件生成 changeset，并查询质量门禁事件；质量门禁失败已联动 run/task 失败，独立门禁执行器仍待补齐。 |
 | 站内通知、outbox 和 Web Push | 未实现 | 当前没有 DevRail 通知表、dispatcher、设备注册、投递重试和推送页面。 |
 | DevRail Angular 功能页 | 部分实现 | 已有项目 CRUD、成员、策略、任务列表/详情、仓库/环境列表与详情、审批列表/详情、运行详情页面及生成 API 服务；通知页面仍待补齐。 |
 | MVP 自动化验收 | 未完成 | 全量工程门禁通过不代表 requirements.md 第 16 节全部条件通过。 |
@@ -47,7 +47,7 @@ DevRail 的 Codex Harness 开发系统 MVP **尚未实现完成**，因此不能
 应按 [requirements.md](requirements.md) 的迭代计划推进：
 
 1. Phase 0：完成项目/仓库/环境/任务 CRUD 的集成测试、成员与策略 API，并完成验收闭环；
-2. Phase 1：补齐过期通知、质量门禁执行器，并完善数据库重启恢复与运行验收；审批撤回、过期 worker、changeset/质量门禁查询和活动 run 自动恢复已完成。
+2. Phase 1：补齐过期通知、质量门禁执行器，并完善数据库重启恢复与运行验收；审批撤回、过期 worker、策略版本校验、changeset/质量门禁查询、质量门禁失败联动和活动 run 自动恢复已完成。
 3. Phase 2：Transactional outbox、站内通知、Web Push、设备/偏好、重试和投递审计；
 4. Phase 3：评论、提及、审查、补丁导出和可选 Git 平台集成。
 

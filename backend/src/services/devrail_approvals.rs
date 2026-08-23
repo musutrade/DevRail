@@ -51,6 +51,9 @@ pub async fn request_from_harness(
     let task_id = devrail_runs::task_id_for_run(pool, request.run_id).await?;
     let expires_at = Utc::now() + Duration::minutes(15);
     let mut tx = pool.begin().await?;
+    let policy_version = devrail_runs::policy_version_for_run(pool, request.run_id)
+        .await?
+        .or_else(|| Some("devrail-policy-v1".to_string()));
     let row = devrail_approvals::create_pending(
         &mut tx,
         &devrail_approvals::NewApproval {
@@ -67,7 +70,7 @@ pub async fn request_from_harness(
             risk_level: &request.risk_level,
             requested_by: request.owner_user_id,
             expires_at,
-            policy_version: Some("devrail-policy-v1"),
+            policy_version: policy_version.as_deref(),
         },
     )
     .await?;
@@ -129,6 +132,12 @@ async fn decide(
         .ok_or_else(|| ApiError::not_found("审批不存在或超出数据范围"))?;
     if approval.status != "pending" {
         return Err(ApiError::conflict("审批已处理，不能重复决策"));
+    }
+    let current_policy = devrail_runs::policy_version_for_run(pool, approval.run_id)
+        .await
+        .map_err(db_error)?;
+    if approval.policy_version != current_policy {
+        return Err(ApiError::conflict("审批策略已更新，不能使用旧策略决策"));
     }
     let mut tx = pool.begin().await.map_err(db_error)?;
     let task_id = devrail_runs::task_id_for_run(pool, approval.run_id)

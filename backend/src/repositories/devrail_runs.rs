@@ -168,6 +168,26 @@ pub(crate) async fn task_id_for_run(pool: &PgPool, run_id: i64) -> Result<i64, s
         .await
 }
 
+pub(crate) async fn policy_version_for_run(
+    pool: &PgPool,
+    run_id: i64,
+) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar("SELECT policy->>'version' FROM devrail_runs WHERE id=$1")
+        .bind(run_id)
+        .fetch_one(pool)
+        .await
+}
+
+pub(crate) async fn has_failed_quality_gate(
+    c: &mut PgConnection,
+    run_id: i64,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM devrail_run_events WHERE run_id=$1 AND event_type='quality_gate' AND COALESCE(payload->>'status','') NOT IN ('passed','success','succeeded'))")
+        .bind(run_id)
+        .fetch_one(c)
+        .await
+}
+
 pub(crate) async fn find_snapshot(
     pool: &PgPool,
     actor: &ActorContext,
