@@ -114,8 +114,19 @@ export class DevRailApiService {
     return this.api.invoke(updateDevRailEnvironment, { project_id: projectId, id, body });
   }
 
-  listTasks(projectId: number, page = 1, pageSize = 20): Promise<DevRailTaskPage> {
-    return this.api.invoke(listDevRailTasks, { project_id: projectId, page, pageSize });
+  listTasks(
+    projectId: number,
+    page = 1,
+    pageSize = 20,
+    filters: { keyword?: string; status?: string } = {},
+  ): Promise<DevRailTaskPage> {
+    return this.api.invoke(listDevRailTasks, {
+      project_id: projectId,
+      page,
+      pageSize,
+      keyword: filters.keyword || undefined,
+      status: filters.status || undefined,
+    });
   }
   getTask(projectId: number, id: number) {
     return this.api.invoke(getDevRailTask, { project_id: projectId, id });

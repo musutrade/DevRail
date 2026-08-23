@@ -106,6 +106,22 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'devrail/projects/:projectId/tasks',
+        canActivate: [permissionGuard],
+        data: { permissions: ROUTE_ACCESS.devrail },
+        loadComponent: () =>
+          import('./pages/devrail-tasks/devrail-tasks').then((m) => m.DevRailTasksPage),
+      },
+      {
+        path: 'devrail/projects/:projectId/tasks/:taskId',
+        canActivate: [permissionGuard],
+        data: { permissions: ROUTE_ACCESS.devrail },
+        loadComponent: () =>
+          import('./pages/devrail-task-detail/devrail-task-detail').then(
+            (m) => m.DevRailTaskDetailPage,
+          ),
+      },
+      {
         path: 'devrail/runs/:id',
         canActivate: [permissionGuard],
         data: { permissions: ROUTE_ACCESS.devrail },

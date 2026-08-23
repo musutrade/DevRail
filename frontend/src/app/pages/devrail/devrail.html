@@ -93,6 +93,14 @@
                   >
                     <mat-icon>policy</mat-icon>
                   </a>
+                  <a
+                    class="row-btn"
+                    [routerLink]="['/devrail/projects', project.id, 'tasks']"
+                    title="项目任务"
+                    aria-label="项目任务"
+                  >
+                    <mat-icon>task_alt</mat-icon>
+                  </a>
                   @if (canWrite() && project.status === 'active') {
                     <button
                       class="row-btn danger"
