@@ -228,6 +228,61 @@ pub async fn interrupt_run(
         .map(Json)
 }
 
+pub async fn retry_run(
+    State(s): State<AppState>,
+    auth: RequirePermission<RunRetry>,
+    Path(id): Path<i64>,
+    Json(req): Json<RetryDevRailRunRequest>,
+) -> Result<(StatusCode, Json<DevRailRunResponse>), ApiError> {
+    services::devrail_runs::retry_run(&s.pool, &auth, &s.supervisor, id, &req)
+        .await
+        .map(|v| (StatusCode::ACCEPTED, Json(v)))
+}
+
+pub async fn list_approvals(
+    State(s): State<AppState>,
+    auth: RequirePermission<ApprovalRead>,
+    Query(q): Query<DevRailListQuery>,
+) -> Result<Json<DevRailApprovalPage>, ApiError> {
+    services::devrail_approvals::list(
+        &s.pool,
+        &auth,
+        q.page.unwrap_or(1).max(1),
+        q.page_size.unwrap_or(20).clamp(1, 100),
+    )
+    .await
+    .map(Json)
+}
+pub async fn get_approval(
+    State(s): State<AppState>,
+    auth: RequirePermission<ApprovalRead>,
+    Path(id): Path<i64>,
+) -> Result<Json<DevRailApprovalResponse>, ApiError> {
+    services::devrail_approvals::get(&s.pool, &auth, id)
+        .await
+        .map(Json)
+}
+pub async fn approve_approval(
+    State(s): State<AppState>,
+    auth: RequirePermission<ApprovalApprove>,
+    Path(id): Path<i64>,
+    Json(req): Json<DevRailApprovalDecisionRequest>,
+) -> Result<Json<DevRailApprovalResponse>, ApiError> {
+    services::devrail_approvals::approve(&s.pool, &auth, &s.supervisor, id, req.reason.as_deref())
+        .await
+        .map(Json)
+}
+pub async fn reject_approval(
+    State(s): State<AppState>,
+    auth: RequirePermission<ApprovalReject>,
+    Path(id): Path<i64>,
+    Json(req): Json<DevRailApprovalDecisionRequest>,
+) -> Result<Json<DevRailApprovalResponse>, ApiError> {
+    services::devrail_approvals::reject(&s.pool, &auth, &s.supervisor, id, req.reason.as_deref())
+        .await
+        .map(Json)
+}
+
 pub async fn list_run_events(
     State(s): State<AppState>,
     auth: RequirePermission<RunRead>,

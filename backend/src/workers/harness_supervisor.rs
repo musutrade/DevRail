@@ -8,7 +8,7 @@ use sqlx::PgPool;
 use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-    process::{Child, Command},
+    process::{Child, ChildStdin, ChildStdout, Command},
     sync::{mpsc, Mutex, Semaphore},
 };
 
@@ -21,6 +21,17 @@ pub struct RunLaunch {
     pub owner_user_id: i64,
     pub cwd: PathBuf,
     pub input: String,
+}
+
+struct ProcessContext {
+    supervisor: HarnessSupervisor,
+    launch: RunLaunch,
+    child: Child,
+    stdin: ChildStdin,
+    stdout: ChildStdout,
+    stderr: tokio::process::ChildStderr,
+    controls: mpsc::Receiver<ControlMessage>,
+    _slot: tokio::sync::OwnedSemaphorePermit,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -38,6 +49,7 @@ pub enum SupervisorError {
 #[derive(Debug)]
 enum ControlMessage {
     Interrupt,
+    Approval { approval_id: i64, approved: bool },
 }
 
 #[derive(Clone)]
@@ -122,7 +134,17 @@ impl HarnessSupervisor {
             .ok_or_else(|| SupervisorError::Spawn("stderr 不可用".into()))?;
         let supervisor = self.clone();
         tokio::spawn(async move {
-            run_process(supervisor, launch, child, stdin, stdout, stderr, rx, slot).await;
+            run_process(ProcessContext {
+                supervisor,
+                launch,
+                child,
+                stdin,
+                stdout,
+                stderr,
+                controls: rx,
+                _slot: slot,
+            })
+            .await;
         });
         Ok(())
     }
@@ -141,25 +163,44 @@ impl HarnessSupervisor {
             .map_err(|_| SupervisorError::ControlUnavailable)
     }
 
+    pub async fn resolve_approval(
+        &self,
+        run_id: i64,
+        approval_id: i64,
+        approved: bool,
+    ) -> Result<(), SupervisorError> {
+        let sender = self
+            .controls
+            .lock()
+            .await
+            .get(&run_id)
+            .cloned()
+            .ok_or(SupervisorError::ControlUnavailable)?;
+        sender
+            .send(ControlMessage::Approval {
+                approval_id,
+                approved,
+            })
+            .await
+            .map_err(|_| SupervisorError::ControlUnavailable)
+    }
+
     pub async fn recover_stale_runs(&self) -> Result<u64, sqlx::Error> {
         devrail_runs::recover_stale_runs(&self.pool).await
     }
 }
 
-#[allow(
-    clippy::too_many_arguments,
-    reason = "Process runner receives all isolated stream handles"
-)]
-async fn run_process(
-    supervisor: HarnessSupervisor,
-    launch: RunLaunch,
-    mut child: Child,
-    mut stdin: tokio::process::ChildStdin,
-    stdout: tokio::process::ChildStdout,
-    stderr: tokio::process::ChildStderr,
-    mut controls: mpsc::Receiver<ControlMessage>,
-    _slot: tokio::sync::OwnedSemaphorePermit,
-) {
+async fn run_process(context: ProcessContext) {
+    let ProcessContext {
+        supervisor,
+        launch,
+        mut child,
+        mut stdin,
+        stdout,
+        stderr,
+        mut controls,
+        _slot,
+    } = context;
     let pool = supervisor.pool.clone();
     let mut out_reader = BufReader::new(stdout);
     let mut err_reader = BufReader::new(stderr);
@@ -232,6 +273,9 @@ async fn run_process(
                     let exit_code = match status { Ok(Ok(s)) => s.code(), _ => { let _ = child.start_kill(); child.wait().await.ok().and_then(|s| s.code()) } };
                     let _ = finish_run(&pool, &launch, "cancelled", "interrupted", exit_code, Some(&stderr_summary), Some("运行已由用户中断")).await;
                     break;
+                }
+                if let Some(ControlMessage::Approval { approval_id, approved }) = command {
+                    let _ = write_json(&mut stdin, json!({"method":"approval/resolve","params":{"approvalId":approval_id,"approved":approved}})).await;
                 }
             }
             result = out_reader.read_line(&mut out_line) => {
@@ -326,6 +370,35 @@ async fn handle_stdout(pool: &PgPool, launch: &RunLaunch, line: &str) -> bool {
         summary.as_deref(),
     )
     .await;
+    if event_type == "approval_request" {
+        let tool_name = value
+            .get("tool")
+            .or_else(|| value.get("tool_name"))
+            .and_then(Value::as_str)
+            .unwrap_or("unknown-tool");
+        let risk_level = value
+            .get("risk_level")
+            .and_then(Value::as_str)
+            .filter(|risk| matches!(*risk, "low" | "medium" | "high" | "critical"))
+            .unwrap_or("high");
+        let approval_key = source_id.as_deref().unwrap_or("approval:unknown");
+        let cwd = launch.cwd.to_string_lossy().to_string();
+        let _ = crate::services::devrail_approvals::request_from_harness(
+            pool,
+            crate::services::devrail_approvals::HarnessApprovalRequest {
+                run_id: launch.run_id,
+                organization_id: launch.organization_id,
+                department_id: launch.department_id,
+                owner_user_id: launch.owner_user_id,
+                tool_name: tool_name.to_string(),
+                args_summary: sanitize(value.get("args").unwrap_or(&json!({}))),
+                cwd,
+                risk_level: risk_level.to_string(),
+                idempotency_key: approval_key.to_string(),
+            },
+        )
+        .await;
+    }
     true
 }
 
@@ -449,15 +522,17 @@ async fn persist_event(
     let mut tx = pool.begin().await?;
     devrail_runs::append_event(
         &mut tx,
-        launch.run_id,
-        launch.organization_id,
-        launch.department_id,
-        launch.owner_user_id,
-        event_type,
-        source_id,
-        &idempotency,
-        &payload,
-        summary,
+        &devrail_runs::NewRunEvent {
+            run_id: launch.run_id,
+            organization_id: launch.organization_id,
+            department_id: launch.department_id,
+            owner_user_id: launch.owner_user_id,
+            event_type,
+            source_event_id: source_id,
+            idempotency_key: &idempotency,
+            payload: &payload,
+            summary,
+        },
     )
     .await?;
     tx.commit().await
@@ -474,34 +549,44 @@ async fn finish_run(
 ) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
     let trace = uuid::Uuid::new_v4().to_string();
-    devrail_runs::update_run_terminal(
+    let transitioned = devrail_runs::update_run_terminal(
         &mut tx,
-        launch.run_id,
-        status,
-        reason,
-        code,
-        stderr.filter(|s| !s.is_empty()),
-        &trace,
-        recovery,
+        &devrail_runs::TerminalRunUpdate {
+            run_id: launch.run_id,
+            status,
+            exit_reason: reason,
+            exit_code: code,
+            stderr_summary: stderr.filter(|s| !s.is_empty()),
+            trace_id: &trace,
+            recovery_suggestion: recovery,
+        },
     )
     .await?;
+    if !transitioned {
+        tx.commit().await?;
+        return Ok(());
+    }
     let task_status = match status {
         "completed" => "succeeded",
         "cancelled" => "cancelled",
         _ => "failed",
     };
     devrail_runs::update_task_status(&mut tx, launch.task_id, task_status).await?;
+    let event_idempotency = format!("terminal:{status}:{reason}");
+    let event_payload = json!({"status":status,"exitReason":reason,"exitCode":code});
     devrail_runs::append_event(
         &mut tx,
-        launch.run_id,
-        launch.organization_id,
-        launch.department_id,
-        launch.owner_user_id,
-        "turn_complete",
-        None,
-        &format!("terminal:{status}:{reason}"),
-        &json!({"status":status,"exitReason":reason,"exitCode":code}),
-        Some(reason),
+        &devrail_runs::NewRunEvent {
+            run_id: launch.run_id,
+            organization_id: launch.organization_id,
+            department_id: launch.department_id,
+            owner_user_id: launch.owner_user_id,
+            event_type: "turn_complete",
+            source_event_id: None,
+            idempotency_key: &event_idempotency,
+            payload: &event_payload,
+            summary: Some(reason),
+        },
     )
     .await?;
     tx.commit().await

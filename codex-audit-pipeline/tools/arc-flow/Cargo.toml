@@ -4,6 +4,9 @@ version = "3.0.0"
 edition = "2021"
 rust-version = "1.97.1"
 
+[lints.clippy]
+allow_attributes = "deny"
+
 [dependencies]
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }

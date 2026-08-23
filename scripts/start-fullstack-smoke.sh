@@ -17,11 +17,16 @@ export RUST_LOG=warn,sqlx=warn,tower_http=warn
 export SERVICE_NAME=arc-admin-fullstack-smoke
 export WEBAUTHN_RP_ID=localhost
 export WEBAUTHN_RP_ORIGIN=http://localhost:4300
-export BOOTSTRAP_ADMIN_USERNAME=fullstack_admin
 export BOOTSTRAP_ADMIN_PASSWORD=Fullstack-Smoke-Password-2026!
-export BOOTSTRAP_ADMIN_DISPLAY_NAME=全栈测试管理员
-export BOOTSTRAP_ADMIN_EMAIL=fullstack-admin@example.test
 
 cargo run --quiet --manifest-path "${BACKEND_MANIFEST}" --bin migrate
-cargo run --quiet --manifest-path "${BACKEND_MANIFEST}" --bin bootstrap_admin
+# Playwright may retry the smoke test in the same backend process.  Give each
+# attempt an isolated administrator so first-login MFA enrollment cannot leak
+# into a retry (the test chooses the suffix from testInfo.retry).
+for attempt in 0 1; do
+  export BOOTSTRAP_ADMIN_USERNAME="fullstack_admin_${attempt}"
+  export BOOTSTRAP_ADMIN_DISPLAY_NAME="全栈测试管理员 ${attempt}"
+  export BOOTSTRAP_ADMIN_EMAIL="fullstack-admin-${attempt}@example.test"
+  cargo run --quiet --manifest-path "${BACKEND_MANIFEST}" --bin bootstrap_admin
+done
 exec cargo run --quiet --manifest-path "${BACKEND_MANIFEST}" --bin arc-admin-backend

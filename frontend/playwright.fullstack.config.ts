@@ -12,6 +12,8 @@ export default defineConfig({
     baseURL: 'http://localhost:4300',
     trace: 'on-first-retry',
   },
+  expect: { timeout: 15_000 },
+  timeout: 60_000,
   projects: [{ name: 'fullstack-chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
     {

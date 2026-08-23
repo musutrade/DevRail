@@ -15,7 +15,8 @@ DevRail 的 Codex Harness 开发系统 MVP **尚未实现完成**，因此不能
 - 工程治理：项目公约、审计门禁、CI、供应链检查和交付流程；
 - Phase 0 首批产品骨架：`devrail` 业务权限、项目/仓库/环境/任务迁移、受数据范围约束的 Rust CRUD API、OpenAPI/Angular 客户端生成和 `/devrail/projects` 基础页面；
 - Phase 1 Harness 基础闭环：后端 `HarnessSupervisor` 受控启动 `codex app-server`，清空环境变量并限制工作区/并发/时限；运行快照、运行元数据、脱敏 JSONL 事件、单调游标、幂等键、异常退出摘要、优雅中断/强制终止、运行查询和 SSE API 已加入；
-- PR #10 已合并到 `main`，合并提交为 `9ef8950`，合并后的主 CI、`arc-flow platform` 和供应链检查均成功。
+- Phase 1 审批与重试基础闭环：审批迁移、数据范围查询、决策追加审计、Supervisor resolve 控制消息和终态 run 重试 API 已加入；审批中心 UI、过期 worker、通知和真正的 thread/resume 恢复仍未完成；
+- PR #13 已合并到 `main`，合并提交为 `2b7d36c`，合并后的主 CI、`arc-flow platform` 和供应链检查均成功。
 
 这些内容是产品 MVP 的工程基础或配套能力，不等于需求文档第 2.1 节和第 16 节定义的 DevRail 业务系统已经交付。
 
@@ -25,10 +26,10 @@ DevRail 的 Codex Harness 开发系统 MVP **尚未实现完成**，因此不能
 | --- | --- | --- |
 | arc-admin 认证、MFA、组织和 RBAC | 已有基线 | DevRail API 已增加业务权限标记和组织/部门/所有者数据范围过滤。 |
 | 项目、仓库、环境、成员 | 部分实现 | 项目/仓库/环境迁移、Repository、Service、Handler、OpenAPI 和项目基础页已加入；项目成员 API/页面仍未实现。 |
-| 任务、快照和运行 | 基础实现 | 已有不可变任务快照、run 生命周期字段、单任务活动运行唯一约束和幂等创建；任务状态联动和 retry 仍待补齐。 |
+| 任务、快照和运行 | 部分实现 | 已有不可变任务快照、run 生命周期字段、单任务活动运行唯一约束、幂等创建和终态重试；从指定 turn 恢复、前端运行详情和完整状态验收仍待补齐。 |
 | Codex `app-server` Harness Supervisor | 基础实现 | 后端独占启动受控 `codex app-server`，完成初始化等待、thread/turn 启动、超时、stderr 摘要、恢复建议和优雅中断；数据库重启恢复仍待补齐。 |
 | thread/turn/item 事件与 SSE | 基础实现 | JSONL 事件按安全类型脱敏持久化，提供 cursor 补拉和 SSE；前端展示页、质量门禁事件映射仍待补齐。 |
-| 工具命令审批 | 未实现 | 当前没有审批表、审批 API、审批中心和决策审计。 |
+| 工具命令审批 | 基础实现 | 已有审批表、数据范围 API、批准/拒绝决策、过期时间、追加决策审计和 Supervisor resolve；审批 UI、过期处理、通知和策略版本强校验仍待补齐。 |
 | 变更集与质量门禁 | 部分具备基础工具 | `arc-flow` 可作为门禁工具，但尚未接入 DevRail run、变更集和任务状态。 |
 | 站内通知、outbox 和 Web Push | 未实现 | 当前没有 DevRail 通知表、dispatcher、设备注册、投递重试和推送页面。 |
 | DevRail Angular 功能页 | 部分实现 | 已有 `features/devrail` API 服务、权限常量、路由和项目基础 CRUD 页面；任务/资源详情页仍待补齐。 |
@@ -46,7 +47,7 @@ DevRail 的 Codex Harness 开发系统 MVP **尚未实现完成**，因此不能
 应按 [requirements.md](requirements.md) 的迭代计划推进：
 
 1. Phase 0：完成项目/仓库/环境/任务 CRUD 的集成测试、成员与策略 API，并完成验收闭环；
-2. Phase 1：补齐 Harness 审批、中断后的可恢复状态、changeset 和质量门禁，并加入运行详情前端页；
+2. Phase 1：补齐审批中心 UI、审批过期/通知、中断后的 thread/resume 可恢复状态、changeset 和质量门禁，并加入运行详情前端页；
 3. Phase 2：Transactional outbox、站内通知、Web Push、设备/偏好、重试和投递审计；
 4. Phase 3：评论、提及、审查、补丁导出和可选 Git 平台集成。
 
