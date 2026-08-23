@@ -17,6 +17,11 @@
           <button class="btn-primary" type="button" (click)="retry()" [disabled]="busy()">
             <mat-icon>replay</mat-icon>重试运行
           </button>
+          @if (current.threadId && current.turnId) {
+            <button class="btn-outline" type="button" (click)="retryFromTurn()" [disabled]="busy()">
+              <mat-icon>history</mat-icon>从当前回合恢复
+            </button>
+          }
         }
       </div>
     }

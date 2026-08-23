@@ -5930,6 +5930,12 @@
               "string",
               "null"
             ]
+          },
+          "resumeFromTurnId": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },

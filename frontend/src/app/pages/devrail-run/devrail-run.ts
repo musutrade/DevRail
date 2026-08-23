@@ -57,6 +57,14 @@ export class DevRailRunPage implements OnInit, OnDestroy {
   }
 
   async retry(): Promise<void> {
+    await this.performRetry(false);
+  }
+
+  async retryFromTurn(): Promise<void> {
+    await this.performRetry(true);
+  }
+
+  private async performRetry(resume: boolean): Promise<void> {
     const current = this.run();
     if (!current || this.busy()) return;
     this.busy.set(true);
@@ -64,6 +72,7 @@ export class DevRailRunPage implements OnInit, OnDestroy {
       const next = await this.api.retryRun(this.runId, {
         idempotencyKey: `ui-retry-${Date.now()}`,
         input: null,
+        ...(resume && current.turnId ? { resumeFromTurnId: current.turnId } : {}),
       });
       this.snack.open(`已创建新的运行 #${next.id}`, '关闭', { duration: 3000 });
       this.runId = next.id;

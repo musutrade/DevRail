@@ -4,4 +4,5 @@
 export interface RetryDevRailRunRequest {
   idempotencyKey: string;
   input?: (string | null);
+  resumeFromTurnId?: (string | null);
 }
