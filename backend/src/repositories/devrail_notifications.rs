@@ -1,5 +1,5 @@
 use crate::access::ActorContext;
-use crate::models::DevRailNotificationRow;
+use crate::models::{DevRailNotificationPreferencesRow, DevRailNotificationRow};
 use serde_json::Value;
 use sqlx::{AssertSqlSafe, PgConnection, PgPool};
 
@@ -55,4 +55,23 @@ pub async fn mark_read(pool: &PgPool, actor: &ActorContext, id: i64) -> Result<b
 }
 pub async fn mark_all_read(pool: &PgPool, actor: &ActorContext) -> Result<u64, sqlx::Error> {
     Ok(sqlx::query("UPDATE devrail_notifications SET read_at=now() WHERE organization_id=$1 AND recipient_user_id=$2 AND read_at IS NULL").bind(actor.organization_id).bind(actor.user_id).execute(pool).await?.rows_affected())
+}
+
+pub async fn preferences(
+    pool: &PgPool,
+    actor: &ActorContext,
+) -> Result<DevRailNotificationPreferencesRow, sqlx::Error> {
+    sqlx::query("INSERT INTO devrail_notification_preferences (organization_id, user_id) VALUES ($1,$2) ON CONFLICT (organization_id,user_id) DO NOTHING")
+        .bind(actor.organization_id).bind(actor.user_id).execute(pool).await?;
+    sqlx::query_as::<_, DevRailNotificationPreferencesRow>("SELECT organization_id, user_id, in_app_enabled, push_enabled, event_types, quiet_hours, updated_at FROM devrail_notification_preferences WHERE organization_id=$1 AND user_id=$2")
+        .bind(actor.organization_id).bind(actor.user_id).fetch_one(pool).await
+}
+
+pub async fn update_preferences(
+    pool: &PgPool,
+    actor: &ActorContext,
+    request: &crate::models::UpdateDevRailNotificationPreferencesRequest,
+) -> Result<DevRailNotificationPreferencesRow, sqlx::Error> {
+    sqlx::query_as::<_, DevRailNotificationPreferencesRow>("INSERT INTO devrail_notification_preferences (organization_id,user_id,in_app_enabled,push_enabled,event_types,quiet_hours) VALUES ($1,$2,COALESCE($3,TRUE),COALESCE($4,FALSE),COALESCE($5,'[]'::jsonb),COALESCE($6,'{}'::jsonb)) ON CONFLICT (organization_id,user_id) DO UPDATE SET in_app_enabled=COALESCE($3,devrail_notification_preferences.in_app_enabled), push_enabled=COALESCE($4,devrail_notification_preferences.push_enabled), event_types=COALESCE($5,devrail_notification_preferences.event_types), quiet_hours=COALESCE($6,devrail_notification_preferences.quiet_hours), updated_at=now() RETURNING organization_id, user_id, in_app_enabled, push_enabled, event_types, quiet_hours, updated_at")
+        .bind(actor.organization_id).bind(actor.user_id).bind(request.in_app_enabled).bind(request.push_enabled).bind(request.event_types.as_ref().map(|v| serde_json::json!(v))).bind(request.quiet_hours.as_ref()).fetch_one(pool).await
 }

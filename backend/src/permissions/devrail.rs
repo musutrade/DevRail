@@ -72,3 +72,7 @@ pub struct NotificationRead;
 impl PermissionRequirement for NotificationRead {
     const CODE: &'static str = "devrail:notification:read";
 }
+pub struct NotificationWrite;
+impl PermissionRequirement for NotificationWrite {
+    const CODE: &'static str = "devrail:notification:write";
+}

@@ -112,4 +112,12 @@ export const APP_NAVIGATION = [
     route: '/devrail/notifications',
     permissions: ROUTE_ACCESS.devrail,
   },
+  {
+    kind: 'link',
+    id: 'devrail-notification-settings',
+    label: 'DevRail 通知设置',
+    icon: 'settings_notifications',
+    route: '/devrail/settings/notifications',
+    permissions: ROUTE_ACCESS.devrail,
+  },
 ] as const satisfies readonly NavigationItem[];

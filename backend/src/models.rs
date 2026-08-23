@@ -1057,6 +1057,37 @@ pub struct DevRailNotificationPage {
     pub page_size: i64,
 }
 
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct DevRailNotificationPreferencesRow {
+    pub organization_id: i64,
+    pub user_id: i64,
+    pub in_app_enabled: bool,
+    pub push_enabled: bool,
+    pub event_types: Value,
+    pub quiet_hours: Value,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailNotificationPreferencesResponse {
+    pub in_app_enabled: bool,
+    pub push_enabled: bool,
+    pub push_supported: bool,
+    pub event_types: Vec<String>,
+    pub quiet_hours: Value,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateDevRailNotificationPreferencesRequest {
+    pub in_app_enabled: Option<bool>,
+    pub push_enabled: Option<bool>,
+    pub event_types: Option<Vec<String>>,
+    pub quiet_hours: Option<Value>,
+}
+
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DevRailApprovalResponse {

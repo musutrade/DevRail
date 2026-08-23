@@ -32,6 +32,7 @@ describe('application navigation', () => {
       ['/devrail/projects', ROUTE_ACCESS.devrail],
       ['/devrail/approvals', ROUTE_ACCESS.devrail],
       ['/devrail/notifications', ROUTE_ACCESS.devrail],
+      ['/devrail/settings/notifications', ROUTE_ACCESS.devrail],
     ]);
 
     for (const item of navigationLinks()) {

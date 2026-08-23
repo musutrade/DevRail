@@ -36,6 +36,8 @@ import { withdrawDevRailApproval } from '../../../generated/api/fn/devrail/withd
 import { listDevRailNotifications } from '../../../generated/api/fn/devrail/list-dev-rail-notifications';
 import { markDevRailNotificationRead } from '../../../generated/api/fn/devrail/mark-dev-rail-notification-read';
 import { markAllDevRailNotificationsRead } from '../../../generated/api/fn/devrail/mark-all-dev-rail-notifications-read';
+import { getDevRailNotificationPreferences } from '../../../generated/api/fn/devrail/get-dev-rail-notification-preferences';
+import { updateDevRailNotificationPreferences } from '../../../generated/api/fn/devrail/update-dev-rail-notification-preferences';
 import type {
   CreateDevRailEnvironmentRequest,
   CreateDevRailProjectRequest,
@@ -63,6 +65,8 @@ import type {
   DevRailApprovalResponse,
   DevRailApprovalDecisionRequest,
   DevRailNotificationPage,
+  DevRailNotificationPreferencesResponse,
+  UpdateDevRailNotificationPreferencesRequest,
 } from '../../../generated/api/models';
 
 @Injectable({ providedIn: 'root' })
@@ -136,6 +140,14 @@ export class DevRailApiService {
   }
   markAllNotificationsRead(): Promise<void> {
     return this.api.invoke(markAllDevRailNotificationsRead, {});
+  }
+  getNotificationPreferences(): Promise<DevRailNotificationPreferencesResponse> {
+    return this.api.invoke(getDevRailNotificationPreferences, {});
+  }
+  updateNotificationPreferences(
+    body: UpdateDevRailNotificationPreferencesRequest,
+  ): Promise<DevRailNotificationPreferencesResponse> {
+    return this.api.invoke(updateDevRailNotificationPreferences, { body });
   }
 
   listRepositories(projectId: number, page = 1, pageSize = 20): Promise<DevRailRepositoryPage> {

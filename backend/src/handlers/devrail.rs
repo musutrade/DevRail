@@ -54,6 +54,23 @@ pub async fn mark_all_notifications_read(
         .await
         .map(|_| StatusCode::NO_CONTENT)
 }
+pub async fn get_notification_preferences(
+    State(s): State<AppState>,
+    auth: RequirePermission<NotificationRead>,
+) -> Result<Json<DevRailNotificationPreferencesResponse>, ApiError> {
+    services::devrail_notifications::get_preferences(&s.pool, &auth)
+        .await
+        .map(Json)
+}
+pub async fn update_notification_preferences(
+    State(s): State<AppState>,
+    auth: RequirePermission<NotificationWrite>,
+    Json(request): Json<UpdateDevRailNotificationPreferencesRequest>,
+) -> Result<Json<DevRailNotificationPreferencesResponse>, ApiError> {
+    services::devrail_notifications::update_preferences(&s.pool, &auth, &request)
+        .await
+        .map(Json)
+}
 pub async fn get_project(
     State(s): State<AppState>,
     auth: RequirePermission<ProjectRead>,
