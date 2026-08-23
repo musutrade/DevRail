@@ -16,6 +16,8 @@ export interface ListDevRailRepositories$Params {
   keyword?: string;
   status?: string;
   projectId?: number;
+  assigneeUserId?: number;
+  label?: string;
 }
 
 export function listDevRailRepositories(http: HttpClient, rootUrl: string, params: ListDevRailRepositories$Params, context?: HttpContext): Observable<StrictHttpResponse<DevRailRepositoryPage>> {
@@ -27,6 +29,8 @@ export function listDevRailRepositories(http: HttpClient, rootUrl: string, param
     rb.query('keyword', params.keyword, {});
     rb.query('status', params.status, {});
     rb.query('projectId', params.projectId, {});
+    rb.query('assigneeUserId', params.assigneeUserId, {});
+    rb.query('label', params.label, {});
   }
 
   return http.request(
