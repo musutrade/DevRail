@@ -42,6 +42,13 @@ button:disabled {
   color: var(--primary);
   background: color-mix(in srgb, var(--primary) 10%, transparent);
 }
+.sync-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  color: var(--on-surface-variant);
+  font-size: 0.9rem;
+}
 label {
   display: grid;
   gap: 0.4rem;

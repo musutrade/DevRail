@@ -10,7 +10,7 @@ use serde_json::Value;
 use sqlx::{AssertSqlSafe, PgConnection, PgPool};
 
 const PROJECT_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, slug, name, description, status, default_repository_id, default_environment_id, notification_policy, quality_gate_template, created_at, updated_at, archived_at";
-const REPOSITORY_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, name, remote_url, protocol, default_branch, credential_ref, last_sync_status, last_head_sha, created_at, updated_at, archived_at";
+const REPOSITORY_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, name, remote_url, protocol, default_branch, credential_ref, last_sync_status, last_head_sha, last_remote_branch, last_remote_branch_count, created_at, updated_at, archived_at";
 const ENVIRONMENT_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, name, workspace_root, network_mode, tool_policy, secret_refs, max_duration_secs, enabled, created_at, updated_at, archived_at";
 const TASK_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, assignee_user_id, title, goal, background, acceptance_criteria, constraints, priority, status, labels, due_at, created_at, updated_at, archived_at";
 
@@ -53,6 +53,14 @@ pub(crate) struct RepositoryUpdate<'a> {
     pub credential_set: bool,
     pub credential_ref: Option<&'a str>,
     pub status: Option<&'a str>,
+}
+pub(crate) struct RepositorySyncUpdate<'a> {
+    pub project_id: i64,
+    pub id: i64,
+    pub status: &'a str,
+    pub head_sha: Option<&'a str>,
+    pub remote_branch: Option<&'a str>,
+    pub remote_branch_count: Option<i64>,
 }
 pub(crate) struct NewEnvironment<'a> {
     pub project_id: i64,
@@ -316,13 +324,10 @@ pub(crate) async fn update_repository(
 pub(crate) async fn update_repository_sync(
     c: &mut PgConnection,
     actor: &ActorContext,
-    project_id: i64,
-    id: i64,
-    status: &str,
-    head_sha: Option<&str>,
+    input: &RepositorySyncUpdate<'_>,
 ) -> Result<bool, sqlx::Error> {
-    let result = sqlx::query("UPDATE devrail_repositories SET last_sync_status=$5,last_head_sha=$6,updated_at=now() WHERE id=$1 AND project_id=$2 AND organization_id=$3 AND ($4='all' OR owner_user_id=$7 OR $4='organization' OR ($4 IN ('department','department_and_children') AND department_id=$8)) AND archived_at IS NULL")
-        .bind(id).bind(project_id).bind(actor.organization_id).bind(actor.data_scope.as_str()).bind(status).bind(head_sha).bind(actor.user_id).bind(actor.department_id).execute(c).await?;
+    let result = sqlx::query("UPDATE devrail_repositories SET last_sync_status=$5,last_head_sha=$6,last_remote_branch=$7,last_remote_branch_count=$8,updated_at=now() WHERE id=$1 AND project_id=$2 AND organization_id=$3 AND ($4='all' OR owner_user_id=$9 OR $4='organization' OR ($4 IN ('department','department_and_children') AND department_id=$10)) AND archived_at IS NULL")
+        .bind(input.id).bind(input.project_id).bind(actor.organization_id).bind(actor.data_scope.as_str()).bind(input.status).bind(input.head_sha).bind(input.remote_branch).bind(input.remote_branch_count).bind(actor.user_id).bind(actor.department_id).execute(c).await?;
     Ok(result.rows_affected() == 1)
 }
 

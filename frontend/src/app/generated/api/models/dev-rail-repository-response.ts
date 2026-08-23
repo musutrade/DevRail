@@ -9,6 +9,8 @@ export interface DevRailRepositoryResponse {
   departmentId?: (number | null);
   id: number;
   lastHeadSha?: (string | null);
+  lastRemoteBranch?: (string | null);
+  lastRemoteBranchCount?: (number | null);
   lastSyncStatus: string;
   name: string;
   organizationId: number;

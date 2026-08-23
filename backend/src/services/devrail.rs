@@ -138,6 +138,8 @@ fn repository_response(row: DevRailRepositoryRow) -> DevRailRepositoryResponse {
         credential_configured: row.credential_ref.is_some(),
         last_sync_status: row.last_sync_status,
         last_head_sha: row.last_head_sha,
+        last_remote_branch: row.last_remote_branch,
+        last_remote_branch_count: row.last_remote_branch_count,
         created_at: row.created_at,
         updated_at: row.updated_at,
         archived_at: row.archived_at,
@@ -546,25 +548,77 @@ pub async fn sync_repository(
             .output(),
     )
     .await;
-    let (status, head_sha) = match result {
+    let (status, head_sha, remote_branch) = match result {
         Ok(Ok(output)) if output.status.success() => {
-            let sha = String::from_utf8_lossy(&output.stdout)
-                .split_whitespace()
-                .next()
+            let text = String::from_utf8_lossy(&output.stdout);
+            let sha = text
+                .lines()
+                .find_map(|line| {
+                    line.split_whitespace().find(|value| {
+                        value.len() == 40 && value.bytes().all(|b| b.is_ascii_hexdigit())
+                    })
+                })
                 .filter(|v| v.len() == 40 && v.bytes().all(|b| b.is_ascii_hexdigit()))
                 .map(str::to_owned);
-            if sha.is_some() {
-                ("synced", sha)
+            let branch = text
+                .lines()
+                .find_map(|line| {
+                    line.strip_prefix("ref: refs/heads/")?
+                        .split_whitespace()
+                        .next()
+                })
+                .filter(|v| v.len() <= 128 && !v.contains(".."))
+                .map(str::to_owned);
+            if sha.is_some() && branch.is_some() {
+                ("synced", sha, branch)
             } else {
-                ("failed", None)
+                ("failed", None, None)
             }
         }
-        _ => ("failed", None),
+        _ => ("failed", None, None),
+    };
+    let branch_count = if status == "synced" {
+        let result = tokio::time::timeout(
+            Duration::from_secs(30),
+            Command::new("git")
+                .arg("-c")
+                .arg("credential.helper=")
+                .arg("ls-remote")
+                .arg("--heads")
+                .arg(&repository.remote_url)
+                .env_clear()
+                .env("GIT_TERMINAL_PROMPT", "0")
+                .env("GIT_CONFIG_NOSYSTEM", "1")
+                .stdin(Stdio::null())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .output(),
+        )
+        .await;
+        match result {
+            Ok(Ok(output)) if output.status.success() => {
+                Some(String::from_utf8_lossy(&output.stdout).lines().count() as i64)
+            }
+            _ => None,
+        }
+    } else {
+        None
     };
     let mut tx = pool.begin().await.map_err(db_error)?;
-    if !devrail::update_repository_sync(&mut tx, actor, project_id, id, status, head_sha.as_deref())
-        .await
-        .map_err(db_error)?
+    if !devrail::update_repository_sync(
+        &mut tx,
+        actor,
+        &devrail::RepositorySyncUpdate {
+            project_id,
+            id,
+            status,
+            head_sha: head_sha.as_deref(),
+            remote_branch: remote_branch.as_deref(),
+            remote_branch_count: branch_count,
+        },
+    )
+    .await
+    .map_err(db_error)?
     {
         return Err(ApiError::not_found("仓库不存在或超出数据范围"));
     }
@@ -580,6 +634,41 @@ pub async fn sync_repository(
     .map_err(db_error)?;
     tx.commit().await.map_err(db_error)?;
     get_repository(pool, actor, project_id, id).await
+}
+
+#[cfg(test)]
+mod repository_sync_tests {
+    fn parse_remote_head(text: &str) -> (Option<String>, Option<String>) {
+        let sha = text
+            .lines()
+            .find_map(|line| {
+                line.split_whitespace()
+                    .find(|value| value.len() == 40 && value.bytes().all(|b| b.is_ascii_hexdigit()))
+            })
+            .filter(|v| v.len() == 40 && v.bytes().all(|b| b.is_ascii_hexdigit()))
+            .map(str::to_owned);
+        let branch = text
+            .lines()
+            .find_map(|line| {
+                line.strip_prefix("ref: refs/heads/")?
+                    .split_whitespace()
+                    .next()
+            })
+            .filter(|v| v.len() <= 128 && !v.contains(".."))
+            .map(str::to_owned);
+        (sha, branch)
+    }
+
+    #[test]
+    fn parses_remote_head_symref_without_persisting_output() {
+        let output = format!("ref: refs/heads/main\tHEAD\n{}\tHEAD\n", "a".repeat(40));
+        let (sha, branch) = parse_remote_head(&output);
+        assert_eq!(
+            sha.as_deref(),
+            Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        );
+        assert_eq!(branch.as_deref(), Some("main"));
+    }
 }
 
 fn workspace(value: &str) -> Result<String, ApiError> {
