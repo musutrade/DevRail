@@ -251,6 +251,15 @@ pub async fn update_environment(
         .await
         .map(Json)
 }
+pub async fn health_check_environment(
+    State(s): State<AppState>,
+    auth: RequirePermission<EnvironmentRead>,
+    Path((project_id, id)): Path<(i64, i64)>,
+) -> Result<Json<DevRailEnvironmentHealthResponse>, ApiError> {
+    services::devrail::health_check_environment(&s.pool, &auth, project_id, id)
+        .await
+        .map(Json)
+}
 
 pub async fn list_tasks(
     State(s): State<AppState>,

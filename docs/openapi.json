@@ -2491,6 +2491,51 @@
         ]
       }
     },
+    "/projects/{project_id}/environments/{id}/health-check": {
+      "post": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "healthCheckDevRailEnvironment",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailEnvironmentHealthResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/projects/{project_id}/members": {
       "get": {
         "tags": [
@@ -5453,6 +5498,42 @@
           "runId": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "DevRailEnvironmentHealthResponse": {
+        "type": "object",
+        "required": [
+          "environmentId",
+          "status",
+          "enabled",
+          "workspaceExists",
+          "workspaceIsDirectory",
+          "workspaceWritable",
+          "message"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "environmentId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "message": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "workspaceExists": {
+            "type": "boolean"
+          },
+          "workspaceIsDirectory": {
+            "type": "boolean"
+          },
+          "workspaceWritable": {
+            "type": "boolean"
           }
         }
       },

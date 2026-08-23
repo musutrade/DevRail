@@ -39,6 +39,7 @@ import { markAllDevRailNotificationsRead } from '../../../generated/api/fn/devra
 import { getDevRailNotificationPreferences } from '../../../generated/api/fn/devrail/get-dev-rail-notification-preferences';
 import { updateDevRailNotificationPreferences } from '../../../generated/api/fn/devrail/update-dev-rail-notification-preferences';
 import { syncDevRailRepository } from '../../../generated/api/fn/devrail/sync-dev-rail-repository';
+import { healthCheckDevRailEnvironment } from '../../../generated/api/fn/devrail/health-check-dev-rail-environment';
 import type {
   CreateDevRailEnvironmentRequest,
   CreateDevRailProjectRequest,
@@ -178,6 +179,9 @@ export class DevRailApiService {
   }
   updateEnvironment(projectId: number, id: number, body: UpdateDevRailEnvironmentRequest) {
     return this.api.invoke(updateDevRailEnvironment, { project_id: projectId, id, body });
+  }
+  healthCheckEnvironment(projectId: number, id: number) {
+    return this.api.invoke(healthCheckDevRailEnvironment, { project_id: projectId, id });
   }
 
   listTasks(

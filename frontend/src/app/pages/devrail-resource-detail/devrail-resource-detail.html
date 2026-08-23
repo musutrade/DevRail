@@ -38,6 +38,21 @@
         <button class="btn-secondary" type="button" (click)="syncRepository()" [disabled]="busy()">
           <mat-icon>sync</mat-icon>同步远端
         </button>
+      } @else {
+        <button
+          class="btn-secondary"
+          type="button"
+          (click)="healthCheckEnvironment()"
+          [disabled]="busy()"
+        >
+          <mat-icon>health_and_safety</mat-icon>健康检查
+        </button>
+        @if (health(); as result) {
+          <div class="health-result" [class.healthy]="result.status === 'healthy'">
+            <strong>{{ result.status === 'healthy' ? '健康' : '异常' }}</strong>
+            <span>{{ result.message }}</span>
+          </div>
+        }
       }
     </form>
   }

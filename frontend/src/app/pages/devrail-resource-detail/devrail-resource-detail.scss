@@ -29,6 +29,19 @@ button:disabled {
   cursor: wait;
   opacity: 0.6;
 }
+.health-result {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.7rem;
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  border-radius: 4px;
+}
+.health-result.healthy {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
 label {
   display: grid;
   gap: 0.4rem;

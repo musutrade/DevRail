@@ -24,6 +24,7 @@ export type { DevRailApprovalPage } from './models/dev-rail-approval-page';
 export type { DevRailApprovalResponse } from './models/dev-rail-approval-response';
 export type { DevRailChangeFileResponse } from './models/dev-rail-change-file-response';
 export type { DevRailChangesetResponse } from './models/dev-rail-changeset-response';
+export type { DevRailEnvironmentHealthResponse } from './models/dev-rail-environment-health-response';
 export type { DevRailEnvironmentPage } from './models/dev-rail-environment-page';
 export type { DevRailEnvironmentResponse } from './models/dev-rail-environment-response';
 export type { DevRailNotificationPage } from './models/dev-rail-notification-page';
