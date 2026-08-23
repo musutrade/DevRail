@@ -47,6 +47,14 @@
           >
             <mat-icon>close</mat-icon>拒绝
           </button>
+          <button
+            class="btn-outline"
+            type="button"
+            (click)="decide('withdraw')"
+            [disabled]="busy()"
+          >
+            <mat-icon>undo</mat-icon>撤回
+          </button>
         </div>
       }
     </section>

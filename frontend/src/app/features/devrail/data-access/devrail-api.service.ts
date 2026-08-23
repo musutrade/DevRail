@@ -30,6 +30,7 @@ import { listDevRailApprovals } from '../../../generated/api/fn/devrail/list-dev
 import { getDevRailApproval } from '../../../generated/api/fn/devrail/get-dev-rail-approval';
 import { approveDevRailApproval } from '../../../generated/api/fn/devrail/approve-dev-rail-approval';
 import { rejectDevRailApproval } from '../../../generated/api/fn/devrail/reject-dev-rail-approval';
+import { withdrawDevRailApproval } from '../../../generated/api/fn/devrail/withdraw-dev-rail-approval';
 import type {
   CreateDevRailEnvironmentRequest,
   CreateDevRailProjectRequest,
@@ -111,6 +112,12 @@ export class DevRailApiService {
     body: DevRailApprovalDecisionRequest,
   ): Promise<DevRailApprovalResponse> {
     return this.api.invoke(rejectDevRailApproval, { id, body });
+  }
+  withdrawApproval(
+    id: number,
+    body: DevRailApprovalDecisionRequest,
+  ): Promise<DevRailApprovalResponse> {
+    return this.api.invoke(withdrawDevRailApproval, { id, body });
   }
 
   listRepositories(projectId: number, page = 1, pageSize = 20): Promise<DevRailRepositoryPage> {

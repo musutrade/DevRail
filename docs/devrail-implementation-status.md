@@ -15,7 +15,7 @@ DevRail 的 Codex Harness 开发系统 MVP **尚未实现完成**，因此不能
 - 工程治理：项目公约、审计门禁、CI、供应链检查和交付流程；
 - Phase 0 首批产品骨架：`devrail` 业务权限、项目/仓库/环境/任务迁移、受数据范围约束的 Rust CRUD API、OpenAPI/Angular 客户端生成和 `/devrail/projects` 基础页面；
 - Phase 1 Harness 基础闭环：后端 `HarnessSupervisor` 受控启动 `codex app-server`，清空环境变量并限制工作区/并发/时限；运行快照、运行元数据、脱敏 JSONL 事件、单调游标、幂等键、异常退出摘要、优雅中断/强制终止、运行查询和 SSE API 已加入；
-- Phase 1 审批与重试基础闭环：审批迁移、数据范围查询、决策追加审计、Supervisor resolve 控制消息、终态 run 重试 API 和指定 turn 的 thread/resume 已加入；审批中心 UI、过期 worker 和通知仍未完成；
+- Phase 1 审批与重试基础闭环：审批迁移、数据范围查询、决策追加审计、Supervisor resolve 控制消息、终态 run 重试 API、指定 turn 的 thread/resume、审批中心 UI、审批撤回和过期 worker 已加入；通知仍未完成；
 - PR #13 已合并到 `main`，合并提交为 `2b7d36c`，合并后的主 CI、`arc-flow platform` 和供应链检查均成功。
 
 这些内容是产品 MVP 的工程基础或配套能力，不等于需求文档第 2.1 节和第 16 节定义的 DevRail 业务系统已经交付。
@@ -29,7 +29,7 @@ DevRail 的 Codex Harness 开发系统 MVP **尚未实现完成**，因此不能
 | 任务、快照和运行 | 部分实现 | 已有任务详情页、服务端关键词/状态/负责人/标签筛选、分页、不可变任务快照、run 生命周期字段、单任务活动运行唯一约束、幂等创建、终态重试、指定 turn 恢复和运行详情页；仓库环境关联和完整状态验收仍待补齐。 |
 | Codex `app-server` Harness Supervisor | 基础实现 | 后端独占启动受控 `codex app-server`，完成初始化等待、thread/turn 启动、thread/resume、超时、stderr 摘要、恢复建议和优雅中断；数据库重启恢复仍待补齐。 |
 | thread/turn/item 事件与 SSE | 基础实现 | JSONL 事件按安全类型脱敏持久化，提供 cursor 补拉、Last-Event-ID SSE 和运行详情展示；质量门禁事件映射仍待补齐。 |
-| 工具命令审批 | 部分实现 | 已有审批表、数据范围 API、审批中心列表/详情、批准/拒绝决策、过期时间、追加决策审计和 Supervisor resolve；撤回/过期 worker、通知和策略版本强校验仍待补齐。 |
+| 工具命令审批 | 部分实现 | 已有审批表、数据范围 API、审批中心列表/详情、批准/拒绝/撤回决策、过期时间、过期 worker、追加决策审计和 Supervisor resolve；通知和策略版本强校验仍待补齐。 |
 | 变更集与质量门禁 | 部分具备基础工具 | `arc-flow` 可作为门禁工具，但尚未接入 DevRail run、变更集和任务状态。 |
 | 站内通知、outbox 和 Web Push | 未实现 | 当前没有 DevRail 通知表、dispatcher、设备注册、投递重试和推送页面。 |
 | DevRail Angular 功能页 | 部分实现 | 已有项目 CRUD、成员、策略、任务列表/详情、仓库/环境列表与详情、审批列表/详情、运行详情页面及生成 API 服务；通知页面仍待补齐。 |

@@ -9,6 +9,8 @@ export type { ApproveDevRailApproval$Params as ApproveDevRailApproval$Params } f
 export { approveDevRailApproval as approveDevRailApproval } from './fn/devrail/approve-dev-rail-approval';
 export type { RejectDevRailApproval$Params as RejectDevRailApproval$Params } from './fn/devrail/reject-dev-rail-approval';
 export { rejectDevRailApproval as rejectDevRailApproval } from './fn/devrail/reject-dev-rail-approval';
+export type { WithdrawDevRailApproval$Params as WithdrawDevRailApproval$Params } from './fn/devrail/withdraw-dev-rail-approval';
+export { withdrawDevRailApproval as withdrawDevRailApproval } from './fn/devrail/withdraw-dev-rail-approval';
 export type { ListDevRailProjects$Params as ListDevRailProjects$Params } from './fn/devrail/list-dev-rail-projects';
 export { listDevRailProjects as listDevRailProjects } from './fn/devrail/list-dev-rail-projects';
 export type { CreateDevRailProject$Params as CreateDevRailProject$Params } from './fn/devrail/create-dev-rail-project';

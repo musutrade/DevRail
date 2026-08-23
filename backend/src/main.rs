@@ -123,6 +123,10 @@ async fn run(config: AppConfig, metadata: TelemetryMetadata) -> anyhow::Result<(
         )?),
         supervisor,
     };
+    arc_admin_backend::workers::approval_expiry::spawn(
+        state.pool.clone(),
+        state.supervisor.clone(),
+    );
     let app = build_router_with_metadata_and_cors(state, metadata, config.cors_layer());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));

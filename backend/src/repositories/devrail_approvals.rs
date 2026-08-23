@@ -118,6 +118,32 @@ pub(crate) async fn decide(
     Ok(Some(row))
 }
 
+pub(crate) async fn withdraw(
+    c: &mut PgConnection,
+    input: &ApprovalDecision<'_>,
+) -> Result<Option<DevRailApprovalRow>, sqlx::Error> {
+    let updated = sqlx::query_as::<_, DevRailApprovalRow>(AssertSqlSafe(format!("WITH RECURSIVE visible_departments AS (SELECT id FROM departments WHERE id=$4 AND organization_id=$2 UNION SELECT child.id FROM departments child JOIN visible_departments parent ON child.parent_id=parent.id WHERE child.organization_id=$2) UPDATE devrail_approvals a SET status='cancelled', decided_by=$3, decision_reason=$6, updated_at=now() WHERE a.id=$5 AND a.status='pending' AND a.requested_by=$3 AND {} RETURNING {APPROVAL_COLUMNS}", scope("a"))))
+        .bind(input.actor.data_scope.as_str()).bind(input.actor.organization_id).bind(input.actor.user_id).bind(input.actor.department_id).bind(input.id).bind(input.reason).fetch_optional(&mut *c).await?;
+    let Some(row) = updated else {
+        return Ok(None);
+    };
+    sqlx::query("INSERT INTO devrail_approval_decisions (organization_id, department_id, owner_user_id, approval_id, decided_by, decision, reason) VALUES ($1,$2,$3,$4,$5,'cancelled',$6)")
+        .bind(row.organization_id).bind(row.department_id).bind(row.owner_user_id).bind(row.id).bind(input.actor.user_id).bind(input.reason).execute(c).await?;
+    Ok(Some(row))
+}
+
+pub(crate) async fn expire_due(pool: &PgPool) -> Result<Vec<DevRailApprovalRow>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    let rows = sqlx::query_as::<_, DevRailApprovalRow>(AssertSqlSafe(format!("UPDATE devrail_approvals SET status='expired', decision_reason='审批已过期', updated_at=now() WHERE status='pending' AND expires_at <= now() RETURNING {APPROVAL_COLUMNS}")))
+        .fetch_all(&mut *tx).await?;
+    for row in &rows {
+        sqlx::query("INSERT INTO devrail_approval_decisions (organization_id, department_id, owner_user_id, approval_id, decided_by, decision, reason) VALUES ($1,$2,$3,$4,NULL,'expired',$5)")
+            .bind(row.organization_id).bind(row.department_id).bind(row.owner_user_id).bind(row.id).bind("审批已过期").execute(&mut *tx).await?;
+    }
+    tx.commit().await?;
+    Ok(rows)
+}
+
 pub(crate) async fn mark_waiting(
     c: &mut PgConnection,
     run_id: i64,
