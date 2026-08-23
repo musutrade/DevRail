@@ -16,7 +16,7 @@
 
 本文件是 DevRail 的第一版产品、架构和验收基线。实现时应继续遵循 arc-admin 的项目公约：
 
-> 实现状态声明：本文件描述的是完整 Codex Harness 开发系统 MVP 的目标，不是当前已交付能力清单。截至 2026-08-22，仓库已完成 arc-admin 基线、`arc-flow` 审计工具生产化、治理文档、Phase 0 CRUD，以及 Phase 1 的 Harness Supervisor 基础闭环（受控 app-server、run 快照/事件、SSE、中断）、审批持久化/决策 API 和终态 run 重试；审批中心 UI、过期通知、thread/resume 恢复、changeset、通知和 Web Push 仍未完成。详见 [DevRail 实现状态](devrail-implementation-status.md)。
+> 实现状态声明：本文件描述的是完整 Codex Harness 开发系统 MVP 的目标，不是当前已交付能力清单。截至 2026-08-23，仓库已完成 arc-admin 基线、`arc-flow` 审计工具生产化、治理文档、Phase 0 项目/仓库/环境 CRUD、成员与项目策略 API/页面，以及 Phase 1 的 Harness Supervisor 基础闭环（受控 app-server、run 快照/事件、SSE、中断、thread/resume）、审批持久化/决策 API 和终态 run 重试；任务/资源详情、审批中心 UI、过期通知、changeset、通知和 Web Push 仍未完成。详见 [DevRail 实现状态](devrail-implementation-status.md)。
 
 - 后端调用链固定为 `Router -> Handler -> Service -> Repository -> PostgreSQL`；SQL 写入只允许在 Repository、migration、测试或 seed 层。
 - 前端业务代码放在 `features/<domain>`，共享认证、配置和权限能力放在 `core`。

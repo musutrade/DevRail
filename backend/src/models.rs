@@ -826,6 +826,21 @@ pub struct DevRailProjectResponse {
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct DevRailProjectPolicyResponse {
+    pub project_id: i64,
+    pub notification_policy: Value,
+    pub quality_gate_template: Value,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateDevRailProjectPolicyRequest {
+    pub notification_policy: Option<Value>,
+    pub quality_gate_template: Option<Value>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct DevRailRepositoryResponse {
     pub id: i64,
     pub organization_id: i64,

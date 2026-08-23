@@ -19,6 +19,10 @@ export type { UpdateDevRailProject$Params as UpdateDevRailProject$Params } from 
 export { updateDevRailProject as updateDevRailProject } from './fn/devrail/update-dev-rail-project';
 export type { ArchiveDevRailProject$Params as ArchiveDevRailProject$Params } from './fn/devrail/archive-dev-rail-project';
 export { archiveDevRailProject as archiveDevRailProject } from './fn/devrail/archive-dev-rail-project';
+export type { GetDevRailProjectPolicy$Params as GetDevRailProjectPolicy$Params } from './fn/devrail/get-dev-rail-project-policy';
+export { getDevRailProjectPolicy as getDevRailProjectPolicy } from './fn/devrail/get-dev-rail-project-policy';
+export type { UpdateDevRailProjectPolicy$Params as UpdateDevRailProjectPolicy$Params } from './fn/devrail/update-dev-rail-project-policy';
+export { updateDevRailProjectPolicy as updateDevRailProjectPolicy } from './fn/devrail/update-dev-rail-project-policy';
 export type { ListDevRailEnvironments$Params as ListDevRailEnvironments$Params } from './fn/devrail/list-dev-rail-environments';
 export { listDevRailEnvironments as listDevRailEnvironments } from './fn/devrail/list-dev-rail-environments';
 export type { CreateDevRailEnvironment$Params as CreateDevRailEnvironment$Params } from './fn/devrail/create-dev-rail-environment';

@@ -62,6 +62,7 @@ const AUDIT_LOGS_PATH: &str = "/api/v1/audit-logs";
 const DEVRAIL_PROJECTS_PATH: &str = "/api/v1/projects";
 const DEVRAIL_PROJECT_PATH: &str = "/api/v1/projects/{id}";
 const DEVRAIL_PROJECT_ARCHIVE_PATH: &str = "/api/v1/projects/{id}/archive";
+const DEVRAIL_PROJECT_POLICY_PATH: &str = "/api/v1/projects/{id}/policy";
 const DEVRAIL_PROJECT_MEMBERS_PATH: &str = "/api/v1/projects/{project_id}/members";
 const DEVRAIL_PROJECT_MEMBER_PATH: &str = "/api/v1/projects/{project_id}/members/{user_id}";
 const DEVRAIL_REPOSITORIES_PATH: &str = "/api/v1/projects/{project_id}/repositories";
@@ -119,6 +120,7 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_PROJECTS_PATH, &["get", "post"]),
     (DEVRAIL_PROJECT_PATH, &["get", "patch"]),
     (DEVRAIL_PROJECT_ARCHIVE_PATH, &["post"]),
+    (DEVRAIL_PROJECT_POLICY_PATH, &["get", "patch"]),
     (DEVRAIL_PROJECT_MEMBERS_PATH, &["get", "post"]),
     (DEVRAIL_PROJECT_MEMBER_PATH, &["delete"]),
     (DEVRAIL_REPOSITORIES_PATH, &["get", "post"]),
@@ -273,6 +275,11 @@ fn base_router(state: AppState) -> Router {
         .route(
             DEVRAIL_PROJECT_ARCHIVE_PATH,
             post(handlers::devrail::archive_project),
+        )
+        .route(
+            DEVRAIL_PROJECT_POLICY_PATH,
+            get(handlers::devrail::get_project_policy)
+                .patch(handlers::devrail::update_project_policy),
         )
         .route(
             DEVRAIL_PROJECT_MEMBERS_PATH,

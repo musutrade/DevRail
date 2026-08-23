@@ -13,20 +13,21 @@ use crate::models::{
     DashboardStats, DataScopeSchema, DepartmentResponse, DepartmentStatusSchema,
     DevRailApprovalDecisionRequest, DevRailApprovalPage, DevRailApprovalResponse,
     DevRailEnvironmentPage, DevRailEnvironmentResponse, DevRailListQuery, DevRailProjectMemberPage,
-    DevRailProjectMemberResponse, DevRailProjectPage, DevRailProjectResponse,
-    DevRailRepositoryPage, DevRailRepositoryResponse, DevRailRunEventPage, DevRailRunPage,
-    DevRailRunResponse, DevRailTaskPage, DevRailTaskResponse, HealthResponse, LoginRequest,
-    LoginResponse, LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest, MfaMethodSchema,
-    MfaPasskeyAuthenticationFinishRequest, MfaPasskeyAuthenticationStartRequest,
+    DevRailProjectMemberResponse, DevRailProjectPage, DevRailProjectPolicyResponse,
+    DevRailProjectResponse, DevRailRepositoryPage, DevRailRepositoryResponse, DevRailRunEventPage,
+    DevRailRunPage, DevRailRunResponse, DevRailTaskPage, DevRailTaskResponse, HealthResponse,
+    LoginRequest, LoginResponse, LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest,
+    MfaMethodSchema, MfaPasskeyAuthenticationFinishRequest, MfaPasskeyAuthenticationStartRequest,
     MfaPasskeyRegistrationFinishRequest, MfaPasskeyRegistrationStartRequest, MfaPasskeyResponse,
     MfaStatusResponse, MfaWebauthnChallengeResponse, ModuleUnlockRequest, ModuleUnlockScopeSchema,
     ModuleUnlockStatusResponse, PageAuditLog, PageQuery, PageUser, PermissionCodes,
     PermissionGroupResponse, PermissionResponse, PermissionTypeSchema, ReadinessResponse,
     RecoveryCodesResponse, RetryDevRailRunRequest, RoleColorSchema, RolePermissions, RoleResponse,
     SortDirectionSchema, StepUpRequest, StepUpResponse, UpdateDepartmentRequest,
-    UpdateDevRailEnvironmentRequest, UpdateDevRailProjectRequest, UpdateDevRailRepositoryRequest,
-    UpdateDevRailTaskRequest, UpdateRolePermissionsRequest, UpdateRoleRequest, UpdateUserRequest,
-    UserResponse, UserSortBySchema, UserStatusSchema,
+    UpdateDevRailEnvironmentRequest, UpdateDevRailProjectPolicyRequest,
+    UpdateDevRailProjectRequest, UpdateDevRailRepositoryRequest, UpdateDevRailTaskRequest,
+    UpdateRolePermissionsRequest, UpdateRoleRequest, UpdateUserRequest, UserResponse,
+    UserSortBySchema, UserStatusSchema,
 };
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::openapi::OpenApi as OpenApiDocument;
@@ -713,6 +714,10 @@ fn get_devrail_project() {}
 fn update_devrail_project() {}
 #[utoipa::path(post, path = "/projects/{id}/archive", operation_id = "archiveDevRailProject", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 204), (status = 404, body = ErrorEnvelope)))]
 fn archive_devrail_project() {}
+#[utoipa::path(get, path = "/projects/{id}/policy", operation_id = "getDevRailProjectPolicy", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 200, body = DevRailProjectPolicyResponse)))]
+fn get_devrail_project_policy() {}
+#[utoipa::path(patch, path = "/projects/{id}/policy", operation_id = "updateDevRailProjectPolicy", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), request_body = UpdateDevRailProjectPolicyRequest, responses((status = 200, body = DevRailProjectPolicyResponse), (status = 422, body = ErrorEnvelope)))]
+fn update_devrail_project_policy() {}
 #[utoipa::path(get, path = "/projects/{project_id}/members", operation_id = "listDevRailProjectMembers", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path)), responses((status = 200, body = DevRailProjectMemberPage)))]
 fn list_devrail_project_members() {}
 #[utoipa::path(post, path = "/projects/{project_id}/members", operation_id = "addDevRailProjectMember", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path)), request_body = AddDevRailProjectMemberRequest, responses((status = 201, body = DevRailProjectMemberResponse)))]
@@ -821,7 +826,8 @@ fn reject_devrail_approval() {}
         dashboard_stats,
         list_audit_logs
         ,list_devrail_projects, create_devrail_project, get_devrail_project,
-        update_devrail_project, archive_devrail_project, list_devrail_project_members,
+        update_devrail_project, archive_devrail_project, get_devrail_project_policy,
+        update_devrail_project_policy, list_devrail_project_members,
         add_devrail_project_member, remove_devrail_project_member, list_devrail_repositories,
         create_devrail_repository, get_devrail_repository, update_devrail_repository,
         list_devrail_environments, create_devrail_environment, get_devrail_environment,
@@ -882,10 +888,10 @@ fn reject_devrail_approval() {}
         UpdateRolePermissionsRequest,
         PermissionCodes,
         DashboardStats,
-        DevRailProjectResponse, DevRailProjectPage, DevRailProjectMemberPage, DevRailProjectMemberResponse, AddDevRailProjectMemberRequest, DevRailRepositoryResponse,
+        DevRailProjectResponse, DevRailProjectPolicyResponse, DevRailProjectPage, DevRailProjectMemberPage, DevRailProjectMemberResponse, AddDevRailProjectMemberRequest, DevRailRepositoryResponse,
         DevRailRepositoryPage, DevRailEnvironmentResponse, DevRailEnvironmentPage,
         DevRailTaskResponse, DevRailTaskPage, CreateDevRailProjectRequest,
-        UpdateDevRailProjectRequest, CreateDevRailRepositoryRequest,
+        UpdateDevRailProjectRequest, UpdateDevRailProjectPolicyRequest, CreateDevRailRepositoryRequest,
         UpdateDevRailRepositoryRequest, CreateDevRailEnvironmentRequest,
         UpdateDevRailEnvironmentRequest, CreateDevRailTaskRequest,
         UpdateDevRailTaskRequest, CreateDevRailRunRequest, DevRailRunResponse,
