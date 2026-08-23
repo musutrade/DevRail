@@ -78,6 +78,49 @@ fn project_response(row: DevRailProjectRow) -> DevRailProjectResponse {
         archived_at: row.archived_at,
     }
 }
+
+fn project_policy_response(row: DevRailProjectRow) -> DevRailProjectPolicyResponse {
+    DevRailProjectPolicyResponse {
+        project_id: row.id,
+        notification_policy: row.notification_policy,
+        quality_gate_template: row.quality_gate_template,
+    }
+}
+
+pub async fn get_project_policy(
+    pool: &PgPool,
+    actor: &ActorContext,
+    id: i64,
+) -> Result<DevRailProjectPolicyResponse, ApiError> {
+    devrail::find_project(pool, actor, id)
+        .await
+        .map_err(db_error)?
+        .map(project_policy_response)
+        .ok_or_else(|| ApiError::not_found("项目不存在或超出数据范围"))
+}
+
+pub async fn update_project_policy(
+    pool: &PgPool,
+    actor: &ActorContext,
+    id: i64,
+    req: &UpdateDevRailProjectPolicyRequest,
+) -> Result<DevRailProjectPolicyResponse, ApiError> {
+    if req.notification_policy.is_none() && req.quality_gate_template.is_none() {
+        return Err(ApiError::validation("至少需要提供一个策略字段"));
+    }
+    let update = UpdateDevRailProjectRequest {
+        name: None,
+        description: NullablePatch::Missing,
+        department_id: NullablePatch::Missing,
+        status: None,
+        default_repository_id: NullablePatch::Missing,
+        default_environment_id: NullablePatch::Missing,
+        notification_policy: req.notification_policy.clone(),
+        quality_gate_template: req.quality_gate_template.clone(),
+    };
+    update_project(pool, actor, id, &update).await?;
+    get_project_policy(pool, actor, id).await
+}
 fn repository_response(row: DevRailRepositoryRow) -> DevRailRepositoryResponse {
     DevRailRepositoryResponse {
         id: row.id,

@@ -61,6 +61,27 @@ pub async fn archive_project(
         .map(|_| StatusCode::NO_CONTENT)
 }
 
+pub async fn get_project_policy(
+    State(s): State<AppState>,
+    auth: RequirePermission<ProjectRead>,
+    Path(id): Path<i64>,
+) -> Result<Json<DevRailProjectPolicyResponse>, ApiError> {
+    services::devrail::get_project_policy(&s.pool, &auth, id)
+        .await
+        .map(Json)
+}
+
+pub async fn update_project_policy(
+    State(s): State<AppState>,
+    auth: RequirePermission<ProjectWrite>,
+    Path(id): Path<i64>,
+    Json(req): Json<UpdateDevRailProjectPolicyRequest>,
+) -> Result<Json<DevRailProjectPolicyResponse>, ApiError> {
+    services::devrail::update_project_policy(&s.pool, &auth, id, &req)
+        .await
+        .map(Json)
+}
+
 pub async fn list_members(
     State(s): State<AppState>,
     auth: RequirePermission<MemberRead>,

@@ -1,0 +1,38 @@
+<div class="page devrail-policy-page">
+  <div class="page-header">
+    <div>
+      <a routerLink="/devrail/projects">返回 DevRail 项目</a>
+      <h1>项目策略</h1>
+      <p>配置通知规则与质量门禁模板，策略会在创建运行时写入快照。</p>
+    </div>
+  </div>
+  @if (loading()) {
+    <div class="loading-wrap" role="status">正在加载项目策略</div>
+  } @else {
+    <section class="policy-form">
+      <label>
+        通知策略 JSON
+        <textarea
+          [value]="notificationPolicy()"
+          (input)="setNotificationPolicy($any($event.target).value)"
+          rows="12"
+          spellcheck="false"
+          aria-label="通知策略 JSON"
+        ></textarea>
+      </label>
+      <label>
+        质量门禁模板 JSON
+        <textarea
+          [value]="qualityGateTemplate()"
+          (input)="setQualityGateTemplate($any($event.target).value)"
+          rows="12"
+          spellcheck="false"
+          aria-label="质量门禁模板 JSON"
+        ></textarea>
+      </label>
+      <button class="btn-primary" type="button" (click)="save()" [disabled]="busy()">
+        <mat-icon>save</mat-icon>保存策略
+      </button>
+    </section>
+  }
+</div>

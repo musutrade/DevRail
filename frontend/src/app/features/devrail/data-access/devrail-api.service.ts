@@ -7,6 +7,7 @@ import { createDevRailRepository } from '../../../generated/api/fn/devrail/creat
 import { createDevRailTask } from '../../../generated/api/fn/devrail/create-dev-rail-task';
 import { getDevRailEnvironment } from '../../../generated/api/fn/devrail/get-dev-rail-environment';
 import { getDevRailProject } from '../../../generated/api/fn/devrail/get-dev-rail-project';
+import { getDevRailProjectPolicy } from '../../../generated/api/fn/devrail/get-dev-rail-project-policy';
 import { getDevRailRepository } from '../../../generated/api/fn/devrail/get-dev-rail-repository';
 import { getDevRailTask } from '../../../generated/api/fn/devrail/get-dev-rail-task';
 import { listDevRailEnvironments } from '../../../generated/api/fn/devrail/list-dev-rail-environments';
@@ -15,6 +16,7 @@ import { listDevRailRepositories } from '../../../generated/api/fn/devrail/list-
 import { listDevRailTasks } from '../../../generated/api/fn/devrail/list-dev-rail-tasks';
 import { updateDevRailEnvironment } from '../../../generated/api/fn/devrail/update-dev-rail-environment';
 import { updateDevRailProject } from '../../../generated/api/fn/devrail/update-dev-rail-project';
+import { updateDevRailProjectPolicy } from '../../../generated/api/fn/devrail/update-dev-rail-project-policy';
 import { updateDevRailRepository } from '../../../generated/api/fn/devrail/update-dev-rail-repository';
 import { updateDevRailTask } from '../../../generated/api/fn/devrail/update-dev-rail-task';
 import { getDevRailRun } from '../../../generated/api/fn/devrail/get-dev-rail-run';
@@ -31,10 +33,12 @@ import type {
   CreateDevRailTaskRequest,
   DevRailEnvironmentPage,
   DevRailProjectPage,
+  DevRailProjectPolicyResponse,
   DevRailRepositoryPage,
   DevRailTaskPage,
   UpdateDevRailEnvironmentRequest,
   UpdateDevRailProjectRequest,
+  UpdateDevRailProjectPolicyRequest,
   UpdateDevRailRepositoryRequest,
   UpdateDevRailTaskRequest,
   DevRailRunEventPage,
@@ -63,6 +67,12 @@ export class DevRailApiService {
   }
   archiveProject(id: number) {
     return this.api.invoke(archiveDevRailProject, { id });
+  }
+  getProjectPolicy(id: number): Promise<DevRailProjectPolicyResponse> {
+    return this.api.invoke(getDevRailProjectPolicy, { id });
+  }
+  updateProjectPolicy(id: number, body: UpdateDevRailProjectPolicyRequest) {
+    return this.api.invoke(updateDevRailProjectPolicy, { id, body });
   }
 
   listMembers(projectId: number): Promise<DevRailProjectMemberPage> {

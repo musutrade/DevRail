@@ -1891,6 +1891,96 @@
         ]
       }
     },
+    "/projects/{id}/policy": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "getDevRailProjectPolicy",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailProjectPolicyResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "updateDevRailProjectPolicy",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDevRailProjectPolicyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailProjectPolicyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/projects/{project_id}/environments": {
       "get": {
         "tags": [
@@ -5047,6 +5137,22 @@
           }
         }
       },
+      "DevRailProjectPolicyResponse": {
+        "type": "object",
+        "required": [
+          "projectId",
+          "notificationPolicy",
+          "qualityGateTemplate"
+        ],
+        "properties": {
+          "notificationPolicy": {},
+          "projectId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "qualityGateTemplate": {}
+        }
+      },
       "DevRailProjectResponse": {
         "type": "object",
         "required": [
@@ -6338,6 +6444,13 @@
               "null"
             ]
           }
+        }
+      },
+      "UpdateDevRailProjectPolicyRequest": {
+        "type": "object",
+        "properties": {
+          "notificationPolicy": {},
+          "qualityGateTemplate": {}
         }
       },
       "UpdateDevRailProjectRequest": {
