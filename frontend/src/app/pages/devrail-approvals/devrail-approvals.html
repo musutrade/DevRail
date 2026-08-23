@@ -1,0 +1,74 @@
+<div class="page approvals-page">
+  <div class="page-header">
+    <div>
+      <h1>DevRail 审批中心</h1>
+      <p>处理 Agent 发起的高风险工具和命令审批。</p>
+    </div>
+  </div>
+  @if (loading()) {
+    <div class="loading-wrap" role="status"><mat-progress-spinner diameter="32" /></div>
+  } @else if (error()) {
+    <div class="empty-state" role="alert">{{ error() }}</div>
+  } @else {
+    <section class="table-card">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>工具</th>
+            <th>风险</th>
+            <th>运行</th>
+            <th>状态</th>
+            <th>过期时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (approval of approvals(); track approval.id) {
+            <tr>
+              <td>
+                <strong>{{ approval.toolName }}</strong
+                ><small>{{ approval.cwd }}</small>
+              </td>
+              <td>{{ approval.riskLevel }}</td>
+              <td>#{{ approval.runId }}</td>
+              <td>{{ approval.status }}</td>
+              <td>{{ approval.expiresAt | date: 'yyyy-MM-dd HH:mm' }}</td>
+              <td>
+                <a
+                  class="row-btn"
+                  [routerLink]="['/devrail/approvals', approval.id]"
+                  aria-label="查看审批"
+                  ><mat-icon>open_in_new</mat-icon></a
+                >
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="6">暂无审批请求</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      <div class="pager">
+        <span>共 {{ total() }} 条，第 {{ page() }} 页</span
+        ><button
+          class="row-btn"
+          type="button"
+          (click)="previousPage()"
+          [disabled]="page() === 1"
+          aria-label="上一页"
+        >
+          <mat-icon>chevron_left</mat-icon></button
+        ><button
+          class="row-btn"
+          type="button"
+          (click)="nextPage()"
+          [disabled]="page() * pageSize >= total()"
+          aria-label="下一页"
+        >
+          <mat-icon>chevron_right</mat-icon>
+        </button>
+      </div>
+    </section>
+  }
+</div>

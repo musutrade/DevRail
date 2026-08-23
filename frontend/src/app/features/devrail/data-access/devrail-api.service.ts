@@ -26,6 +26,10 @@ import { retryDevRailRun } from '../../../generated/api/fn/devrail/retry-dev-rai
 import { listDevRailProjectMembers } from '../../../generated/api/fn/devrail/list-dev-rail-project-members';
 import { addDevRailProjectMember } from '../../../generated/api/fn/devrail/add-dev-rail-project-member';
 import { removeDevRailProjectMember } from '../../../generated/api/fn/devrail/remove-dev-rail-project-member';
+import { listDevRailApprovals } from '../../../generated/api/fn/devrail/list-dev-rail-approvals';
+import { getDevRailApproval } from '../../../generated/api/fn/devrail/get-dev-rail-approval';
+import { approveDevRailApproval } from '../../../generated/api/fn/devrail/approve-dev-rail-approval';
+import { rejectDevRailApproval } from '../../../generated/api/fn/devrail/reject-dev-rail-approval';
 import type {
   CreateDevRailEnvironmentRequest,
   CreateDevRailProjectRequest,
@@ -47,6 +51,9 @@ import type {
   AddDevRailProjectMemberRequest,
   DevRailProjectMemberPage,
   DevRailProjectMemberResponse,
+  DevRailApprovalPage,
+  DevRailApprovalResponse,
+  DevRailApprovalDecisionRequest,
 } from '../../../generated/api/models';
 
 @Injectable({ providedIn: 'root' })
@@ -86,6 +93,24 @@ export class DevRailApiService {
   }
   removeMember(projectId: number, userId: number): Promise<void> {
     return this.api.invoke(removeDevRailProjectMember, { project_id: projectId, user_id: userId });
+  }
+  listApprovals(page = 1, pageSize = 20): Promise<DevRailApprovalPage> {
+    return this.api.invoke(listDevRailApprovals, { page, pageSize });
+  }
+  getApproval(id: number): Promise<DevRailApprovalResponse> {
+    return this.api.invoke(getDevRailApproval, { id });
+  }
+  approveApproval(
+    id: number,
+    body: DevRailApprovalDecisionRequest,
+  ): Promise<DevRailApprovalResponse> {
+    return this.api.invoke(approveDevRailApproval, { id, body });
+  }
+  rejectApproval(
+    id: number,
+    body: DevRailApprovalDecisionRequest,
+  ): Promise<DevRailApprovalResponse> {
+    return this.api.invoke(rejectDevRailApproval, { id, body });
   }
 
   listRepositories(projectId: number, page = 1, pageSize = 20): Promise<DevRailRepositoryPage> {

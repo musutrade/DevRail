@@ -90,6 +90,22 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/devrail/devrail').then((m) => m.DevRailPage),
       },
       {
+        path: 'devrail/approvals',
+        canActivate: [permissionGuard],
+        data: { permissions: ROUTE_ACCESS.devrail },
+        loadComponent: () =>
+          import('./pages/devrail-approvals/devrail-approvals').then((m) => m.DevRailApprovalsPage),
+      },
+      {
+        path: 'devrail/approvals/:id',
+        canActivate: [permissionGuard],
+        data: { permissions: ROUTE_ACCESS.devrail },
+        loadComponent: () =>
+          import('./pages/devrail-approval-detail/devrail-approval-detail').then(
+            (m) => m.DevRailApprovalDetailPage,
+          ),
+      },
+      {
         path: 'devrail/projects/:id/members',
         canActivate: [permissionGuard],
         data: { permissions: ROUTE_ACCESS.devrail },
