@@ -1036,6 +1036,9 @@ async fn login_and_user_crud_flow() {
             "devrail:member:write",
             "devrail:notification:read",
             "devrail:notification:write",
+            "devrail:push_device:read",
+            "devrail:push_device:write",
+            "devrail:push_device:revoke",
         ])
     );
     let permission_id = |code: &str| {

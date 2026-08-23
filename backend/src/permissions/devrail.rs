@@ -76,3 +76,15 @@ pub struct NotificationWrite;
 impl PermissionRequirement for NotificationWrite {
     const CODE: &'static str = "devrail:notification:write";
 }
+pub struct PushDeviceRead;
+impl PermissionRequirement for PushDeviceRead {
+    const CODE: &'static str = "devrail:push_device:read";
+}
+pub struct PushDeviceWrite;
+impl PermissionRequirement for PushDeviceWrite {
+    const CODE: &'static str = "devrail:push_device:write";
+}
+pub struct PushDeviceRevoke;
+impl PermissionRequirement for PushDeviceRevoke {
+    const CODE: &'static str = "devrail:push_device:revoke";
+}

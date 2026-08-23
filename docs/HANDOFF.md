@@ -26,7 +26,7 @@ DevRail 的产品范围见 [需求文档](requirements.md)，当前实现口径�
 | 测试     | ESLint、Prettier、84 项 Angular 单测、Playwright 桌面/移动端 E2E、Rust/PostgreSQL 集成测试和全栈 smoke |
 | 运维     | 生产 Compose、独立 migration、JSON 日志、Prometheus/Loki/Grafana、Blackbox、可选 Tempo、备份与审计归档 |
 | 供应链   | Dependabot、RustSec、`cargo deny`、CodeQL、Trivy 镜像扫描和 SPDX SBOM                                  |
-| DevRail 产品 MVP | 仍未完成；Phase 0 CRUD 与仓库/环境创建入口、仓库远端 HEAD 同步检查、环境健康检查，以及 Phase 1 Harness Supervisor、审批、撤回、过期 worker、活动 run 数据库重启恢复、策略版本校验、受限命令质量门禁执行、质量门禁失败联动、终态重试、审批 UI、运行详情、changeset/质量门禁查询已加入；Phase 2 已加入站内通知、transactional outbox、run 终态通知、审批状态通知、用户通知偏好和通知中心/设置页面，完整资源同步、完整质量门禁定义与日志引用、Web Push、设备注册、投递重试和审计仍待开发 |
+| DevRail 产品 MVP | 仍未完成；Phase 0 CRUD 与仓库/环境创建入口、仓库远端 HEAD 同步检查、环境健康检查，以及 Phase 1 Harness Supervisor、审批、撤回、过期 worker、活动 run 数据库重启恢复、策略版本校验、受限命令质量门禁执行、质量门禁失败联动、终态重试、审批 UI、运行详情、changeset/质量门禁查询已加入；Phase 2 已加入站内通知、transactional outbox、run 终态通知、审批状态通知、用户通知偏好、通知中心/设置页面和 Web Push 设备注册/列表/撤销，完整资源同步、完整质量门禁定义与日志引用、VAPID 初始化、投递 worker、重试和审计仍待开发 |
 | 审计工具配套 | `arc-flow` 生产化、跨平台 CI、性能基准、SBOM 和操作文档已完成 |
 
 ## 常用命令

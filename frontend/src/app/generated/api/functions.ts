@@ -69,6 +69,12 @@ export type { GetDevRailTask$Params as GetDevRailTask$Params } from './fn/devrai
 export { getDevRailTask as getDevRailTask } from './fn/devrail/get-dev-rail-task';
 export type { UpdateDevRailTask$Params as UpdateDevRailTask$Params } from './fn/devrail/update-dev-rail-task';
 export { updateDevRailTask as updateDevRailTask } from './fn/devrail/update-dev-rail-task';
+export type { ListDevRailPushDevices$Params as ListDevRailPushDevices$Params } from './fn/devrail/list-dev-rail-push-devices';
+export { listDevRailPushDevices as listDevRailPushDevices } from './fn/devrail/list-dev-rail-push-devices';
+export type { RegisterDevRailPushDevice$Params as RegisterDevRailPushDevice$Params } from './fn/devrail/register-dev-rail-push-device';
+export { registerDevRailPushDevice as registerDevRailPushDevice } from './fn/devrail/register-dev-rail-push-device';
+export type { RevokeDevRailPushDevice$Params as RevokeDevRailPushDevice$Params } from './fn/devrail/revoke-dev-rail-push-device';
+export { revokeDevRailPushDevice as revokeDevRailPushDevice } from './fn/devrail/revoke-dev-rail-push-device';
 export type { GetDevRailRun$Params as GetDevRailRun$Params } from './fn/devrail/get-dev-rail-run';
 export { getDevRailRun as getDevRailRun } from './fn/devrail/get-dev-rail-run';
 export type { GetDevRailRunChangeset$Params as GetDevRailRunChangeset$Params } from './fn/devrail/get-dev-rail-run-changeset';

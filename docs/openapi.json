@@ -3175,6 +3175,96 @@
         ]
       }
     },
+    "/push/devices": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "listDevRailPushDevices",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DevRailPushDeviceResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "registerDevRailPushDevice",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDevRailPushDeviceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailPushDeviceResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/push/devices/{id}": {
+      "delete": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "revokeDevRailPushDevice",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/readyz": {
       "get": {
         "tags": [
@@ -5996,6 +6086,80 @@
           }
         }
       },
+      "DevRailPushDeviceResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "deviceName",
+          "platform",
+          "endpointFingerprint",
+          "status",
+          "lastActiveAt",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "browser": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "clientVersion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deviceName": {
+            "type": "string"
+          },
+          "endpointFingerprint": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastActiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "platform": {
+            "type": "string"
+          },
+          "revokedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "DevRailQualityGatePage": {
         "type": "object",
         "required": [
@@ -7054,6 +7218,51 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "RegisterDevRailPushDeviceRequest": {
+        "type": "object",
+        "required": [
+          "deviceName",
+          "platform",
+          "endpoint",
+          "p256dh",
+          "auth"
+        ],
+        "properties": {
+          "auth": {
+            "type": "string"
+          },
+          "browser": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "clientVersion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deviceName": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "p256dh": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
