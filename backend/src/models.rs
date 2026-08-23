@@ -883,6 +883,18 @@ pub struct DevRailEnvironmentResponse {
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct DevRailEnvironmentHealthResponse {
+    pub environment_id: i64,
+    pub status: String,
+    pub enabled: bool,
+    pub workspace_exists: bool,
+    pub workspace_is_directory: bool,
+    pub workspace_writable: bool,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct DevRailTaskResponse {
     pub id: i64,
     pub organization_id: i64,

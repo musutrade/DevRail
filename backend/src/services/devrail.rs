@@ -603,6 +603,35 @@ fn duration(value: i64) -> Result<i64, ApiError> {
         Err(ApiError::validation("最大运行时长必须在 60-86400 秒之间"))
     }
 }
+fn environment_health(
+    enabled: bool,
+    metadata: Option<&std::fs::Metadata>,
+) -> (bool, bool, bool, bool, String) {
+    let workspace_exists = metadata.is_some();
+    let workspace_is_directory = metadata.as_ref().is_some_and(|value| value.is_dir());
+    let workspace_writable = metadata
+        .as_ref()
+        .is_some_and(|value| !value.permissions().readonly());
+    let healthy = enabled && workspace_exists && workspace_is_directory && workspace_writable;
+    let message = if !enabled {
+        "环境已禁用"
+    } else if !workspace_exists {
+        "工作区不存在"
+    } else if !workspace_is_directory {
+        "工作区不是目录"
+    } else if !workspace_writable {
+        "工作区不可写"
+    } else {
+        "环境健康"
+    };
+    (
+        healthy,
+        workspace_exists,
+        workspace_is_directory,
+        workspace_writable,
+        message.to_string(),
+    )
+}
 pub async fn list_environments(
     pool: &PgPool,
     actor: &ActorContext,
@@ -744,6 +773,46 @@ pub async fn update_environment(
     .map_err(db_error)?;
     tx.commit().await.map_err(db_error)?;
     get_environment(pool, actor, project_id, id).await
+}
+
+pub async fn health_check_environment(
+    pool: &PgPool,
+    actor: &ActorContext,
+    project_id: i64,
+    id: i64,
+) -> Result<DevRailEnvironmentHealthResponse, ApiError> {
+    let environment = get_environment(pool, actor, project_id, id).await?;
+    let metadata = tokio::fs::metadata(&environment.workspace_root).await.ok();
+    let (healthy, workspace_exists, workspace_is_directory, workspace_writable, message) =
+        environment_health(environment.enabled, metadata.as_ref());
+    let response = DevRailEnvironmentHealthResponse {
+        environment_id: id,
+        status: if healthy { "healthy" } else { "unhealthy" }.to_string(),
+        enabled: environment.enabled,
+        workspace_exists,
+        workspace_is_directory,
+        workspace_writable,
+        message,
+    };
+    let mut tx = pool.begin().await.map_err(db_error)?;
+    repositories::audit_logs::record(
+        &mut tx,
+        Some(actor.user_id),
+        "devrail.environment.health_check",
+        "devrail_environment",
+        Some(id),
+        json!({
+            "projectId": project_id,
+            "status": response.status,
+            "workspaceExists": response.workspace_exists,
+            "workspaceIsDirectory": response.workspace_is_directory,
+            "workspaceWritable": response.workspace_writable,
+        }),
+    )
+    .await
+    .map_err(db_error)?;
+    tx.commit().await.map_err(db_error)?;
+    Ok(response)
 }
 
 fn priority(value: &str) -> Result<String, ApiError> {
@@ -962,5 +1031,15 @@ mod tests {
         assert!(workspace("/srv/../etc").is_err());
         assert!(duration(3600).is_ok());
         assert!(duration(30).is_err());
+    }
+
+    #[test]
+    fn reports_environment_health_for_disabled_and_missing_workspaces() {
+        let disabled = environment_health(false, None);
+        assert!(!disabled.0);
+        assert_eq!(disabled.4, "环境已禁用");
+        let missing = environment_health(true, None);
+        assert!(!missing.0);
+        assert_eq!(missing.4, "工作区不存在");
     }
 }

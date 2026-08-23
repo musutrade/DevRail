@@ -20,6 +20,9 @@ export class DevRailResourceDetailPage implements OnInit {
   readonly resource = signal<DevRailRepository | DevRailEnvironment | null>(null);
   readonly kind = signal<'repositories' | 'environments'>('repositories');
   readonly busy = signal(false);
+  readonly health = signal<Awaited<ReturnType<DevRailApiService['healthCheckEnvironment']>> | null>(
+    null,
+  );
   projectId = 0;
   resourceId = 0;
   private readonly route = inject(ActivatedRoute);
@@ -72,6 +75,17 @@ export class DevRailResourceDetailPage implements OnInit {
       this.snack.open('仓库同步检查已完成', '关闭', { duration: 2500 });
     } catch (e) {
       this.snack.open(apiErrorMessage(e, '仓库同步失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
+  async healthCheckEnvironment(): Promise<void> {
+    this.busy.set(true);
+    try {
+      this.health.set(await this.api.healthCheckEnvironment(this.projectId, this.resourceId));
+      this.snack.open('环境健康检查已完成', '关闭', { duration: 2500 });
+    } catch (e) {
+      this.snack.open(apiErrorMessage(e, '环境健康检查失败'), '关闭', { duration: 5000 });
     } finally {
       this.busy.set(false);
     }

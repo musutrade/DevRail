@@ -12,13 +12,14 @@ use crate::models::{
     CreateDevRailRunRequest, CreateDevRailTaskRequest, CreateRoleRequest, CreateUserRequest,
     DashboardStats, DataScopeSchema, DepartmentResponse, DepartmentStatusSchema,
     DevRailApprovalDecisionRequest, DevRailApprovalPage, DevRailApprovalResponse,
-    DevRailChangesetResponse, DevRailEnvironmentPage, DevRailEnvironmentResponse, DevRailListQuery,
-    DevRailNotificationPage, DevRailNotificationPreferencesResponse, DevRailNotificationResponse,
-    DevRailProjectMemberPage, DevRailProjectMemberResponse, DevRailProjectPage,
-    DevRailProjectPolicyResponse, DevRailProjectResponse, DevRailQualityGatePage,
-    DevRailRepositoryPage, DevRailRepositoryResponse, DevRailRunEventPage, DevRailRunPage,
-    DevRailRunResponse, DevRailTaskPage, DevRailTaskResponse, HealthResponse, LoginRequest,
-    LoginResponse, LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest, MfaMethodSchema,
+    DevRailChangesetResponse, DevRailEnvironmentHealthResponse, DevRailEnvironmentPage,
+    DevRailEnvironmentResponse, DevRailListQuery, DevRailNotificationPage,
+    DevRailNotificationPreferencesResponse, DevRailNotificationResponse, DevRailProjectMemberPage,
+    DevRailProjectMemberResponse, DevRailProjectPage, DevRailProjectPolicyResponse,
+    DevRailProjectResponse, DevRailQualityGatePage, DevRailRepositoryPage,
+    DevRailRepositoryResponse, DevRailRunEventPage, DevRailRunPage, DevRailRunResponse,
+    DevRailTaskPage, DevRailTaskResponse, HealthResponse, LoginRequest, LoginResponse,
+    LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest, MfaMethodSchema,
     MfaPasskeyAuthenticationFinishRequest, MfaPasskeyAuthenticationStartRequest,
     MfaPasskeyRegistrationFinishRequest, MfaPasskeyRegistrationStartRequest, MfaPasskeyResponse,
     MfaStatusResponse, MfaWebauthnChallengeResponse, ModuleUnlockRequest, ModuleUnlockScopeSchema,
@@ -746,6 +747,8 @@ fn create_devrail_environment() {}
 fn get_devrail_environment() {}
 #[utoipa::path(patch, path = "/projects/{project_id}/environments/{id}", operation_id = "updateDevRailEnvironment", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), ("id" = i64, Path)), request_body = UpdateDevRailEnvironmentRequest, responses((status = 200, body = DevRailEnvironmentResponse)))]
 fn update_devrail_environment() {}
+#[utoipa::path(post, path = "/projects/{project_id}/environments/{id}/health-check", operation_id = "healthCheckDevRailEnvironment", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), ("id" = i64, Path)), responses((status = 200, body = DevRailEnvironmentHealthResponse)))]
+fn health_check_devrail_environment() {}
 
 #[utoipa::path(get, path = "/projects/{project_id}/tasks", operation_id = "listDevRailTasks", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), DevRailListQuery), responses((status = 200, body = DevRailTaskPage)))]
 fn list_devrail_tasks() {}
@@ -851,7 +854,7 @@ fn withdraw_devrail_approval() {}
         add_devrail_project_member, remove_devrail_project_member, list_devrail_repositories,
         create_devrail_repository, get_devrail_repository, update_devrail_repository, sync_devrail_repository,
         list_devrail_environments, create_devrail_environment, get_devrail_environment,
-        update_devrail_environment, list_devrail_tasks, create_devrail_task,
+        update_devrail_environment, health_check_devrail_environment, list_devrail_tasks, create_devrail_task,
         get_devrail_task, update_devrail_task, create_devrail_run, list_devrail_runs,
         get_devrail_run, interrupt_devrail_run, list_devrail_run_events, get_devrail_run_changeset, get_devrail_run_quality_gates
         ,stream_devrail_run_events, retry_devrail_run, list_devrail_approvals,
@@ -913,7 +916,7 @@ fn withdraw_devrail_approval() {}
         DevRailTaskResponse, DevRailTaskPage, CreateDevRailProjectRequest,
         UpdateDevRailProjectRequest, UpdateDevRailProjectPolicyRequest, CreateDevRailRepositoryRequest,
         UpdateDevRailRepositoryRequest, CreateDevRailEnvironmentRequest,
-        UpdateDevRailEnvironmentRequest, CreateDevRailTaskRequest,
+        UpdateDevRailEnvironmentRequest, DevRailEnvironmentHealthResponse, CreateDevRailTaskRequest,
         UpdateDevRailTaskRequest, CreateDevRailRunRequest, DevRailRunResponse,
         DevRailRunPage, DevRailRunEventPage, DevRailChangesetResponse, DevRailQualityGatePage, DevRailNotificationPage, DevRailNotificationResponse, DevRailNotificationPreferencesResponse, UpdateDevRailNotificationPreferencesRequest, RetryDevRailRunRequest,
         DevRailApprovalResponse, DevRailApprovalPage, DevRailApprovalDecisionRequest

@@ -43,6 +43,8 @@ export type { GetDevRailEnvironment$Params as GetDevRailEnvironment$Params } fro
 export { getDevRailEnvironment as getDevRailEnvironment } from './fn/devrail/get-dev-rail-environment';
 export type { UpdateDevRailEnvironment$Params as UpdateDevRailEnvironment$Params } from './fn/devrail/update-dev-rail-environment';
 export { updateDevRailEnvironment as updateDevRailEnvironment } from './fn/devrail/update-dev-rail-environment';
+export type { HealthCheckDevRailEnvironment$Params as HealthCheckDevRailEnvironment$Params } from './fn/devrail/health-check-dev-rail-environment';
+export { healthCheckDevRailEnvironment as healthCheckDevRailEnvironment } from './fn/devrail/health-check-dev-rail-environment';
 export type { ListDevRailProjectMembers$Params as ListDevRailProjectMembers$Params } from './fn/devrail/list-dev-rail-project-members';
 export { listDevRailProjectMembers as listDevRailProjectMembers } from './fn/devrail/list-dev-rail-project-members';
 export type { AddDevRailProjectMember$Params as AddDevRailProjectMember$Params } from './fn/devrail/add-dev-rail-project-member';

@@ -70,6 +70,8 @@ const DEVRAIL_REPOSITORY_PATH: &str = "/api/v1/projects/{project_id}/repositorie
 const DEVRAIL_REPOSITORY_SYNC_PATH: &str = "/api/v1/projects/{project_id}/repositories/{id}/sync";
 const DEVRAIL_ENVIRONMENTS_PATH: &str = "/api/v1/projects/{project_id}/environments";
 const DEVRAIL_ENVIRONMENT_PATH: &str = "/api/v1/projects/{project_id}/environments/{id}";
+const DEVRAIL_ENVIRONMENT_HEALTH_PATH: &str =
+    "/api/v1/projects/{project_id}/environments/{id}/health-check";
 const DEVRAIL_TASKS_PATH: &str = "/api/v1/projects/{project_id}/tasks";
 const DEVRAIL_TASK_PATH: &str = "/api/v1/projects/{project_id}/tasks/{id}";
 const DEVRAIL_TASK_RUNS_PATH: &str = "/api/v1/tasks/{task_id}/runs";
@@ -136,6 +138,7 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_REPOSITORY_SYNC_PATH, &["post"]),
     (DEVRAIL_ENVIRONMENTS_PATH, &["get", "post"]),
     (DEVRAIL_ENVIRONMENT_PATH, &["get", "patch"]),
+    (DEVRAIL_ENVIRONMENT_HEALTH_PATH, &["post"]),
     (DEVRAIL_TASKS_PATH, &["get", "post"]),
     (DEVRAIL_TASK_PATH, &["get", "patch"]),
     (DEVRAIL_TASK_RUNS_PATH, &["get", "post"]),
@@ -324,6 +327,10 @@ fn base_router(state: AppState) -> Router {
         .route(
             DEVRAIL_ENVIRONMENT_PATH,
             get(handlers::devrail::get_environment).patch(handlers::devrail::update_environment),
+        )
+        .route(
+            DEVRAIL_ENVIRONMENT_HEALTH_PATH,
+            post(handlers::devrail::health_check_environment),
         )
         .route(
             DEVRAIL_TASKS_PATH,
