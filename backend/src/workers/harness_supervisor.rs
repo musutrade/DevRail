@@ -648,6 +648,43 @@ async fn finish_run(
         },
     )
     .await?;
+    let (level, title) = if status == "completed" {
+        ("success", "运行已完成")
+    } else {
+        ("error", "运行失败")
+    };
+    let source_key = format!("run:{}:{}", launch.run_id, reason);
+    let deep_link = format!("/devrail/runs/{}", launch.run_id);
+    crate::repositories::devrail_notifications::create(
+        &mut tx,
+        &crate::repositories::devrail_notifications::NewNotification {
+            organization_id: launch.organization_id,
+            department_id: launch.department_id,
+            recipient_user_id: launch.owner_user_id,
+            event_type: if status == "completed" {
+                "run.completed"
+            } else {
+                "run.failed"
+            },
+            level,
+            title,
+            summary: recovery.unwrap_or("运行状态已更新"),
+            resource_type: Some("devrail_run"),
+            resource_id: Some(launch.run_id),
+            deep_link: Some(&deep_link),
+            source_key: &source_key,
+        },
+    )
+    .await?;
+    crate::repositories::devrail_notifications::outbox(
+        &mut tx,
+        launch.organization_id,
+        "notification.created",
+        "devrail_run",
+        Some(launch.run_id),
+        &json!({"notificationSource":source_key}),
+    )
+    .await?;
     tx.commit().await
 }
 

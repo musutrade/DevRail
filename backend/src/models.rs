@@ -1013,6 +1013,50 @@ pub struct DevRailQualityGateResponse {
     pub summary: Option<String>,
 }
 
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct DevRailNotificationRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub recipient_user_id: i64,
+    pub event_type: String,
+    pub level: String,
+    pub title: String,
+    pub summary: String,
+    pub resource_type: Option<String>,
+    pub resource_id: Option<i64>,
+    pub deep_link: Option<String>,
+    pub source_key: String,
+    pub read_at: Option<DateTime<Utc>>,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailNotificationResponse {
+    pub id: i64,
+    pub event_type: String,
+    pub level: String,
+    pub title: String,
+    pub summary: String,
+    pub resource_type: Option<String>,
+    pub resource_id: Option<i64>,
+    pub deep_link: Option<String>,
+    pub read_at: Option<DateTime<Utc>>,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+}
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailNotificationPage {
+    pub items: Vec<DevRailNotificationResponse>,
+    pub total: i64,
+    pub unread: i64,
+    pub page: i64,
+    pub page_size: i64,
+}
+
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DevRailApprovalResponse {

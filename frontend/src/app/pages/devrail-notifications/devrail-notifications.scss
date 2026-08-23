@@ -1,0 +1,26 @@
+.notifications-page {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.data-table strong,
+.data-table small {
+  display: block;
+}
+.data-table small {
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+}
+.unread-row strong {
+  font-weight: 700;
+}
+.summary {
+  color: var(--text-secondary);
+  padding-bottom: 1rem;
+}
+.pager {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.75rem;
+  padding-top: 1rem;
+}

@@ -26,7 +26,7 @@ DevRail 的产品范围见 [需求文档](requirements.md)，当前实现口径�
 | 测试     | ESLint、Prettier、84 项 Angular 单测、Playwright 桌面/移动端 E2E、Rust/PostgreSQL 集成测试和全栈 smoke |
 | 运维     | 生产 Compose、独立 migration、JSON 日志、Prometheus/Loki/Grafana、Blackbox、可选 Tempo、备份与审计归档 |
 | 供应链   | Dependabot、RustSec、`cargo deny`、CodeQL、Trivy 镜像扫描和 SPDX SBOM                                  |
-| DevRail 产品 MVP | 仍未完成；Phase 0 CRUD 与 Phase 1 Harness Supervisor、审批、撤回、过期 worker、活动 run 数据库重启恢复、策略版本校验、质量门禁失败联动、终态重试、审批 UI、运行详情、changeset/质量门禁查询已加入；通知、质量门禁执行器、outbox 和 Web Push 仍待开发 |
+| DevRail 产品 MVP | 仍未完成；Phase 0 CRUD 与 Phase 1 Harness Supervisor、审批、撤回、过期 worker、活动 run 数据库重启恢复、策略版本校验、质量门禁失败联动、终态重试、审批 UI、运行详情、changeset/质量门禁查询已加入；Phase 2 已加入站内通知、transactional outbox、终态通知和通知中心，质量门禁执行器、Web Push、设备/偏好、投递重试和审计仍待开发 |
 | 审计工具配套 | `arc-flow` 生产化、跨平台 CI、性能基准、SBOM 和操作文档已完成 |
 
 ## 常用命令
@@ -57,7 +57,7 @@ VISUAL_REVIEW=1 npm run e2e -- --project=chromium --project=mobile-chromium
 4. 保护 `main`，将 Quality gate、Backend verification、Frontend verification 设为 required checks，并启用 secret scanning 与 push protection；
 5. 将审计归档、SBOM、备份和发布证据写入权限独立的不可变存储，并执行恢复演练；
 6. 根据业务 RPO/RTO、数据分类、司法辖区与合同要求补齐高合规控制；
-7. 按 [DevRail 实现状态](devrail-implementation-status.md) 和 [需求文档](requirements.md) 继续完成 Phase 1 过期通知、质量门禁执行器与运行验收；当前 Harness Supervisor、审批持久化、审批 UI、撤回/过期 worker、活动 run 数据库重启恢复、策略版本校验、质量门禁失败联动、changeset/质量门禁查询和终态重试基础已落地，审计工具 P1/P2 已完成但不构成产品 MVP 完成。
+7. 按 [DevRail 实现状态](devrail-implementation-status.md) 和 [需求文档](requirements.md) 继续完成质量门禁执行器与通知推送链路；当前已落地站内通知、transactional outbox、终态通知和通知中心，Web Push 设备/偏好、dispatcher、投递重试/审计以及质量门禁执行器仍未完成。
 
 ## 已知边界
 

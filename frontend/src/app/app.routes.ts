@@ -97,6 +97,15 @@ export const routes: Routes = [
           import('./pages/devrail-approvals/devrail-approvals').then((m) => m.DevRailApprovalsPage),
       },
       {
+        path: 'devrail/notifications',
+        canActivate: [permissionGuard],
+        data: { permissions: ROUTE_ACCESS.devrail },
+        loadComponent: () =>
+          import('./pages/devrail-notifications/devrail-notifications').then(
+            (m) => m.DevRailNotificationsPage,
+          ),
+      },
+      {
         path: 'devrail/approvals/:id',
         canActivate: [permissionGuard],
         data: { permissions: ROUTE_ACCESS.devrail },

@@ -26,6 +26,8 @@ export type { DevRailChangeFileResponse } from './models/dev-rail-change-file-re
 export type { DevRailChangesetResponse } from './models/dev-rail-changeset-response';
 export type { DevRailEnvironmentPage } from './models/dev-rail-environment-page';
 export type { DevRailEnvironmentResponse } from './models/dev-rail-environment-response';
+export type { DevRailNotificationPage } from './models/dev-rail-notification-page';
+export type { DevRailNotificationResponse } from './models/dev-rail-notification-response';
 export type { DevRailProjectMemberPage } from './models/dev-rail-project-member-page';
 export type { DevRailProjectMemberResponse } from './models/dev-rail-project-member-response';
 export type { DevRailProjectPage } from './models/dev-rail-project-page';

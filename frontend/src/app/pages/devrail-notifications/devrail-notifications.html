@@ -1,0 +1,89 @@
+<div class="page notifications-page">
+  <div class="page-header">
+    <div>
+      <h1>DevRail 通知中心</h1>
+      <p>查看运行状态和需要关注的 DevRail 事件。</p>
+    </div>
+    <button class="row-btn" type="button" (click)="markAllRead()" [disabled]="unread() === 0">
+      <mat-icon>done_all</mat-icon><span>全部已读</span>
+    </button>
+  </div>
+  @if (loading()) {
+    <div class="loading-wrap" role="status"><mat-progress-spinner diameter="32" /></div>
+  } @else if (error()) {
+    <div class="empty-state" role="alert">{{ error() }}</div>
+  } @else {
+    <section class="table-card">
+      <div class="summary">未读 {{ unread() }} 条，共 {{ total() }} 条</div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>通知</th>
+            <th>类型</th>
+            <th>时间</th>
+            <th>状态</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (notification of notifications(); track notification.id) {
+            <tr [class.unread-row]="!notification.readAt">
+              <td>
+                <strong>{{ notification.title }}</strong
+                ><small>{{ notification.summary }}</small>
+              </td>
+              <td>{{ notification.eventType }}</td>
+              <td>{{ notification.createdAt | date: 'yyyy-MM-dd HH:mm' }}</td>
+              <td>{{ notification.readAt ? '已读' : '未读' }}</td>
+              <td>
+                @if (notification.deepLink) {
+                  <a
+                    class="row-btn"
+                    [routerLink]="notification.deepLink"
+                    (click)="markRead(notification)"
+                    aria-label="查看通知"
+                    ><mat-icon>open_in_new</mat-icon></a
+                  >
+                }
+                @if (!notification.readAt) {
+                  <button
+                    class="row-btn"
+                    type="button"
+                    (click)="markRead(notification)"
+                    aria-label="标记已读"
+                  >
+                    <mat-icon>done</mat-icon>
+                  </button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="5">暂无通知</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      <div class="pager">
+        <span>第 {{ page() }} 页</span
+        ><button
+          class="row-btn"
+          type="button"
+          (click)="previousPage()"
+          [disabled]="page() === 1"
+          aria-label="上一页"
+        >
+          <mat-icon>chevron_left</mat-icon></button
+        ><button
+          class="row-btn"
+          type="button"
+          (click)="nextPage()"
+          [disabled]="page() * pageSize >= total()"
+          aria-label="下一页"
+        >
+          <mat-icon>chevron_right</mat-icon>
+        </button>
+      </div>
+    </section>
+  }
+</div>
