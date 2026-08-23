@@ -15,7 +15,7 @@ concurrency:
 jobs:
   quality:
     name: Quality gate
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
@@ -45,7 +45,7 @@ jobs:
 
   backend:
     name: Backend verification
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
       postgres:
@@ -83,7 +83,7 @@ jobs:
 
   frontend:
     name: Frontend verification
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
       postgres:
@@ -130,7 +130,6 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
       - name: Install Playwright browser
         working-directory: frontend
-        # CentOS runner dependencies are provisioned on the runner host.
         run: npx playwright install chromium
       - name: Run frontend checks and tests
         env:
@@ -148,7 +147,7 @@ jobs:
   dependency-review:
     name: Dependency review
     if: github.event_name == 'pull_request' && github.event.repository.private == false
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
