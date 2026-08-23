@@ -30,7 +30,7 @@ DevRail 的 Codex Harness 开发系统 MVP **尚未实现完成**，因此不能
 | 任务、快照和运行 | 部分实现 | 已有任务详情页、服务端关键词/状态/负责人/标签筛选、分页、不可变任务快照、run 生命周期字段、单任务活动运行唯一约束、幂等创建、终态重试、指定 turn 恢复和运行详情页；仓库环境关联和完整状态验收仍待补齐。 |
 | Codex `app-server` Harness Supervisor | 基础实现 | 后端独占启动受控 `codex app-server`，完成初始化等待、thread/turn 启动、thread/resume、活动 run 数据库重启恢复、超时、stderr 摘要、恢复建议和优雅中断；审批等待状态仍需通知与人工恢复验收。 |
 | thread/turn/item 事件与 SSE | 基础实现 | JSONL 事件按安全类型脱敏持久化，提供 cursor 补拉、Last-Event-ID SSE、质量门禁事件映射和运行详情展示。 |
-| 工具命令审批 | 部分实现 | 已有审批表、数据范围 API、审批中心列表/详情、批准/拒绝/撤回决策、过期时间、过期 worker、追加决策审计、策略版本强校验和 Supervisor resolve；通知仍待补齐。 |
+| 工具命令审批 | 部分实现 | 已有审批表、数据范围 API、审批中心列表/详情、批准/拒绝/撤回决策、过期时间、过期 worker、追加决策审计、策略版本强校验和 Supervisor resolve；请求、批准、拒绝、撤回和过期均已写入站内通知/outbox。 |
 | 变更集与质量门禁 | 部分实现 | 运行详情可从脱敏文件变更事件生成 changeset，并查询质量门禁事件；质量门禁失败已联动 run/task 失败，独立门禁执行器仍待补齐。 |
 | 站内通知、outbox 和 Web Push | 部分实现 | 已有通知事实表、transactional outbox、终态 run 通知、通知 API 和通知中心；Web Push dispatcher、设备注册、投递重试、偏好和投递审计仍待补齐。 |
 | DevRail Angular 功能页 | 部分实现 | 已有项目 CRUD、成员、策略、任务列表/详情、仓库/环境列表与详情、审批列表/详情、运行详情和通知中心页面及生成 API 服务；通知设置仍待补齐。 |

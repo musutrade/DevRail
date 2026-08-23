@@ -7,6 +7,53 @@ use chrono::{Duration, Utc};
 use serde_json::json;
 use sqlx::PgPool;
 
+fn notification_copy(status: &str) -> (&'static str, &'static str, &'static str) {
+    match status {
+        "approved" => ("success", "审批已批准", "devrail.approval.approved"),
+        "rejected" => ("error", "审批已拒绝", "devrail.approval.rejected"),
+        "cancelled" => ("warning", "审批已撤回", "devrail.approval.cancelled"),
+        "expired" => ("warning", "审批已过期", "devrail.approval.expired"),
+        _ => ("info", "需要处理审批", "devrail.approval.requested"),
+    }
+}
+
+async fn add_notification(
+    tx: &mut sqlx::PgConnection,
+    approval: &DevRailApprovalRow,
+    status: &str,
+    summary: &str,
+) -> Result<(), sqlx::Error> {
+    let (level, title, event_type) = notification_copy(status);
+    let source_key = format!("approval:{}:{}", approval.id, status);
+    let deep_link = format!("/devrail/approvals/{}", approval.id);
+    repositories::devrail_notifications::create(
+        tx,
+        &repositories::devrail_notifications::NewNotification {
+            organization_id: approval.organization_id,
+            department_id: approval.department_id,
+            recipient_user_id: approval.requested_by,
+            event_type,
+            level,
+            title,
+            summary,
+            resource_type: Some("devrail_approval"),
+            resource_id: Some(approval.id),
+            deep_link: Some(&deep_link),
+            source_key: &source_key,
+        },
+    )
+    .await?;
+    repositories::devrail_notifications::outbox(
+        tx,
+        approval.organization_id,
+        "notification.created",
+        &format!("devrail_approval:{status}"),
+        Some(approval.id),
+        &json!({"notificationSource": source_key, "eventType": event_type}),
+    )
+    .await
+}
+
 fn db_error(error: sqlx::Error) -> ApiError {
     ApiError::internal(error)
 }
@@ -82,6 +129,13 @@ pub async fn request_from_harness(
         "devrail_approval",
         Some(row.id),
         json!({"runId":request.run_id,"tool":request.tool_name,"riskLevel":request.risk_level}),
+    )
+    .await?;
+    add_notification(
+        &mut tx,
+        &row,
+        "requested",
+        "Agent 请求执行高风险工具，请及时处理审批。",
     )
     .await?;
     tx.commit().await?;
@@ -190,6 +244,17 @@ async fn decide(
             .await
             .map_err(db_error)?;
     }
+    add_notification(
+        &mut tx,
+        &row,
+        decision,
+        reason.unwrap_or(match decision {
+            "approved" => "审批已批准，运行将继续。",
+            _ => "审批已拒绝，运行已停止。",
+        }),
+    )
+    .await
+    .map_err(db_error)?;
     tx.commit().await.map_err(db_error)?;
     if decision == "approved" {
         supervisor
@@ -258,6 +323,14 @@ pub async fn withdraw(
     )
     .await
     .map_err(db_error)?;
+    add_notification(
+        &mut tx,
+        &row,
+        "cancelled",
+        reason.unwrap_or("审批请求已撤回。"),
+    )
+    .await
+    .map_err(db_error)?;
     tx.commit().await.map_err(db_error)?;
     supervisor
         .resolve_approval(approval.run_id, id, false)
@@ -289,6 +362,13 @@ pub async fn expire_due(
         )
         .await?;
         devrail_runs::update_task_status(&mut tx, task_id, "failed").await?;
+        add_notification(
+            &mut tx,
+            row,
+            "expired",
+            "审批超过有效期，运行已停止；请重新发起 run。",
+        )
+        .await?;
         tx.commit().await?;
         let _ = supervisor.resolve_approval(row.run_id, row.id, false).await;
     }
@@ -302,4 +382,21 @@ pub async fn expire(
     id: i64,
 ) -> Result<DevRailApprovalResponse, ApiError> {
     reject(pool, actor, supervisor, id, Some("审批已过期")).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::notification_copy;
+
+    #[test]
+    fn notification_copy_maps_all_approval_states() {
+        assert_eq!(
+            notification_copy("requested").2,
+            "devrail.approval.requested"
+        );
+        assert_eq!(notification_copy("approved").0, "success");
+        assert_eq!(notification_copy("rejected").0, "error");
+        assert_eq!(notification_copy("cancelled").0, "warning");
+        assert_eq!(notification_copy("expired").2, "devrail.approval.expired");
+    }
 }
