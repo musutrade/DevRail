@@ -84,6 +84,9 @@ const DEVRAIL_APPROVAL_PATH: &str = "/api/v1/approvals/{id}";
 const DEVRAIL_APPROVAL_APPROVE_PATH: &str = "/api/v1/approvals/{id}/approve";
 const DEVRAIL_APPROVAL_REJECT_PATH: &str = "/api/v1/approvals/{id}/reject";
 const DEVRAIL_APPROVAL_WITHDRAW_PATH: &str = "/api/v1/approvals/{id}/withdraw";
+const DEVRAIL_NOTIFICATIONS_PATH: &str = "/api/v1/notifications";
+const DEVRAIL_NOTIFICATION_READ_PATH: &str = "/api/v1/notifications/{id}/read";
+const DEVRAIL_NOTIFICATIONS_READ_ALL_PATH: &str = "/api/v1/notifications/read-all";
 const METRICS_PATH: &str = "/metrics";
 
 /// Public HTTP operations generated into `docs/openapi.json`.
@@ -145,6 +148,9 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_APPROVAL_APPROVE_PATH, &["post"]),
     (DEVRAIL_APPROVAL_REJECT_PATH, &["post"]),
     (DEVRAIL_APPROVAL_WITHDRAW_PATH, &["post"]),
+    (DEVRAIL_NOTIFICATIONS_PATH, &["get"]),
+    (DEVRAIL_NOTIFICATION_READ_PATH, &["post"]),
+    (DEVRAIL_NOTIFICATIONS_READ_ALL_PATH, &["post"]),
 ];
 
 #[derive(Clone)]
@@ -348,6 +354,18 @@ fn base_router(state: AppState) -> Router {
         .route(
             DEVRAIL_APPROVALS_PATH,
             get(handlers::devrail::list_approvals),
+        )
+        .route(
+            DEVRAIL_NOTIFICATIONS_PATH,
+            get(handlers::devrail::list_notifications),
+        )
+        .route(
+            DEVRAIL_NOTIFICATION_READ_PATH,
+            post(handlers::devrail::mark_notification_read),
+        )
+        .route(
+            DEVRAIL_NOTIFICATIONS_READ_ALL_PATH,
+            post(handlers::devrail::mark_all_notifications_read),
         )
         .route(DEVRAIL_APPROVAL_PATH, get(handlers::devrail::get_approval))
         .route(

@@ -18,7 +18,7 @@ concurrency:
 jobs:
   rust-dependencies:
     name: Rust dependency policy
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
@@ -50,7 +50,7 @@ jobs:
 
   container-images:
     name: Container scan and SBOM
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
       fail-fast: false

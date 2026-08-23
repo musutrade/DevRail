@@ -68,3 +68,7 @@ pub struct ApprovalReject;
 impl PermissionRequirement for ApprovalReject {
     const CODE: &'static str = "devrail:approval:reject";
 }
+pub struct NotificationRead;
+impl PermissionRequirement for NotificationRead {
+    const CODE: &'static str = "devrail:notification:read";
+}

@@ -33,6 +33,9 @@ import { getDevRailApproval } from '../../../generated/api/fn/devrail/get-dev-ra
 import { approveDevRailApproval } from '../../../generated/api/fn/devrail/approve-dev-rail-approval';
 import { rejectDevRailApproval } from '../../../generated/api/fn/devrail/reject-dev-rail-approval';
 import { withdrawDevRailApproval } from '../../../generated/api/fn/devrail/withdraw-dev-rail-approval';
+import { listDevRailNotifications } from '../../../generated/api/fn/devrail/list-dev-rail-notifications';
+import { markDevRailNotificationRead } from '../../../generated/api/fn/devrail/mark-dev-rail-notification-read';
+import { markAllDevRailNotificationsRead } from '../../../generated/api/fn/devrail/mark-all-dev-rail-notifications-read';
 import type {
   CreateDevRailEnvironmentRequest,
   CreateDevRailProjectRequest,
@@ -59,6 +62,7 @@ import type {
   DevRailApprovalPage,
   DevRailApprovalResponse,
   DevRailApprovalDecisionRequest,
+  DevRailNotificationPage,
 } from '../../../generated/api/models';
 
 @Injectable({ providedIn: 'root' })
@@ -122,6 +126,16 @@ export class DevRailApiService {
     body: DevRailApprovalDecisionRequest,
   ): Promise<DevRailApprovalResponse> {
     return this.api.invoke(withdrawDevRailApproval, { id, body });
+  }
+
+  listNotifications(page = 1, pageSize = 20): Promise<DevRailNotificationPage> {
+    return this.api.invoke(listDevRailNotifications, { page, pageSize });
+  }
+  markNotificationRead(id: number): Promise<void> {
+    return this.api.invoke(markDevRailNotificationRead, { id });
+  }
+  markAllNotificationsRead(): Promise<void> {
+    return this.api.invoke(markAllDevRailNotificationsRead, {});
   }
 
   listRepositories(projectId: number, page = 1, pageSize = 20): Promise<DevRailRepositoryPage> {

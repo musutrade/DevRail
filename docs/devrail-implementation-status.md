@@ -15,7 +15,8 @@ DevRail 的 Codex Harness 开发系统 MVP **尚未实现完成**，因此不能
 - 工程治理：项目公约、审计门禁、CI、供应链检查和交付流程；
 - Phase 0 首批产品骨架：`devrail` 业务权限、项目/仓库/环境/任务迁移、受数据范围约束的 Rust CRUD API、OpenAPI/Angular 客户端生成和 `/devrail/projects` 基础页面；
 - Phase 1 Harness 基础闭环：后端 `HarnessSupervisor` 受控启动 `codex app-server`，清空环境变量并限制工作区/并发/时限；运行快照、运行元数据、脱敏 JSONL 事件、单调游标、幂等键、异常退出摘要、优雅中断/强制终止、运行查询和 SSE API 已加入；
-- Phase 1 审批与重试基础闭环：审批迁移、数据范围查询、决策追加审计、Supervisor resolve 控制消息、终态 run 重试 API、指定 turn 的 thread/resume、审批中心 UI、审批撤回和过期 worker 已加入；通知仍未完成；
+- Phase 1 审批与重试基础闭环：审批迁移、数据范围查询、决策追加审计、Supervisor resolve 控制消息、终态 run 重试 API、指定 turn 的 thread/resume、审批中心 UI、审批撤回和过期 worker 已加入；
+- Phase 2 通知基础能力：站内通知事实表、transactional outbox、通知查询/未读计数/已读 API、终态 run 通知和 Angular 通知中心已加入；Web Push dispatcher、设备注册、偏好、delivery 重试和投递审计仍未完成；
 - PR #23（审批撤回与过期 worker）和 PR #24（changeset/质量门禁查询）已合并到 `main`，合并提交分别为 `f50bb5c` 和 `2fc8d0c`，对应 CI、`arc-flow platform` 和供应链检查均成功。
 
 这些内容是产品 MVP 的工程基础或配套能力，不等于需求文档第 2.1 节和第 16 节定义的 DevRail 业务系统已经交付。
@@ -31,8 +32,8 @@ DevRail 的 Codex Harness 开发系统 MVP **尚未实现完成**，因此不能
 | thread/turn/item 事件与 SSE | 基础实现 | JSONL 事件按安全类型脱敏持久化，提供 cursor 补拉、Last-Event-ID SSE、质量门禁事件映射和运行详情展示。 |
 | 工具命令审批 | 部分实现 | 已有审批表、数据范围 API、审批中心列表/详情、批准/拒绝/撤回决策、过期时间、过期 worker、追加决策审计、策略版本强校验和 Supervisor resolve；通知仍待补齐。 |
 | 变更集与质量门禁 | 部分实现 | 运行详情可从脱敏文件变更事件生成 changeset，并查询质量门禁事件；质量门禁失败已联动 run/task 失败，独立门禁执行器仍待补齐。 |
-| 站内通知、outbox 和 Web Push | 未实现 | 当前没有 DevRail 通知表、dispatcher、设备注册、投递重试和推送页面。 |
-| DevRail Angular 功能页 | 部分实现 | 已有项目 CRUD、成员、策略、任务列表/详情、仓库/环境列表与详情、审批列表/详情、运行详情页面及生成 API 服务；通知页面仍待补齐。 |
+| 站内通知、outbox 和 Web Push | 部分实现 | 已有通知事实表、transactional outbox、终态 run 通知、通知 API 和通知中心；Web Push dispatcher、设备注册、投递重试、偏好和投递审计仍待补齐。 |
+| DevRail Angular 功能页 | 部分实现 | 已有项目 CRUD、成员、策略、任务列表/详情、仓库/环境列表与详情、审批列表/详情、运行详情和通知中心页面及生成 API 服务；通知设置仍待补齐。 |
 | MVP 自动化验收 | 未完成 | 全量工程门禁通过不代表 requirements.md 第 16 节全部条件通过。 |
 
 ## 当前不应作出的结论
@@ -48,7 +49,7 @@ DevRail 的 Codex Harness 开发系统 MVP **尚未实现完成**，因此不能
 
 1. Phase 0：完成项目/仓库/环境/任务 CRUD 的集成测试、成员与策略 API，并完成验收闭环；
 2. Phase 1：补齐过期通知、质量门禁执行器，并完善数据库重启恢复与运行验收；审批撤回、过期 worker、策略版本校验、changeset/质量门禁查询、质量门禁失败联动和活动 run 自动恢复已完成。
-3. Phase 2：Transactional outbox、站内通知、Web Push、设备/偏好、重试和投递审计；
+3. Phase 2：已完成 transactional outbox、站内通知和通知中心第一步；继续实现 Web Push、设备/偏好、重试和投递审计；
 4. Phase 3：评论、提及、审查、补丁导出和可选 Git 平台集成。
 
 每个阶段完成后，都必须同步需求、API、数据模型、权限、UI 和测试状态；只有 requirements.md 第 16 节全部满足后，才能将 MVP 标记为完成。

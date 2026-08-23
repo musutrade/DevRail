@@ -23,6 +23,37 @@ pub async fn list_projects(
         .await
         .map(Json)
 }
+pub async fn list_notifications(
+    State(s): State<AppState>,
+    auth: RequirePermission<NotificationRead>,
+    Query(q): Query<DevRailListQuery>,
+) -> Result<Json<DevRailNotificationPage>, ApiError> {
+    services::devrail_notifications::list(
+        &s.pool,
+        &auth,
+        q.page.unwrap_or(1).max(1),
+        q.page_size.unwrap_or(20).clamp(1, 100),
+    )
+    .await
+    .map(Json)
+}
+pub async fn mark_notification_read(
+    State(s): State<AppState>,
+    auth: RequirePermission<NotificationRead>,
+    Path(id): Path<i64>,
+) -> Result<StatusCode, ApiError> {
+    services::devrail_notifications::mark_read(&s.pool, &auth, id)
+        .await
+        .map(|_| StatusCode::NO_CONTENT)
+}
+pub async fn mark_all_notifications_read(
+    State(s): State<AppState>,
+    auth: RequirePermission<NotificationRead>,
+) -> Result<StatusCode, ApiError> {
+    services::devrail_notifications::mark_all_read(&s.pool, &auth)
+        .await
+        .map(|_| StatusCode::NO_CONTENT)
+}
 pub async fn get_project(
     State(s): State<AppState>,
     auth: RequirePermission<ProjectRead>,
