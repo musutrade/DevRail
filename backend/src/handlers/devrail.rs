@@ -7,7 +7,7 @@ use crate::permissions::devrail::*;
 use crate::services;
 use crate::AppState;
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::Json;
 use futures_core::Stream;
@@ -310,12 +310,19 @@ pub async fn stream_run_events(
     State(s): State<AppState>,
     auth: RequirePermission<RunRead>,
     Path(id): Path<i64>,
+    headers: HeaderMap,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
     let _ = services::devrail_runs::get_run(&s.pool, &auth, id).await?;
     let pool = s.pool.clone();
     let actor = auth.actor.clone();
+    let initial_cursor = headers
+        .get("last-event-id")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(0)
+        .max(0);
     let stream = async_stream::stream! {
-        let mut cursor = 0_i64;
+        let mut cursor = initial_cursor;
         let mut interval = tokio::time::interval(Duration::from_secs(1));
         loop {
             interval.tick().await;
