@@ -112,6 +112,18 @@ pub(crate) async fn update_task_status(
         .map(|_| ())
 }
 
+pub(crate) async fn mark_quality_gate_failed(
+    c: &mut PgConnection,
+    run_id: i64,
+    task_id: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE devrail_runs SET status='failed',exit_reason='quality_gate_failed',recovery_suggestion='质量门禁未通过；请查看门禁结果后重试',completed_at=COALESCE(completed_at,now()),updated_at=now() WHERE id=$1")
+        .bind(run_id)
+        .execute(&mut *c)
+        .await?;
+    update_task_status(c, task_id, "failed").await
+}
+
 pub(crate) async fn list_recoverable_runs(
     pool: &PgPool,
 ) -> Result<Vec<DevRailRunRow>, sqlx::Error> {

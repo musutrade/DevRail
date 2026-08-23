@@ -6,6 +6,9 @@ use crate::workers::harness_supervisor::{HarnessSupervisor, RunLaunch};
 use serde_json::json;
 use sqlx::PgPool;
 use std::path::PathBuf;
+use std::process::Stdio;
+use std::time::{Duration, Instant};
+use tokio::process::Command;
 
 fn db_error(error: sqlx::Error) -> ApiError {
     ApiError::internal(error)
@@ -79,6 +82,62 @@ fn bounded_input(value: Option<&str>, fallback: &str) -> Result<String, ApiError
         ));
     }
     Ok(input.to_string())
+}
+
+fn quality_gate_commands(
+    template: &serde_json::Value,
+) -> Result<Vec<(String, Vec<String>)>, ApiError> {
+    let gates = template
+        .get("gates")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| ApiError::validation("质量门禁模板必须包含 gates 数组"))?;
+    if gates.is_empty() || gates.len() > 8 {
+        return Err(ApiError::validation("质量门禁数量必须为 1-8 项"));
+    }
+    gates
+        .iter()
+        .map(|gate| {
+            let name = gate
+                .get("name")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.trim().is_empty() && value.len() <= 128)
+                .ok_or_else(|| ApiError::validation("质量门禁缺少有效名称"))?
+                .to_string();
+            let command = gate
+                .get("command")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| ApiError::validation("质量门禁缺少命令"))?;
+            let args: Vec<String> = command
+                .split_ascii_whitespace()
+                .map(str::to_string)
+                .collect();
+            let allowed = (args.len() == 2
+                && args[0] == "cargo"
+                && matches!(args[1].as_str(), "check" | "test" | "clippy" | "fmt"))
+                || (args.len() == 3
+                    && args[0] == "cargo"
+                    && args[1] == "flow"
+                    && args[2] == "verify")
+                || (args.len() == 3
+                    && args[0] == "npm"
+                    && args[1] == "run"
+                    && matches!(args[2].as_str(), "lint" | "test:ci" | "build"));
+            if !allowed {
+                return Err(ApiError::validation("质量门禁命令不在允许列表中"));
+            }
+            Ok((name, args))
+        })
+        .collect()
+}
+
+fn gate_summary(output: &[u8]) -> String {
+    String::from_utf8_lossy(output)
+        .lines()
+        .rfind(|line| !line.trim().is_empty())
+        .unwrap_or("命令未输出摘要")
+        .chars()
+        .take(500)
+        .collect()
 }
 
 pub async fn create_run(
@@ -368,4 +427,111 @@ pub async fn get_quality_gates(
         })
         .collect();
     Ok(DevRailQualityGatePage { run_id: id, items })
+}
+
+pub async fn execute_quality_gates(
+    pool: &PgPool,
+    actor: &ActorContext,
+    id: i64,
+) -> Result<DevRailQualityGatePage, ApiError> {
+    let run = get_run(pool, actor, id).await?;
+    if !matches!(run.status.as_str(), "completed" | "failed") {
+        return Err(ApiError::conflict("运行尚未结束，不能执行质量门禁"));
+    }
+    let task = devrail::find_task_by_id(pool, actor, run.task_id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("任务不存在或超出数据范围"))?;
+    let project = devrail::find_project(pool, actor, task.project_id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("项目不存在或超出数据范围"))?;
+    let commands = quality_gate_commands(&project.quality_gate_template)?;
+    let mut failed = false;
+    for (index, (name, args)) in commands.iter().enumerate() {
+        let started = Instant::now();
+        let output = tokio::time::timeout(
+            Duration::from_secs(900),
+            Command::new(&args[0])
+                .args(&args[1..])
+                .current_dir(&run.cwd)
+                .env_clear()
+                .env("PATH", "/usr/local/bin:/usr/bin:/bin")
+                .stdin(Stdio::null())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .output(),
+        )
+        .await;
+        let (status, exit_code, summary) = match output {
+            Ok(Ok(output)) if output.status.success() => {
+                ("passed", output.status.code(), gate_summary(&output.stdout))
+            }
+            Ok(Ok(output)) => {
+                failed = true;
+                ("failed", output.status.code(), gate_summary(&output.stderr))
+            }
+            Ok(Err(_)) => {
+                failed = true;
+                ("failed", None, "质量门禁命令无法启动".to_string())
+            }
+            Err(_) => {
+                failed = true;
+                ("failed", None, "质量门禁执行超时".to_string())
+            }
+        };
+        let payload = json!({"name":name,"status":status,"exit_code":exit_code,"duration_ms":started.elapsed().as_millis() as i64});
+        let mut tx = pool.begin().await.map_err(db_error)?;
+        devrail_runs::append_event(
+            &mut tx,
+            &devrail_runs::NewRunEvent {
+                run_id: id,
+                organization_id: actor.organization_id,
+                department_id: task.department_id,
+                owner_user_id: actor.user_id,
+                event_type: "quality_gate",
+                source_event_id: None,
+                idempotency_key: &format!("quality-gate-{id}-{index}"),
+                payload: &payload,
+                summary: Some(&summary),
+            },
+        )
+        .await
+        .map_err(db_error)?;
+        tx.commit().await.map_err(db_error)?;
+    }
+    let mut tx = pool.begin().await.map_err(db_error)?;
+    if failed {
+        devrail_runs::mark_quality_gate_failed(&mut tx, id, task.id)
+            .await
+            .map_err(db_error)?;
+    }
+    repositories::audit_logs::record(
+        &mut tx,
+        Some(actor.user_id),
+        "devrail.quality_gate.execute",
+        "devrail_run",
+        Some(id),
+        json!({"taskId":task.id,"failed":failed,"count":commands.len()}),
+    )
+    .await
+    .map_err(db_error)?;
+    tx.commit().await.map_err(db_error)?;
+    get_quality_gates(pool, actor, id).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn quality_gate_commands_accept_only_allowlisted_tools() {
+        let template = serde_json::json!({"gates":[
+            {"name":"检查","command":"cargo check"},
+            {"name":"测试","command":"npm run test:ci"}
+        ]});
+        assert_eq!(quality_gate_commands(&template).unwrap().len(), 2);
+        let rejected = serde_json::json!({"gates":[{"name":"危险","command":"sh -c rm -rf"}]});
+        assert!(quality_gate_commands(&rejected).is_err());
+    }
 }

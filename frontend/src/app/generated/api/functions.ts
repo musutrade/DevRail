@@ -81,6 +81,8 @@ export type { InterruptDevRailRun$Params as InterruptDevRailRun$Params } from '.
 export { interruptDevRailRun as interruptDevRailRun } from './fn/devrail/interrupt-dev-rail-run';
 export type { GetDevRailRunQualityGates$Params as GetDevRailRunQualityGates$Params } from './fn/devrail/get-dev-rail-run-quality-gates';
 export { getDevRailRunQualityGates as getDevRailRunQualityGates } from './fn/devrail/get-dev-rail-run-quality-gates';
+export type { ExecuteDevRailRunQualityGates$Params as ExecuteDevRailRunQualityGates$Params } from './fn/devrail/execute-dev-rail-run-quality-gates';
+export { executeDevRailRunQualityGates as executeDevRailRunQualityGates } from './fn/devrail/execute-dev-rail-run-quality-gates';
 export type { RetryDevRailRun$Params as RetryDevRailRun$Params } from './fn/devrail/retry-dev-rail-run';
 export { retryDevRailRun as retryDevRailRun } from './fn/devrail/retry-dev-rail-run';
 export type { ListDevRailRuns$Params as ListDevRailRuns$Params } from './fn/devrail/list-dev-rail-runs';
