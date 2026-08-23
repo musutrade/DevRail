@@ -18,8 +18,9 @@ use crate::models::{
     DevRailProjectMemberResponse, DevRailProjectPage, DevRailProjectPolicyResponse,
     DevRailProjectResponse, DevRailPushDeviceResponse, DevRailQualityGatePage,
     DevRailRepositoryPage, DevRailRepositoryResponse, DevRailRunEventPage, DevRailRunPage,
-    DevRailRunResponse, DevRailTaskPage, DevRailTaskResponse, HealthResponse, LoginRequest,
-    LoginResponse, LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest, MfaMethodSchema,
+    DevRailRunResponse, DevRailTaskPage, DevRailTaskResponse, DevRailWorktreeFileResponse,
+    DevRailWorktreeQuery, DevRailWorktreeResponse, HealthResponse, LoginRequest, LoginResponse,
+    LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest, MfaMethodSchema,
     MfaPasskeyAuthenticationFinishRequest, MfaPasskeyAuthenticationStartRequest,
     MfaPasskeyRegistrationFinishRequest, MfaPasskeyRegistrationStartRequest, MfaPasskeyResponse,
     MfaStatusResponse, MfaWebauthnChallengeResponse, ModuleUnlockRequest, ModuleUnlockScopeSchema,
@@ -739,6 +740,8 @@ fn get_devrail_repository() {}
 fn update_devrail_repository() {}
 #[utoipa::path(post, path = "/projects/{project_id}/repositories/{id}/sync", operation_id = "syncDevRailRepository", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), ("id" = i64, Path)), responses((status = 200, body = DevRailRepositoryResponse)))]
 fn sync_devrail_repository() {}
+#[utoipa::path(get, path = "/projects/{project_id}/repositories/{id}/worktree", operation_id = "inspectDevRailRepositoryWorktree", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), ("id" = i64, Path), DevRailWorktreeQuery), responses((status = 200, body = DevRailWorktreeResponse)))]
+fn inspect_devrail_repository_worktree() {}
 
 #[utoipa::path(get, path = "/projects/{project_id}/environments", operation_id = "listDevRailEnvironments", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), DevRailListQuery), responses((status = 200, body = DevRailEnvironmentPage)))]
 fn list_devrail_environments() {}
@@ -861,7 +864,7 @@ fn withdraw_devrail_approval() {}
         update_devrail_project, archive_devrail_project, get_devrail_project_policy,
         update_devrail_project_policy, list_devrail_project_members,
         add_devrail_project_member, remove_devrail_project_member, list_devrail_repositories,
-        create_devrail_repository, get_devrail_repository, update_devrail_repository, sync_devrail_repository,
+        create_devrail_repository, get_devrail_repository, update_devrail_repository, sync_devrail_repository, inspect_devrail_repository_worktree,
         list_devrail_environments, create_devrail_environment, get_devrail_environment,
         update_devrail_environment, health_check_devrail_environment, list_devrail_tasks, create_devrail_task,
         get_devrail_task, update_devrail_task, create_devrail_run, list_devrail_runs,
@@ -921,7 +924,7 @@ fn withdraw_devrail_approval() {}
         PermissionCodes,
         DashboardStats,
         DevRailProjectResponse, DevRailProjectPolicyResponse, DevRailProjectPage, DevRailProjectMemberPage, DevRailProjectMemberResponse, AddDevRailProjectMemberRequest, DevRailRepositoryResponse,
-        DevRailRepositoryPage, DevRailEnvironmentResponse, DevRailEnvironmentPage,
+        DevRailRepositoryPage, DevRailWorktreeFileResponse, DevRailWorktreeResponse, DevRailEnvironmentResponse, DevRailEnvironmentPage,
         DevRailTaskResponse, DevRailTaskPage, CreateDevRailProjectRequest,
         UpdateDevRailProjectRequest, UpdateDevRailProjectPolicyRequest, CreateDevRailRepositoryRequest,
         UpdateDevRailRepositoryRequest, CreateDevRailEnvironmentRequest,

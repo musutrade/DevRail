@@ -2937,6 +2937,60 @@
         ]
       }
     },
+    "/projects/{project_id}/repositories/{id}/worktree": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "inspectDevRailRepositoryWorktree",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailWorktreeResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/projects/{project_id}/tasks": {
       "get": {
         "tags": [
@@ -6684,6 +6738,72 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "DevRailWorktreeFileResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "DevRailWorktreeResponse": {
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "environmentId",
+          "status",
+          "changedFiles",
+          "checkedAt"
+        ],
+        "properties": {
+          "branch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "changedFiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DevRailWorktreeFileResponse"
+            }
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "commitSummary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "environmentId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "headSha": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "repositoryId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string"
           }
         }
       },

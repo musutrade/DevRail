@@ -8,6 +8,7 @@ import type {
   DevRailEnvironment,
   DevRailRepository,
 } from '../../features/devrail/models/devrail.model';
+import type { DevRailEnvironmentResponse } from '../../generated/api/models';
 
 @Component({
   selector: 'app-devrail-resource-detail',
@@ -23,6 +24,10 @@ export class DevRailResourceDetailPage implements OnInit {
   readonly health = signal<Awaited<ReturnType<DevRailApiService['healthCheckEnvironment']>> | null>(
     null,
   );
+  readonly worktree = signal<Awaited<
+    ReturnType<DevRailApiService['inspectRepositoryWorktree']>
+  > | null>(null);
+  readonly environments = signal<DevRailEnvironmentResponse[]>([]);
   projectId = 0;
   resourceId = 0;
   private readonly route = inject(ActivatedRoute);
@@ -90,13 +95,35 @@ export class DevRailResourceDetailPage implements OnInit {
       this.busy.set(false);
     }
   }
+  async inspectWorktree(environmentIdValue: string): Promise<void> {
+    const environmentId = Number(environmentIdValue);
+    if (!Number.isSafeInteger(environmentId) || environmentId < 1) {
+      return;
+    }
+    this.busy.set(true);
+    try {
+      this.worktree.set(
+        await this.api.inspectRepositoryWorktree(this.projectId, this.resourceId, environmentId),
+      );
+      this.snack.open('工作树状态检查已完成', '关闭', { duration: 2500 });
+    } catch (e) {
+      this.snack.open(apiErrorMessage(e, '工作树状态检查失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
   private async load(): Promise<void> {
     try {
-      this.resource.set(
-        this.kind() === 'repositories'
-          ? await this.api.getRepository(this.projectId, this.resourceId)
-          : await this.api.getEnvironment(this.projectId, this.resourceId),
-      );
+      if (this.kind() === 'repositories') {
+        const [repository, environments] = await Promise.all([
+          this.api.getRepository(this.projectId, this.resourceId),
+          this.api.listEnvironments(this.projectId),
+        ]);
+        this.resource.set(repository);
+        this.environments.set(environments.items.filter((environment) => environment.enabled));
+      } else {
+        this.resource.set(await this.api.getEnvironment(this.projectId, this.resourceId));
+      }
     } catch (e) {
       this.snack.open(apiErrorMessage(e, '资源加载失败'), '关闭', { duration: 5000 });
     }

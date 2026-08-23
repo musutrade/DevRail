@@ -15,6 +15,33 @@
           <span>最近远端分支：{{ $any(item).lastRemoteBranch || '未同步' }}</span>
           <span>远端分支数：{{ $any(item).lastRemoteBranchCount ?? '未同步' }}</span>
         </div>
+        <label
+          >工作树环境<select #environmentId required>
+            <option value="">选择环境</option>
+            @for (environment of environments(); track environment.id) {
+              <option [value]="environment.id">{{ environment.name }}</option>
+            }
+          </select></label
+        >
+        <button
+          class="btn-secondary"
+          type="button"
+          (click)="inspectWorktree(environmentId.value)"
+          [disabled]="busy() || !environmentId.value"
+        >
+          <mat-icon>account_tree</mat-icon>检查工作树
+        </button>
+        @if (worktree(); as tree) {
+          <div class="sync-summary">
+            <span>工作树状态：{{ tree.status === 'clean' ? '干净' : '有改动' }}</span>
+            <span>分支：{{ tree.branch || '未知' }}</span>
+            <span>HEAD：{{ tree.headSha || '未知' }}</span>
+            <span>提交：{{ tree.commitSummary || '无' }}</span>
+            @for (file of tree.changedFiles; track file.path) {
+              <span>{{ file.status }} {{ file.path }}</span>
+            }
+          </div>
+        }
       } @else {
         <label
           >工作区根目录<input

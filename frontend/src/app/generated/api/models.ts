@@ -46,6 +46,8 @@ export type { DevRailRunPage } from './models/dev-rail-run-page';
 export type { DevRailRunResponse } from './models/dev-rail-run-response';
 export type { DevRailTaskPage } from './models/dev-rail-task-page';
 export type { DevRailTaskResponse } from './models/dev-rail-task-response';
+export type { DevRailWorktreeFileResponse } from './models/dev-rail-worktree-file-response';
+export type { DevRailWorktreeResponse } from './models/dev-rail-worktree-response';
 export type { ErrorBody } from './models/error-body';
 export type { ErrorEnvelope } from './models/error-envelope';
 export type { HealthResponse } from './models/health-response';
