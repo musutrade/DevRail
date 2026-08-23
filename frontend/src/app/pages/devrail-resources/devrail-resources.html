@@ -11,6 +11,32 @@
   } @else if (error()) {
     <div class="empty-state" role="alert">{{ error() }}</div>
   } @else if (kind() === 'repositories') {
+    <form class="resource-form" (ngSubmit)="createRepository()">
+      <h2>新增代码仓库</h2>
+      <label
+        >名称<input name="repositoryName" [(ngModel)]="repositoryName" required maxlength="128"
+      /></label>
+      <label
+        >远程地址<input
+          name="repositoryUrl"
+          [(ngModel)]="repositoryUrl"
+          required
+          placeholder="https://git.example.com/team/repo.git"
+      /></label>
+      <label
+        >默认分支<input name="repositoryBranch" [(ngModel)]="repositoryBranch" required
+      /></label>
+      <button
+        class="row-btn primary-btn"
+        type="submit"
+        [disabled]="creating() || !repositoryName || !repositoryUrl"
+      >
+        <mat-icon>add</mat-icon><span>创建仓库</span>
+      </button>
+    </form>
+    @if (createError()) {
+      <div class="empty-state" role="alert">{{ createError() }}</div>
+    }
     <table class="data-table">
       <thead>
         <tr>
@@ -43,6 +69,44 @@
       </tbody>
     </table>
   } @else {
+    <form class="resource-form" (ngSubmit)="createEnvironment()">
+      <h2>新增运行环境</h2>
+      <label
+        >名称<input name="environmentName" [(ngModel)]="environmentName" required maxlength="128"
+      /></label>
+      <label
+        >工作区绝对路径<input
+          name="workspaceRoot"
+          [(ngModel)]="workspaceRoot"
+          required
+          placeholder="/controlled/workspaces/project"
+      /></label>
+      <label
+        >网络模式<select name="networkMode" [(ngModel)]="networkMode">
+          <option value="off">关闭网络</option>
+          <option value="allowlist">允许列表</option>
+        </select></label
+      >
+      <label
+        >最长运行时长（秒）<input
+          name="maxDurationSecs"
+          type="number"
+          min="60"
+          max="86400"
+          [(ngModel)]="maxDurationSecs"
+          required
+      /></label>
+      <button
+        class="row-btn primary-btn"
+        type="submit"
+        [disabled]="creating() || !environmentName || !workspaceRoot"
+      >
+        <mat-icon>add</mat-icon><span>创建环境</span>
+      </button>
+    </form>
+    @if (createError()) {
+      <div class="empty-state" role="alert">{{ createError() }}</div>
+    }
     <table class="data-table">
       <thead>
         <tr>

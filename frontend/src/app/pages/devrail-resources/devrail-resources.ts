@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -8,10 +9,14 @@ import type {
   DevRailEnvironment,
   DevRailRepository,
 } from '../../features/devrail/models/devrail.model';
+import type {
+  CreateDevRailEnvironmentRequest,
+  CreateDevRailRepositoryRequest,
+} from '../../generated/api/models';
 
 @Component({
   selector: 'app-devrail-resources',
-  imports: [MatIconModule, MatProgressSpinnerModule, RouterLink],
+  imports: [FormsModule, MatIconModule, MatProgressSpinnerModule, RouterLink],
   templateUrl: './devrail-resources.html',
   styleUrl: './devrail-resources.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -22,6 +27,15 @@ export class DevRailResourcesPage implements OnInit {
   readonly repositories = signal<DevRailRepository[]>([]);
   readonly environments = signal<DevRailEnvironment[]>([]);
   readonly kind = signal<'repositories' | 'environments'>('repositories');
+  readonly creating = signal(false);
+  readonly createError = signal<string | null>(null);
+  repositoryName = '';
+  repositoryUrl = '';
+  repositoryBranch = 'main';
+  environmentName = '';
+  workspaceRoot = '';
+  networkMode = 'off';
+  maxDurationSecs = 3600;
   projectId = 0;
   private readonly route = inject(ActivatedRoute);
   private readonly api = inject(DevRailApiService);
@@ -43,6 +57,48 @@ export class DevRailResourcesPage implements OnInit {
       this.error.set(apiErrorMessage(e, '资源加载失败'));
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  async createRepository(): Promise<void> {
+    const request: CreateDevRailRepositoryRequest = {
+      name: this.repositoryName,
+      remoteUrl: this.repositoryUrl,
+      defaultBranch: this.repositoryBranch || 'main',
+    };
+    await this.create(async () => {
+      await this.api.createRepository(this.projectId, request);
+      this.repositoryName = '';
+      this.repositoryUrl = '';
+      await this.load();
+    });
+  }
+
+  async createEnvironment(): Promise<void> {
+    const request: CreateDevRailEnvironmentRequest = {
+      name: this.environmentName,
+      workspaceRoot: this.workspaceRoot,
+      networkMode: this.networkMode,
+      maxDurationSecs: this.maxDurationSecs,
+      enabled: true,
+    };
+    await this.create(async () => {
+      await this.api.createEnvironment(this.projectId, request);
+      this.environmentName = '';
+      this.workspaceRoot = '';
+      await this.load();
+    });
+  }
+
+  private async create(action: () => Promise<void>): Promise<void> {
+    this.creating.set(true);
+    this.createError.set(null);
+    try {
+      await action();
+    } catch (error) {
+      this.createError.set(apiErrorMessage(error, '创建资源失败'));
+    } finally {
+      this.creating.set(false);
     }
   }
 }
