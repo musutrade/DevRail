@@ -9,6 +9,26 @@ form {
   background: var(--surface-container);
   border-radius: 0.5rem;
 }
+.btn-primary,
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  justify-content: center;
+  padding: 0.65rem 1rem;
+  border: 0;
+  border-radius: 4px;
+  font: inherit;
+  cursor: pointer;
+}
+.btn-secondary {
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+}
+button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
 label {
   display: grid;
   gap: 0.4rem;

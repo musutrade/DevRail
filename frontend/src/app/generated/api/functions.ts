@@ -57,6 +57,8 @@ export type { GetDevRailRepository$Params as GetDevRailRepository$Params } from 
 export { getDevRailRepository as getDevRailRepository } from './fn/devrail/get-dev-rail-repository';
 export type { UpdateDevRailRepository$Params as UpdateDevRailRepository$Params } from './fn/devrail/update-dev-rail-repository';
 export { updateDevRailRepository as updateDevRailRepository } from './fn/devrail/update-dev-rail-repository';
+export type { SyncDevRailRepository$Params as SyncDevRailRepository$Params } from './fn/devrail/sync-dev-rail-repository';
+export { syncDevRailRepository as syncDevRailRepository } from './fn/devrail/sync-dev-rail-repository';
 export type { ListDevRailTasks$Params as ListDevRailTasks$Params } from './fn/devrail/list-dev-rail-tasks';
 export { listDevRailTasks as listDevRailTasks } from './fn/devrail/list-dev-rail-tasks';
 export type { CreateDevRailTask$Params as CreateDevRailTask$Params } from './fn/devrail/create-dev-rail-task';

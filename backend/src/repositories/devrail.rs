@@ -313,6 +313,19 @@ pub(crate) async fn update_repository(
     Ok(r.rows_affected() > 0)
 }
 
+pub(crate) async fn update_repository_sync(
+    c: &mut PgConnection,
+    actor: &ActorContext,
+    project_id: i64,
+    id: i64,
+    status: &str,
+    head_sha: Option<&str>,
+) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query("UPDATE devrail_repositories SET last_sync_status=$5,last_head_sha=$6,updated_at=now() WHERE id=$1 AND project_id=$2 AND organization_id=$3 AND ($4='all' OR owner_user_id=$7 OR $4='organization' OR ($4 IN ('department','department_and_children') AND department_id=$8)) AND archived_at IS NULL")
+        .bind(id).bind(project_id).bind(actor.organization_id).bind(actor.data_scope.as_str()).bind(status).bind(head_sha).bind(actor.user_id).bind(actor.department_id).execute(c).await?;
+    Ok(result.rows_affected() == 1)
+}
+
 pub async fn list_environments(
     pool: &PgPool,
     actor: &ActorContext,

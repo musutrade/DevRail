@@ -201,6 +201,15 @@ pub async fn update_repository(
         .await
         .map(Json)
 }
+pub async fn sync_repository(
+    State(s): State<AppState>,
+    auth: RequirePermission<RepositoryWrite>,
+    Path((project_id, id)): Path<(i64, i64)>,
+) -> Result<Json<DevRailRepositoryResponse>, ApiError> {
+    services::devrail::sync_repository(&s.pool, &auth, project_id, id)
+        .await
+        .map(Json)
+}
 
 pub async fn list_environments(
     State(s): State<AppState>,

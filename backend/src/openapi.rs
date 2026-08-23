@@ -735,6 +735,8 @@ fn create_devrail_repository() {}
 fn get_devrail_repository() {}
 #[utoipa::path(patch, path = "/projects/{project_id}/repositories/{id}", operation_id = "updateDevRailRepository", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), ("id" = i64, Path)), request_body = UpdateDevRailRepositoryRequest, responses((status = 200, body = DevRailRepositoryResponse)))]
 fn update_devrail_repository() {}
+#[utoipa::path(post, path = "/projects/{project_id}/repositories/{id}/sync", operation_id = "syncDevRailRepository", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), ("id" = i64, Path)), responses((status = 200, body = DevRailRepositoryResponse)))]
+fn sync_devrail_repository() {}
 
 #[utoipa::path(get, path = "/projects/{project_id}/environments", operation_id = "listDevRailEnvironments", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), DevRailListQuery), responses((status = 200, body = DevRailEnvironmentPage)))]
 fn list_devrail_environments() {}
@@ -847,7 +849,7 @@ fn withdraw_devrail_approval() {}
         update_devrail_project, archive_devrail_project, get_devrail_project_policy,
         update_devrail_project_policy, list_devrail_project_members,
         add_devrail_project_member, remove_devrail_project_member, list_devrail_repositories,
-        create_devrail_repository, get_devrail_repository, update_devrail_repository,
+        create_devrail_repository, get_devrail_repository, update_devrail_repository, sync_devrail_repository,
         list_devrail_environments, create_devrail_environment, get_devrail_environment,
         update_devrail_environment, list_devrail_tasks, create_devrail_task,
         get_devrail_task, update_devrail_task, create_devrail_run, list_devrail_runs,

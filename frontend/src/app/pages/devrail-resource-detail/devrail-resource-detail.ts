@@ -65,6 +65,17 @@ export class DevRailResourceDetailPage implements OnInit {
       this.busy.set(false);
     }
   }
+  async syncRepository(): Promise<void> {
+    this.busy.set(true);
+    try {
+      this.resource.set(await this.api.syncRepository(this.projectId, this.resourceId));
+      this.snack.open('仓库同步检查已完成', '关闭', { duration: 2500 });
+    } catch (e) {
+      this.snack.open(apiErrorMessage(e, '仓库同步失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
   private async load(): Promise<void> {
     try {
       this.resource.set(
