@@ -1,0 +1,52 @@
+<div class="page devrail-task-detail-page">
+  <div class="page-header">
+    <div>
+      <a [routerLink]="['/devrail/projects', projectId, 'tasks']">返回任务列表</a>
+      <h1>任务详情</h1>
+    </div>
+  </div>
+  @if (loading()) {
+    <div class="loading-wrap" role="status"><mat-progress-spinner diameter="32" /></div>
+  } @else if (task(); as current) {
+    <form class="task-form" #taskForm (submit)="$event.preventDefault(); save(taskForm)">
+      <label>标题<input name="title" [value]="current.title" required /></label>
+      <label
+        >目标<textarea name="goal" rows="5" required>{{ current.goal }}</textarea>
+      </label>
+      <div class="form-grid">
+        <label
+          >状态<select name="status" [value]="current.status">
+            <option value="draft">草稿</option>
+            <option value="queued">排队中</option>
+            <option value="running">运行中</option>
+            <option value="awaiting_approval">等待审批</option>
+            <option value="succeeded">已完成</option>
+            <option value="failed">失败</option>
+            <option value="cancelled">已取消</option>
+          </select></label
+        ><label
+          >优先级<select name="priority" [value]="current.priority">
+            <option value="low">低</option>
+            <option value="normal">普通</option>
+            <option value="high">高</option>
+            <option value="urgent">紧急</option>
+          </select></label
+        >
+      </div>
+      <label
+        >背景<textarea name="background" rows="4">{{ current.background || '' }}</textarea>
+      </label>
+      <label
+        >验收标准<textarea name="acceptanceCriteria" rows="4">{{
+          current.acceptanceCriteria || ''
+        }}</textarea>
+      </label>
+      <label
+        >约束<textarea name="constraints" rows="4">{{ current.constraints || '' }}</textarea>
+      </label>
+      <button class="btn-primary" type="submit" [disabled]="busy()">
+        <mat-icon>save</mat-icon>保存任务
+      </button>
+    </form>
+  }
+</div>

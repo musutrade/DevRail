@@ -1,0 +1,37 @@
+.devrail-task-detail-page {
+  max-width: 900px;
+  margin: 0 auto;
+}
+.task-form {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: var(--surface-container);
+  border-radius: 0.5rem;
+}
+.task-form label {
+  display: grid;
+  gap: 0.4rem;
+  font-weight: 600;
+}
+.task-form input,
+.task-form textarea,
+.task-form select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.65rem;
+  border: 1px solid var(--outline-variant);
+  border-radius: 4px;
+  font: inherit;
+  font-weight: 400;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+@media (max-width: 700px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
