@@ -188,7 +188,38 @@ impl HarnessSupervisor {
     }
 
     pub async fn recover_stale_runs(&self) -> Result<u64, sqlx::Error> {
-        devrail_runs::recover_stale_runs(&self.pool).await
+        let runs = devrail_runs::list_recoverable_runs(&self.pool).await?;
+        let mut recovered = 0;
+        for run in runs {
+            let snapshot = sqlx::query_scalar::<_, Value>(
+                "SELECT snapshot FROM devrail_task_snapshots WHERE id=$1",
+            )
+            .bind(run.snapshot_id)
+            .fetch_optional(&self.pool)
+            .await?;
+            let input = snapshot
+                .as_ref()
+                .and_then(|value| value.get("goal"))
+                .and_then(Value::as_str)
+                .unwrap_or("继续执行原任务")
+                .to_string();
+            let launch = RunLaunch {
+                run_id: run.id,
+                task_id: run.task_id,
+                organization_id: run.organization_id,
+                department_id: run.department_id,
+                owner_user_id: run.owner_user_id,
+                cwd: PathBuf::from(run.cwd),
+                input,
+                resume_thread_id: run.thread_id,
+                resume_turn_id: run.turn_id,
+            };
+            if self.launch(launch).await.is_ok() {
+                recovered += 1;
+            }
+        }
+        let _ = devrail_runs::mark_unrecoverable_runs(&self.pool).await?;
+        Ok(recovered)
     }
 }
 
