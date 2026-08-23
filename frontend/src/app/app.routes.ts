@@ -90,6 +90,13 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/devrail/devrail').then((m) => m.DevRailPage),
       },
       {
+        path: 'devrail/projects/:id/members',
+        canActivate: [permissionGuard],
+        data: { permissions: ROUTE_ACCESS.devrail },
+        loadComponent: () =>
+          import('./pages/devrail-members/devrail-members').then((m) => m.DevRailMembersPage),
+      },
+      {
         path: 'devrail/runs/:id',
         canActivate: [permissionGuard],
         data: { permissions: ROUTE_ACCESS.devrail },

@@ -6,13 +6,14 @@
 
 use crate::error::ErrorEnvelope;
 use crate::models::{
-    AssignRolesRequest, AuditLogQuery, BatchAssignRolesRequest, BatchUserIdsRequest,
-    ChangePasswordRequest, CreateDepartmentRequest, CreateDevRailEnvironmentRequest,
-    CreateDevRailProjectRequest, CreateDevRailRepositoryRequest, CreateDevRailRunRequest,
-    CreateDevRailTaskRequest, CreateRoleRequest, CreateUserRequest, DashboardStats,
-    DataScopeSchema, DepartmentResponse, DepartmentStatusSchema, DevRailApprovalDecisionRequest,
-    DevRailApprovalPage, DevRailApprovalResponse, DevRailEnvironmentPage,
-    DevRailEnvironmentResponse, DevRailListQuery, DevRailProjectPage, DevRailProjectResponse,
+    AddDevRailProjectMemberRequest, AssignRolesRequest, AuditLogQuery, BatchAssignRolesRequest,
+    BatchUserIdsRequest, ChangePasswordRequest, CreateDepartmentRequest,
+    CreateDevRailEnvironmentRequest, CreateDevRailProjectRequest, CreateDevRailRepositoryRequest,
+    CreateDevRailRunRequest, CreateDevRailTaskRequest, CreateRoleRequest, CreateUserRequest,
+    DashboardStats, DataScopeSchema, DepartmentResponse, DepartmentStatusSchema,
+    DevRailApprovalDecisionRequest, DevRailApprovalPage, DevRailApprovalResponse,
+    DevRailEnvironmentPage, DevRailEnvironmentResponse, DevRailListQuery, DevRailProjectMemberPage,
+    DevRailProjectMemberResponse, DevRailProjectPage, DevRailProjectResponse,
     DevRailRepositoryPage, DevRailRepositoryResponse, DevRailRunEventPage, DevRailRunPage,
     DevRailRunResponse, DevRailTaskPage, DevRailTaskResponse, HealthResponse, LoginRequest,
     LoginResponse, LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest, MfaMethodSchema,
@@ -712,6 +713,12 @@ fn get_devrail_project() {}
 fn update_devrail_project() {}
 #[utoipa::path(post, path = "/projects/{id}/archive", operation_id = "archiveDevRailProject", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 204), (status = 404, body = ErrorEnvelope)))]
 fn archive_devrail_project() {}
+#[utoipa::path(get, path = "/projects/{project_id}/members", operation_id = "listDevRailProjectMembers", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path)), responses((status = 200, body = DevRailProjectMemberPage)))]
+fn list_devrail_project_members() {}
+#[utoipa::path(post, path = "/projects/{project_id}/members", operation_id = "addDevRailProjectMember", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path)), request_body = AddDevRailProjectMemberRequest, responses((status = 201, body = DevRailProjectMemberResponse)))]
+fn add_devrail_project_member() {}
+#[utoipa::path(delete, path = "/projects/{project_id}/members/{user_id}", operation_id = "removeDevRailProjectMember", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), ("user_id" = i64, Path)), responses((status = 204)))]
+fn remove_devrail_project_member() {}
 
 #[utoipa::path(get, path = "/projects/{project_id}/repositories", operation_id = "listDevRailRepositories", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), DevRailListQuery), responses((status = 200, body = DevRailRepositoryPage)))]
 fn list_devrail_repositories() {}
@@ -814,7 +821,8 @@ fn reject_devrail_approval() {}
         dashboard_stats,
         list_audit_logs
         ,list_devrail_projects, create_devrail_project, get_devrail_project,
-        update_devrail_project, archive_devrail_project, list_devrail_repositories,
+        update_devrail_project, archive_devrail_project, list_devrail_project_members,
+        add_devrail_project_member, remove_devrail_project_member, list_devrail_repositories,
         create_devrail_repository, get_devrail_repository, update_devrail_repository,
         list_devrail_environments, create_devrail_environment, get_devrail_environment,
         update_devrail_environment, list_devrail_tasks, create_devrail_task,
@@ -874,7 +882,7 @@ fn reject_devrail_approval() {}
         UpdateRolePermissionsRequest,
         PermissionCodes,
         DashboardStats,
-        DevRailProjectResponse, DevRailProjectPage, DevRailRepositoryResponse,
+        DevRailProjectResponse, DevRailProjectPage, DevRailProjectMemberPage, DevRailProjectMemberResponse, AddDevRailProjectMemberRequest, DevRailRepositoryResponse,
         DevRailRepositoryPage, DevRailEnvironmentResponse, DevRailEnvironmentPage,
         DevRailTaskResponse, DevRailTaskPage, CreateDevRailProjectRequest,
         UpdateDevRailProjectRequest, CreateDevRailRepositoryRequest,

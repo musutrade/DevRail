@@ -1,0 +1,29 @@
+.devrail-members-page {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.member-form {
+  display: flex;
+  gap: 1rem;
+  align-items: end;
+  padding: 1.25rem;
+  margin: 1.25rem 0;
+  background: var(--surface-container);
+  border-radius: 0.75rem;
+}
+.member-form label {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 180px;
+}
+.member-form input,
+.member-form select {
+  min-height: 2.5rem;
+  padding: 0.5rem;
+}
+@media (max-width: 700px) {
+  .member-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

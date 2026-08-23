@@ -11,6 +11,7 @@ import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
 import { apiErrorMessage } from '../../core/api-error';
 import { DevRailApiService } from '../../features/devrail/data-access/devrail-api.service';
@@ -19,7 +20,14 @@ import type { DevRailProject } from '../../features/devrail/models/devrail.model
 
 @Component({
   selector: 'app-devrail',
-  imports: [DatePipe, FormsModule, MatIconModule, MatProgressSpinnerModule, MatSnackBarModule],
+  imports: [
+    DatePipe,
+    FormsModule,
+    MatIconModule,
+    MatProgressSpinnerModule,
+    MatSnackBarModule,
+    RouterLink,
+  ],
   templateUrl: './devrail.html',
   styleUrl: './devrail.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

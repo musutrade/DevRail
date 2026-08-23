@@ -2112,6 +2112,124 @@
         ]
       }
     },
+    "/projects/{project_id}/members": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "listDevRailProjectMembers",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailProjectMemberPage"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "addDevRailProjectMember",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddDevRailProjectMemberRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailProjectMemberResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/projects/{project_id}/members/{user_id}": {
+      "delete": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "removeDevRailProjectMember",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/projects/{project_id}/repositories": {
       "get": {
         "tags": [
@@ -3993,6 +4111,24 @@
   },
   "components": {
     "schemas": {
+      "AddDevRailProjectMemberRequest": {
+        "type": "object",
+        "required": [
+          "userId"
+        ],
+        "properties": {
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "userId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "AssignRolesRequest": {
         "type": "object",
         "required": [
@@ -4825,6 +4961,59 @@
             "format": "date-time"
           },
           "workspaceRoot": {
+            "type": "string"
+          }
+        }
+      },
+      "DevRailProjectMemberPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DevRailProjectMemberResponse"
+            }
+          }
+        }
+      },
+      "DevRailProjectMemberResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "projectId",
+          "userId",
+          "username",
+          "displayName",
+          "role",
+          "joinedAt"
+        ],
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "projectId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "role": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "username": {
             "type": "string"
           }
         }

@@ -61,6 +61,37 @@ pub async fn archive_project(
         .map(|_| StatusCode::NO_CONTENT)
 }
 
+pub async fn list_members(
+    State(s): State<AppState>,
+    auth: RequirePermission<MemberRead>,
+    Path(project_id): Path<i64>,
+) -> Result<Json<DevRailProjectMemberPage>, ApiError> {
+    services::devrail_members::list(&s.pool, &auth, project_id)
+        .await
+        .map(Json)
+}
+
+pub async fn add_member(
+    State(s): State<AppState>,
+    auth: RequirePermission<MemberWrite>,
+    Path(project_id): Path<i64>,
+    Json(req): Json<AddDevRailProjectMemberRequest>,
+) -> Result<(StatusCode, Json<DevRailProjectMemberResponse>), ApiError> {
+    services::devrail_members::add(&s.pool, &auth, project_id, &req)
+        .await
+        .map(|v| (StatusCode::CREATED, Json(v)))
+}
+
+pub async fn remove_member(
+    State(s): State<AppState>,
+    auth: RequirePermission<MemberWrite>,
+    Path((project_id, user_id)): Path<(i64, i64)>,
+) -> Result<StatusCode, ApiError> {
+    services::devrail_members::remove(&s.pool, &auth, project_id, user_id)
+        .await
+        .map(|_| StatusCode::NO_CONTENT)
+}
+
 pub async fn list_repositories(
     State(s): State<AppState>,
     auth: RequirePermission<RepositoryRead>,

@@ -77,6 +77,14 @@
                 <td>{{ project.defaultEnvironmentId ? '已配置' : '未配置' }}</td>
                 <td>{{ project.updatedAt | date: 'yyyy-MM-dd HH:mm' }}</td>
                 <td>
+                  <a
+                    class="row-btn"
+                    [routerLink]="['/devrail/projects', project.id, 'members']"
+                    title="项目成员"
+                    aria-label="项目成员"
+                  >
+                    <mat-icon>group</mat-icon>
+                  </a>
                   @if (canWrite() && project.status === 'active') {
                     <button
                       class="row-btn danger"

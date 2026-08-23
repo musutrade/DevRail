@@ -1032,6 +1032,8 @@ async fn login_and_user_crud_flow() {
             "devrail:approval:read",
             "devrail:approval:approve",
             "devrail:approval:reject",
+            "devrail:member:read",
+            "devrail:member:write",
         ])
     );
     let permission_id = |code: &str| {
