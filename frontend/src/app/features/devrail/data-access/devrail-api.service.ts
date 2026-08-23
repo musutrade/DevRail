@@ -17,6 +17,10 @@ import { updateDevRailEnvironment } from '../../../generated/api/fn/devrail/upda
 import { updateDevRailProject } from '../../../generated/api/fn/devrail/update-dev-rail-project';
 import { updateDevRailRepository } from '../../../generated/api/fn/devrail/update-dev-rail-repository';
 import { updateDevRailTask } from '../../../generated/api/fn/devrail/update-dev-rail-task';
+import { getDevRailRun } from '../../../generated/api/fn/devrail/get-dev-rail-run';
+import { listDevRailRunEvents } from '../../../generated/api/fn/devrail/list-dev-rail-run-events';
+import { interruptDevRailRun } from '../../../generated/api/fn/devrail/interrupt-dev-rail-run';
+import { retryDevRailRun } from '../../../generated/api/fn/devrail/retry-dev-rail-run';
 import type {
   CreateDevRailEnvironmentRequest,
   CreateDevRailProjectRequest,
@@ -30,6 +34,9 @@ import type {
   UpdateDevRailProjectRequest,
   UpdateDevRailRepositoryRequest,
   UpdateDevRailTaskRequest,
+  DevRailRunEventPage,
+  DevRailRunResponse,
+  RetryDevRailRunRequest,
 } from '../../../generated/api/models';
 
 @Injectable({ providedIn: 'root' })
@@ -89,5 +96,21 @@ export class DevRailApiService {
   }
   updateTask(projectId: number, id: number, body: UpdateDevRailTaskRequest) {
     return this.api.invoke(updateDevRailTask, { project_id: projectId, id, body });
+  }
+
+  getRun(id: number): Promise<DevRailRunResponse> {
+    return this.api.invoke(getDevRailRun, { id });
+  }
+
+  listRunEvents(id: number): Promise<DevRailRunEventPage> {
+    return this.api.invoke(listDevRailRunEvents, { id });
+  }
+
+  interruptRun(id: number): Promise<DevRailRunResponse> {
+    return this.api.invoke(interruptDevRailRun, { id });
+  }
+
+  retryRun(id: number, body: RetryDevRailRunRequest): Promise<DevRailRunResponse> {
+    return this.api.invoke(retryDevRailRun, { id, body });
   }
 }

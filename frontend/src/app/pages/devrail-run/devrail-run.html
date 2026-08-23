@@ -1,0 +1,82 @@
+<div class="page devrail-run-page">
+  <div class="page-header">
+    <div>
+      <a routerLink="/devrail/projects" class="back-link">返回 DevRail 项目</a>
+      <h1>运行详情</h1>
+      @if (run(); as current) {
+        <p>运行 #{{ current.id }} · 任务 #{{ current.taskId }}</p>
+      }
+    </div>
+    @if (run(); as current) {
+      <div class="run-actions">
+        @if (!['completed', 'failed', 'cancelled'].includes(current.status)) {
+          <button class="btn-outline" type="button" (click)="interrupt()" [disabled]="busy()">
+            <mat-icon>stop_circle</mat-icon>中断运行
+          </button>
+        } @else {
+          <button class="btn-primary" type="button" (click)="retry()" [disabled]="busy()">
+            <mat-icon>replay</mat-icon>重试运行
+          </button>
+        }
+      </div>
+    }
+  </div>
+  @if (error()) {
+    <div class="empty-state" role="alert">
+      <mat-icon>error</mat-icon>
+      <p>{{ error() }}</p>
+    </div>
+  } @else if (loading()) {
+    <div class="loading-wrap" role="status" aria-label="正在加载运行">
+      <mat-progress-spinner diameter="32" />
+    </div>
+  } @else if (run(); as current) {
+    <section class="run-summary" aria-labelledby="run-summary-title">
+      <h2 id="run-summary-title">运行状态</h2>
+      <div class="summary-grid">
+        <div>
+          <span>状态</span><strong>{{ current.status }}</strong>
+        </div>
+        <div>
+          <span>线程</span><strong>{{ current.threadId || '等待 Harness' }}</strong>
+        </div>
+        <div>
+          <span>回合</span><strong>{{ current.turnId || '等待 Harness' }}</strong>
+        </div>
+        <div>
+          <span>开始时间</span
+          ><strong>{{
+            current.startedAt ? (current.startedAt | date: 'yyyy-MM-dd HH:mm:ss') : '未开始'
+          }}</strong>
+        </div>
+      </div>
+      @if (current.exitReason || current.recoverySuggestion) {
+        <div class="run-message" role="status">
+          <strong>{{ current.exitReason || '运行提示' }}</strong>
+          @if (current.recoverySuggestion) {
+            <p>{{ current.recoverySuggestion }}</p>
+          }
+        </div>
+      }
+    </section>
+    <section class="event-card" aria-labelledby="event-title">
+      <div class="section-heading">
+        <h2 id="event-title">事件时间线</h2>
+        <span>{{ events().length }} 条事件</span>
+      </div>
+      <ol class="event-list">
+        @for (event of events(); track event.cursor) {
+          <li>
+            <div class="event-meta">
+              <strong>{{ event.eventType }}</strong
+              ><span>#{{ event.cursor }} · {{ event.occurredAt | date: 'HH:mm:ss' }}</span>
+            </div>
+            <p>{{ eventPayload(event) }}</p>
+          </li>
+        } @empty {
+          <li class="table-empty">暂无事件</li>
+        }
+      </ol>
+    </section>
+  }
+</div>
