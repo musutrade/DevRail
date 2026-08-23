@@ -67,6 +67,7 @@ const DEVRAIL_PROJECT_MEMBERS_PATH: &str = "/api/v1/projects/{project_id}/member
 const DEVRAIL_PROJECT_MEMBER_PATH: &str = "/api/v1/projects/{project_id}/members/{user_id}";
 const DEVRAIL_REPOSITORIES_PATH: &str = "/api/v1/projects/{project_id}/repositories";
 const DEVRAIL_REPOSITORY_PATH: &str = "/api/v1/projects/{project_id}/repositories/{id}";
+const DEVRAIL_REPOSITORY_SYNC_PATH: &str = "/api/v1/projects/{project_id}/repositories/{id}/sync";
 const DEVRAIL_ENVIRONMENTS_PATH: &str = "/api/v1/projects/{project_id}/environments";
 const DEVRAIL_ENVIRONMENT_PATH: &str = "/api/v1/projects/{project_id}/environments/{id}";
 const DEVRAIL_TASKS_PATH: &str = "/api/v1/projects/{project_id}/tasks";
@@ -132,6 +133,7 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_PROJECT_MEMBER_PATH, &["delete"]),
     (DEVRAIL_REPOSITORIES_PATH, &["get", "post"]),
     (DEVRAIL_REPOSITORY_PATH, &["get", "patch"]),
+    (DEVRAIL_REPOSITORY_SYNC_PATH, &["post"]),
     (DEVRAIL_ENVIRONMENTS_PATH, &["get", "post"]),
     (DEVRAIL_ENVIRONMENT_PATH, &["get", "patch"]),
     (DEVRAIL_TASKS_PATH, &["get", "post"]),
@@ -310,6 +312,10 @@ fn base_router(state: AppState) -> Router {
         .route(
             DEVRAIL_REPOSITORY_PATH,
             get(handlers::devrail::get_repository).patch(handlers::devrail::update_repository),
+        )
+        .route(
+            DEVRAIL_REPOSITORY_SYNC_PATH,
+            post(handlers::devrail::sync_repository),
         )
         .route(
             DEVRAIL_ENVIRONMENTS_PATH,

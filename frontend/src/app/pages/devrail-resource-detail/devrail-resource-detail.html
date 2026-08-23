@@ -34,6 +34,11 @@
       <button class="btn-primary" type="submit" [disabled]="busy()">
         <mat-icon>save</mat-icon>保存
       </button>
+      @if (kind() === 'repositories') {
+        <button class="btn-secondary" type="button" (click)="syncRepository()" [disabled]="busy()">
+          <mat-icon>sync</mat-icon>同步远端
+        </button>
+      }
     </form>
   }
 </div>

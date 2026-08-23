@@ -2847,6 +2847,51 @@
         ]
       }
     },
+    "/projects/{project_id}/repositories/{id}/sync": {
+      "post": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "syncDevRailRepository",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailRepositoryResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/projects/{project_id}/tasks": {
       "get": {
         "tags": [

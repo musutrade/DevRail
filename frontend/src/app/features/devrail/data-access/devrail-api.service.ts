@@ -38,6 +38,7 @@ import { markDevRailNotificationRead } from '../../../generated/api/fn/devrail/m
 import { markAllDevRailNotificationsRead } from '../../../generated/api/fn/devrail/mark-all-dev-rail-notifications-read';
 import { getDevRailNotificationPreferences } from '../../../generated/api/fn/devrail/get-dev-rail-notification-preferences';
 import { updateDevRailNotificationPreferences } from '../../../generated/api/fn/devrail/update-dev-rail-notification-preferences';
+import { syncDevRailRepository } from '../../../generated/api/fn/devrail/sync-dev-rail-repository';
 import type {
   CreateDevRailEnvironmentRequest,
   CreateDevRailProjectRequest,
@@ -161,6 +162,9 @@ export class DevRailApiService {
   }
   updateRepository(projectId: number, id: number, body: UpdateDevRailRepositoryRequest) {
     return this.api.invoke(updateDevRailRepository, { project_id: projectId, id, body });
+  }
+  syncRepository(projectId: number, id: number) {
+    return this.api.invoke(syncDevRailRepository, { project_id: projectId, id });
   }
 
   listEnvironments(projectId: number, page = 1, pageSize = 20): Promise<DevRailEnvironmentPage> {

@@ -6,6 +6,9 @@ use crate::models::*;
 use crate::repositories::{self, devrail, devrail_members};
 use serde_json::{json, Value};
 use sqlx::PgPool;
+use std::process::Stdio;
+use std::time::Duration;
+use tokio::process::Command;
 use url::Url;
 
 const DEFAULT_PAGE: i64 = 1;
@@ -512,6 +515,66 @@ pub async fn update_repository(
         "devrail_repository",
         Some(id),
         json!({"projectId":project_id}),
+    )
+    .await
+    .map_err(db_error)?;
+    tx.commit().await.map_err(db_error)?;
+    get_repository(pool, actor, project_id, id).await
+}
+
+pub async fn sync_repository(
+    pool: &PgPool,
+    actor: &ActorContext,
+    project_id: i64,
+    id: i64,
+) -> Result<DevRailRepositoryResponse, ApiError> {
+    let repository = get_repository(pool, actor, project_id, id).await?;
+    let result = tokio::time::timeout(
+        Duration::from_secs(30),
+        Command::new("git")
+            .arg("-c")
+            .arg("credential.helper=")
+            .arg("ls-remote")
+            .arg(&repository.remote_url)
+            .arg("HEAD")
+            .env_clear()
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .output(),
+    )
+    .await;
+    let (status, head_sha) = match result {
+        Ok(Ok(output)) if output.status.success() => {
+            let sha = String::from_utf8_lossy(&output.stdout)
+                .split_whitespace()
+                .next()
+                .filter(|v| v.len() == 40 && v.bytes().all(|b| b.is_ascii_hexdigit()))
+                .map(str::to_owned);
+            if sha.is_some() {
+                ("synced", sha)
+            } else {
+                ("failed", None)
+            }
+        }
+        _ => ("failed", None),
+    };
+    let mut tx = pool.begin().await.map_err(db_error)?;
+    if !devrail::update_repository_sync(&mut tx, actor, project_id, id, status, head_sha.as_deref())
+        .await
+        .map_err(db_error)?
+    {
+        return Err(ApiError::not_found("仓库不存在或超出数据范围"));
+    }
+    repositories::audit_logs::record(
+        &mut tx,
+        Some(actor.user_id),
+        "devrail.repository.sync",
+        "devrail_repository",
+        Some(id),
+        json!({"projectId": project_id, "status": status}),
     )
     .await
     .map_err(db_error)?;
