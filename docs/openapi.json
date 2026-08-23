@@ -6022,6 +6022,12 @@
           "status"
         ],
         "properties": {
+          "commandSummary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "durationMs": {
             "type": [
               "integer",
@@ -6029,12 +6035,24 @@
             ],
             "format": "int64"
           },
+          "executorVersion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "exitCode": {
             "type": [
               "integer",
               "null"
             ],
             "format": "int64"
+          },
+          "logRef": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "name": {
             "type": "string"

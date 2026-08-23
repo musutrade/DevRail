@@ -57,7 +57,7 @@ VISUAL_REVIEW=1 npm run e2e -- --project=chromium --project=mobile-chromium
 4. 保护 `main`，将 Quality gate、Backend verification、Frontend verification 设为 required checks，并启用 secret scanning 与 push protection；
 5. 将审计归档、SBOM、备份和发布证据写入权限独立的不可变存储，并执行恢复演练；
 6. 根据业务 RPO/RTO、数据分类、司法辖区与合同要求补齐高合规控制；
-7. 按 [DevRail 实现状态](devrail-implementation-status.md) 和 [需求文档](requirements.md) 继续完成本地工作树状态、完整资源同步、完整质量门禁定义与日志引用及通知推送链路；当前已落地仓库远端 HEAD/默认分支/分支数量检查、环境健康检查、受限命令质量门禁执行、站内通知、transactional outbox、run/审批状态通知和通知中心，Web Push 设备/偏好、dispatcher、投递重试/审计仍未完成。
+7. 按 [DevRail 实现状态](devrail-implementation-status.md) 和 [需求文档](requirements.md) 继续完成本地工作树状态、完整资源同步、更丰富的质量门禁日志后端及通知推送链路；当前已落地仓库远端 HEAD/默认分支/分支数量检查、环境健康检查、受限命令质量门禁执行、结构化门禁元数据、站内通知、transactional outbox、run/审批状态通知和通知中心，Web Push 设备/偏好、dispatcher、投递重试/审计仍未完成。
 
 ## 已知边界
 

@@ -1024,6 +1024,9 @@ pub struct DevRailQualityGatePage {
 pub struct DevRailQualityGateResponse {
     pub name: String,
     pub status: String,
+    pub command_summary: Option<String>,
+    pub executor_version: Option<String>,
+    pub log_ref: Option<String>,
     pub exit_code: Option<i64>,
     pub duration_ms: Option<i64>,
     pub summary: Option<String>,

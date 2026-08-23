@@ -104,6 +104,10 @@
               ><span>{{ gate.status }}</span>
             </div>
             <p>{{ gate.summary || '暂无摘要' }}</p>
+            <small
+              >{{ gate.commandSummary || '未提供命令摘要' }} ·
+              {{ gate.executorVersion || '未提供执行器版本' }}</small
+            >
           </li>
         } @empty {
           <li class="table-empty">暂无质量门禁结果</li>

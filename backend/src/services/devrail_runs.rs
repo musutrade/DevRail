@@ -421,6 +421,9 @@ pub async fn get_quality_gates(
         .map(|row| DevRailQualityGateResponse {
             name: string_field(&row.payload, "name").unwrap_or_else(|| "质量门禁".to_string()),
             status: string_field(&row.payload, "status").unwrap_or_else(|| "unknown".to_string()),
+            command_summary: string_field(&row.payload, "command_summary"),
+            executor_version: string_field(&row.payload, "executor_version"),
+            log_ref: string_field(&row.payload, "log_ref"),
             exit_code: integer_field(&row.payload, "exit_code"),
             duration_ms: integer_field(&row.payload, "duration_ms"),
             summary: row.summary,
@@ -480,7 +483,15 @@ pub async fn execute_quality_gates(
                 ("failed", None, "质量门禁执行超时".to_string())
             }
         };
-        let payload = json!({"name":name,"status":status,"exit_code":exit_code,"duration_ms":started.elapsed().as_millis() as i64});
+        let payload = json!({
+            "name": name,
+            "status": status,
+            "command_summary": args.join(" "),
+            "executor_version": "devrail-gate-v1",
+            "log_ref": format!("run-event:{id}:quality-gate:{index}"),
+            "exit_code": exit_code,
+            "duration_ms": started.elapsed().as_millis() as i64,
+        });
         let mut tx = pool.begin().await.map_err(db_error)?;
         devrail_runs::append_event(
             &mut tx,
