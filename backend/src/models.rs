@@ -984,6 +984,37 @@ pub struct DevRailRunEventPage {
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct DevRailChangesetResponse {
+    pub run_id: i64,
+    pub files: Vec<DevRailChangeFileResponse>,
+}
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailChangeFileResponse {
+    pub path: String,
+    pub status: String,
+    pub additions: Option<i64>,
+    pub deletions: Option<i64>,
+    pub summary: Option<String>,
+}
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailQualityGatePage {
+    pub run_id: i64,
+    pub items: Vec<DevRailQualityGateResponse>,
+}
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailQualityGateResponse {
+    pub name: String,
+    pub status: String,
+    pub exit_code: Option<i64>,
+    pub duration_ms: Option<i64>,
+    pub summary: Option<String>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct DevRailApprovalResponse {
     pub id: i64,
     pub run_id: i64,

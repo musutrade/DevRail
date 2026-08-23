@@ -23,6 +23,8 @@ import { getDevRailRun } from '../../../generated/api/fn/devrail/get-dev-rail-ru
 import { listDevRailRunEvents } from '../../../generated/api/fn/devrail/list-dev-rail-run-events';
 import { interruptDevRailRun } from '../../../generated/api/fn/devrail/interrupt-dev-rail-run';
 import { retryDevRailRun } from '../../../generated/api/fn/devrail/retry-dev-rail-run';
+import { getDevRailRunChangeset } from '../../../generated/api/fn/devrail/get-dev-rail-run-changeset';
+import { getDevRailRunQualityGates } from '../../../generated/api/fn/devrail/get-dev-rail-run-quality-gates';
 import { listDevRailProjectMembers } from '../../../generated/api/fn/devrail/list-dev-rail-project-members';
 import { addDevRailProjectMember } from '../../../generated/api/fn/devrail/add-dev-rail-project-member';
 import { removeDevRailProjectMember } from '../../../generated/api/fn/devrail/remove-dev-rail-project-member';
@@ -48,6 +50,8 @@ import type {
   UpdateDevRailTaskRequest,
   DevRailRunEventPage,
   DevRailRunResponse,
+  DevRailChangesetResponse,
+  DevRailQualityGatePage,
   RetryDevRailRunRequest,
   AddDevRailProjectMemberRequest,
   DevRailProjectMemberPage,
@@ -178,6 +182,12 @@ export class DevRailApiService {
 
   listRunEvents(id: number): Promise<DevRailRunEventPage> {
     return this.api.invoke(listDevRailRunEvents, { id });
+  }
+  getRunChangeset(id: number): Promise<DevRailChangesetResponse> {
+    return this.api.invoke(getDevRailRunChangeset, { id });
+  }
+  getRunQualityGates(id: number): Promise<DevRailQualityGatePage> {
+    return this.api.invoke(getDevRailRunQualityGates, { id });
   }
 
   interruptRun(id: number): Promise<DevRailRunResponse> {

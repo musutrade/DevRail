@@ -431,6 +431,7 @@ fn classify_event(value: &Value) -> (String, Option<String>, Option<String>, Val
         }
         k if k.contains("command") => "command_end",
         k if k.contains("file") || k.contains("change") || k.contains("patch") => "file_change",
+        k if k.contains("quality") || k.contains("gate") => "quality_gate",
         k if k.contains("tool") => "tool_call",
         k if k.contains("reasoning") => "reasoning_summary",
         k if k.contains("error") || value.get("error").is_some() => "error",
