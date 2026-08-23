@@ -27,6 +27,12 @@ export type { GetDevRailEnvironment$Params as GetDevRailEnvironment$Params } fro
 export { getDevRailEnvironment as getDevRailEnvironment } from './fn/devrail/get-dev-rail-environment';
 export type { UpdateDevRailEnvironment$Params as UpdateDevRailEnvironment$Params } from './fn/devrail/update-dev-rail-environment';
 export { updateDevRailEnvironment as updateDevRailEnvironment } from './fn/devrail/update-dev-rail-environment';
+export type { ListDevRailProjectMembers$Params as ListDevRailProjectMembers$Params } from './fn/devrail/list-dev-rail-project-members';
+export { listDevRailProjectMembers as listDevRailProjectMembers } from './fn/devrail/list-dev-rail-project-members';
+export type { AddDevRailProjectMember$Params as AddDevRailProjectMember$Params } from './fn/devrail/add-dev-rail-project-member';
+export { addDevRailProjectMember as addDevRailProjectMember } from './fn/devrail/add-dev-rail-project-member';
+export type { RemoveDevRailProjectMember$Params as RemoveDevRailProjectMember$Params } from './fn/devrail/remove-dev-rail-project-member';
+export { removeDevRailProjectMember as removeDevRailProjectMember } from './fn/devrail/remove-dev-rail-project-member';
 export type { ListDevRailRepositories$Params as ListDevRailRepositories$Params } from './fn/devrail/list-dev-rail-repositories';
 export { listDevRailRepositories as listDevRailRepositories } from './fn/devrail/list-dev-rail-repositories';
 export type { CreateDevRailRepository$Params as CreateDevRailRepository$Params } from './fn/devrail/create-dev-rail-repository';

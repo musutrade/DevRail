@@ -21,6 +21,9 @@ import { getDevRailRun } from '../../../generated/api/fn/devrail/get-dev-rail-ru
 import { listDevRailRunEvents } from '../../../generated/api/fn/devrail/list-dev-rail-run-events';
 import { interruptDevRailRun } from '../../../generated/api/fn/devrail/interrupt-dev-rail-run';
 import { retryDevRailRun } from '../../../generated/api/fn/devrail/retry-dev-rail-run';
+import { listDevRailProjectMembers } from '../../../generated/api/fn/devrail/list-dev-rail-project-members';
+import { addDevRailProjectMember } from '../../../generated/api/fn/devrail/add-dev-rail-project-member';
+import { removeDevRailProjectMember } from '../../../generated/api/fn/devrail/remove-dev-rail-project-member';
 import type {
   CreateDevRailEnvironmentRequest,
   CreateDevRailProjectRequest,
@@ -37,6 +40,9 @@ import type {
   DevRailRunEventPage,
   DevRailRunResponse,
   RetryDevRailRunRequest,
+  AddDevRailProjectMemberRequest,
+  DevRailProjectMemberPage,
+  DevRailProjectMemberResponse,
 } from '../../../generated/api/models';
 
 @Injectable({ providedIn: 'root' })
@@ -57,6 +63,19 @@ export class DevRailApiService {
   }
   archiveProject(id: number) {
     return this.api.invoke(archiveDevRailProject, { id });
+  }
+
+  listMembers(projectId: number): Promise<DevRailProjectMemberPage> {
+    return this.api.invoke(listDevRailProjectMembers, { project_id: projectId });
+  }
+  addMember(
+    projectId: number,
+    body: AddDevRailProjectMemberRequest,
+  ): Promise<DevRailProjectMemberResponse> {
+    return this.api.invoke(addDevRailProjectMember, { project_id: projectId, body });
+  }
+  removeMember(projectId: number, userId: number): Promise<void> {
+    return this.api.invoke(removeDevRailProjectMember, { project_id: projectId, user_id: userId });
   }
 
   listRepositories(projectId: number, page = 1, pageSize = 20): Promise<DevRailRepositoryPage> {

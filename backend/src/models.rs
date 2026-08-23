@@ -215,6 +215,21 @@ pub struct DevRailTaskRow {
     pub archived_at: Option<DateTime<Utc>>,
 }
 
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct DevRailProjectMemberRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub project_id: i64,
+    pub user_id: i64,
+    pub username: String,
+    pub display_name: String,
+    pub role: String,
+    pub joined_at: DateTime<Utc>,
+    pub revoked_at: Option<DateTime<Utc>>,
+}
+
 #[derive(Debug, Clone, FromRow)]
 pub struct DevRailRunRow {
     pub id: i64,
@@ -870,6 +885,31 @@ pub struct DevRailTaskResponse {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub archived_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailProjectMemberResponse {
+    pub id: i64,
+    pub project_id: i64,
+    pub user_id: i64,
+    pub username: String,
+    pub display_name: String,
+    pub role: String,
+    pub joined_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailProjectMemberPage {
+    pub items: Vec<DevRailProjectMemberResponse>,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AddDevRailProjectMemberRequest {
+    pub user_id: i64,
+    pub role: Option<String>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]

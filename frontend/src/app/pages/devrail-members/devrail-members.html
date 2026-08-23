@@ -1,0 +1,67 @@
+<div class="page devrail-members-page">
+  <div class="page-header">
+    <div>
+      <a routerLink="/devrail/projects">返回 DevRail 项目</a>
+      <h1>项目成员</h1>
+      <p>管理当前项目的成员和项目角色。</p>
+    </div>
+  </div>
+  <section class="member-form">
+    <label
+      >用户 ID<input
+        [value]="username()"
+        (input)="setUsername($any($event.target).value)"
+        inputmode="numeric" /></label
+    ><label
+      >项目角色<select [value]="role()" (change)="setRole($any($event.target).value)">
+        <option value="admin">管理员</option>
+        <option value="developer">开发者</option>
+        <option value="observer">观察者</option>
+      </select></label
+    ><button class="btn-primary" type="button" (click)="add()" [disabled]="busy()">
+      <mat-icon>person_add</mat-icon>添加成员
+    </button>
+  </section>
+  @if (loading()) {
+    <div class="loading-wrap" role="status">正在加载成员</div>
+  } @else {
+    <section class="table-card">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>用户名</th>
+            <th>显示名称</th>
+            <th>角色</th>
+            <th>加入时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (member of members(); track member.id) {
+            <tr>
+              <td>{{ member.username }}</td>
+              <td>{{ member.displayName }}</td>
+              <td>{{ member.role }}</td>
+              <td>{{ member.joinedAt | date: 'yyyy-MM-dd HH:mm' }}</td>
+              <td>
+                <button
+                  class="row-btn danger"
+                  type="button"
+                  (click)="remove(member)"
+                  [disabled]="busy()"
+                  aria-label="移除成员"
+                >
+                  <mat-icon>person_remove</mat-icon>
+                </button>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="5">暂无项目成员</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  }
+</div>

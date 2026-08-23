@@ -32,6 +32,14 @@ pub struct TaskWrite;
 impl PermissionRequirement for TaskWrite {
     const CODE: &'static str = "devrail:task:write";
 }
+pub struct MemberRead;
+impl PermissionRequirement for MemberRead {
+    const CODE: &'static str = "devrail:member:read";
+}
+pub struct MemberWrite;
+impl PermissionRequirement for MemberWrite {
+    const CODE: &'static str = "devrail:member:write";
+}
 pub struct RunRead;
 impl PermissionRequirement for RunRead {
     const CODE: &'static str = "devrail:run:read";

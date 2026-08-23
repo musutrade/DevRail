@@ -3,7 +3,7 @@
 use crate::access::ActorContext;
 use crate::error::{db_error, ApiError};
 use crate::models::*;
-use crate::repositories::{self, devrail};
+use crate::repositories::{self, devrail, devrail_members};
 use serde_json::{json, Value};
 use sqlx::PgPool;
 use url::Url;
@@ -206,6 +206,9 @@ pub async fn create_project(
     )
     .await
     .map_err(db_error)?;
+    devrail_members::add(&mut tx, actor, row.id, actor.user_id, "owner")
+        .await
+        .map_err(db_error)?;
     repositories::audit_logs::record(
         &mut tx,
         Some(actor.user_id),
