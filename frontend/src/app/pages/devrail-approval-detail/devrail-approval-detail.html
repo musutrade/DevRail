@@ -1,0 +1,54 @@
+<div class="page approval-detail">
+  <div class="page-header">
+    <div>
+      <a routerLink="/devrail/approvals">返回审批中心</a>
+      <h1>审批详情</h1>
+    </div>
+  </div>
+  @if (loading()) {
+    <div class="loading-wrap" role="status">正在加载审批</div>
+  } @else if (approval(); as item) {
+    <section class="detail">
+      <dl>
+        <dt>工具</dt>
+        <dd>{{ item.toolName }}</dd>
+        <dt>风险级别</dt>
+        <dd>{{ item.riskLevel }}</dd>
+        <dt>工作目录</dt>
+        <dd>{{ item.cwd }}</dd>
+        <dt>影响范围</dt>
+        <dd>{{ item.impactScope || '未提供' }}</dd>
+        <dt>参数摘要</dt>
+        <dd>
+          <pre>{{ item.argsSummary | json }}</pre>
+        </dd>
+        <dt>状态</dt>
+        <dd>{{ item.status }}</dd>
+        <dt>过期时间</dt>
+        <dd>{{ item.expiresAt }}</dd>
+      </dl>
+      @if (item.status === 'pending') {
+        <label
+          >处理原因<textarea
+            [value]="reason()"
+            (input)="setReason($any($event.target).value)"
+            rows="4"
+            aria-label="处理原因"
+          ></textarea>
+        </label>
+        <div class="actions">
+          <button class="btn-primary" type="button" (click)="decide('approve')" [disabled]="busy()">
+            <mat-icon>check</mat-icon>批准</button
+          ><button
+            class="btn-outline danger"
+            type="button"
+            (click)="decide('reject')"
+            [disabled]="busy()"
+          >
+            <mat-icon>close</mat-icon>拒绝
+          </button>
+        </div>
+      }
+    </section>
+  }
+</div>

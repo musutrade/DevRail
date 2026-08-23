@@ -30,6 +30,7 @@ describe('application navigation', () => {
       ['/role-permissions', ROUTE_ACCESS.rolePermissions],
       ['/audit-logs', ROUTE_ACCESS.auditLogs],
       ['/devrail/projects', ROUTE_ACCESS.devrail],
+      ['/devrail/approvals', ROUTE_ACCESS.devrail],
     ]);
 
     for (const item of navigationLinks()) {
