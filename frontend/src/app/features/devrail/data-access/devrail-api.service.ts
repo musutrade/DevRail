@@ -118,7 +118,7 @@ export class DevRailApiService {
     projectId: number,
     page = 1,
     pageSize = 20,
-    filters: { keyword?: string; status?: string } = {},
+    filters: { keyword?: string; status?: string; assigneeUserId?: number; label?: string } = {},
   ): Promise<DevRailTaskPage> {
     return this.api.invoke(listDevRailTasks, {
       project_id: projectId,
@@ -126,6 +126,8 @@ export class DevRailApiService {
       pageSize,
       keyword: filters.keyword || undefined,
       status: filters.status || undefined,
+      assigneeUserId: filters.assigneeUserId,
+      label: filters.label || undefined,
     });
   }
   getTask(projectId: number, id: number) {

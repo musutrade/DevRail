@@ -405,7 +405,7 @@ pub async fn list_tasks(
     page: i64,
     size: i64,
 ) -> Result<Vec<DevRailTaskRow>, sqlx::Error> {
-    let sql=format!("{} AND ($6::text IS NULL OR t.title ILIKE '%' || $6 || '%' OR t.goal ILIKE '%' || $6 || '%') AND ($7::text IS NULL OR t.status=$7) ORDER BY t.updated_at DESC,t.id DESC LIMIT $8 OFFSET $9",child_scope_sql("devrail_tasks","t",true).await);
+    let sql=format!("{} AND ($6::text IS NULL OR t.title ILIKE '%' || $6 || '%' OR t.goal ILIKE '%' || $6 || '%') AND ($7::text IS NULL OR t.status=$7) AND ($8::bigint IS NULL OR t.assignee_user_id=$8) AND ($9::text IS NULL OR t.labels @> jsonb_build_array($9::text)) ORDER BY t.updated_at DESC,t.id DESC LIMIT $10 OFFSET $11",child_scope_sql("devrail_tasks","t",true).await);
     sqlx::query_as::<_, DevRailTaskRow>(AssertSqlSafe(sql))
         .bind(actor.data_scope.as_str())
         .bind(actor.organization_id)
@@ -414,6 +414,8 @@ pub async fn list_tasks(
         .bind(q.project_id)
         .bind(q.keyword.as_deref())
         .bind(q.status.as_deref())
+        .bind(q.assignee_user_id)
+        .bind(q.label.as_deref())
         .bind(size)
         .bind((page - 1) * size)
         .fetch_all(pool)
@@ -424,7 +426,7 @@ pub async fn count_tasks(
     actor: &ActorContext,
     q: &DevRailListQuery,
 ) -> Result<i64, sqlx::Error> {
-    let sql=format!("WITH RECURSIVE visible_departments AS (SELECT id FROM departments WHERE id=$4 AND organization_id=$2 UNION SELECT child.id FROM departments child JOIN visible_departments parent ON child.parent_id=parent.id WHERE child.organization_id=$2) SELECT count(*) FROM devrail_tasks t WHERE {} AND t.project_id=$5 AND t.archived_at IS NULL AND ($6::text IS NULL OR t.title ILIKE '%' || $6 || '%' OR t.goal ILIKE '%' || $6 || '%') AND ($7::text IS NULL OR t.status=$7)",scope_sql("t"));
+    let sql=format!("WITH RECURSIVE visible_departments AS (SELECT id FROM departments WHERE id=$4 AND organization_id=$2 UNION SELECT child.id FROM departments child JOIN visible_departments parent ON child.parent_id=parent.id WHERE child.organization_id=$2) SELECT count(*) FROM devrail_tasks t WHERE {} AND t.project_id=$5 AND t.archived_at IS NULL AND ($6::text IS NULL OR t.title ILIKE '%' || $6 || '%' OR t.goal ILIKE '%' || $6 || '%') AND ($7::text IS NULL OR t.status=$7) AND ($8::bigint IS NULL OR t.assignee_user_id=$8) AND ($9::text IS NULL OR t.labels @> jsonb_build_array($9::text))",scope_sql("t"));
     sqlx::query_scalar::<_, i64>(AssertSqlSafe(sql))
         .bind(actor.data_scope.as_str())
         .bind(actor.organization_id)
@@ -433,6 +435,8 @@ pub async fn count_tasks(
         .bind(q.project_id)
         .bind(q.keyword.as_deref())
         .bind(q.status.as_deref())
+        .bind(q.assignee_user_id)
+        .bind(q.label.as_deref())
         .fetch_one(pool)
         .await
 }

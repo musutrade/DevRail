@@ -21,6 +21,8 @@ export class DevRailTasksPage implements OnInit {
   readonly error = signal<string | null>(null);
   readonly keyword = signal('');
   readonly status = signal('');
+  readonly assigneeUserId = signal('');
+  readonly label = signal('');
   readonly page = signal(1);
   readonly pageSize = 20;
   readonly total = signal(0);
@@ -39,6 +41,12 @@ export class DevRailTasksPage implements OnInit {
   }
   setStatus(value: string): void {
     this.status.set(value);
+  }
+  setAssigneeUserId(value: string): void {
+    this.assigneeUserId.set(value);
+  }
+  setLabel(value: string): void {
+    this.label.set(value);
   }
   applyFilters(): void {
     this.page.set(1);
@@ -64,6 +72,8 @@ export class DevRailTasksPage implements OnInit {
       const result = await this.api.listTasks(this.projectId, this.page(), this.pageSize, {
         keyword: this.keyword().trim(),
         status: this.status(),
+        assigneeUserId: Number(this.assigneeUserId()) || undefined,
+        label: this.label().trim(),
       });
       this.tasks.set(result.items);
       this.total.set(result.total);

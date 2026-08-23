@@ -21,6 +21,18 @@
         <option value="failed">失败</option>
       </select></label
     >
+    <label
+      >负责人 ID<input
+        [value]="assigneeUserId()"
+        (input)="setAssigneeUserId($any($event.target).value)"
+        inputmode="numeric"
+    /></label>
+    <label
+      >标签<input
+        [value]="label()"
+        (input)="setLabel($any($event.target).value)"
+        placeholder="例如 backend"
+    /></label>
     <button class="btn-primary" type="button" (click)="applyFilters()">
       <mat-icon>search</mat-icon>查询
     </button>

@@ -802,6 +802,8 @@ pub struct DevRailListQuery {
     pub keyword: Option<String>,
     pub status: Option<String>,
     pub project_id: Option<i64>,
+    pub assignee_user_id: Option<i64>,
+    pub label: Option<String>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]

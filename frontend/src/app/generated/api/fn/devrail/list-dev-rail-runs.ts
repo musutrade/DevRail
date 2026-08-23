@@ -16,6 +16,8 @@ export interface ListDevRailRuns$Params {
   keyword?: string;
   status?: string;
   projectId?: number;
+  assigneeUserId?: number;
+  label?: string;
 }
 
 export function listDevRailRuns(http: HttpClient, rootUrl: string, params: ListDevRailRuns$Params, context?: HttpContext): Observable<StrictHttpResponse<DevRailRunPage>> {
@@ -27,6 +29,8 @@ export function listDevRailRuns(http: HttpClient, rootUrl: string, params: ListD
     rb.query('keyword', params.keyword, {});
     rb.query('status', params.status, {});
     rb.query('projectId', params.projectId, {});
+    rb.query('assigneeUserId', params.assigneeUserId, {});
+    rb.query('label', params.label, {});
   }
 
   return http.request(
