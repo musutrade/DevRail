@@ -215,6 +215,77 @@ pub async fn reject(
     Ok(result)
 }
 
+pub async fn withdraw(
+    pool: &PgPool,
+    actor: &ActorContext,
+    supervisor: &HarnessSupervisor,
+    id: i64,
+    reason: Option<&str>,
+) -> Result<DevRailApprovalResponse, ApiError> {
+    let approval = devrail_approvals::find(pool, actor, id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("审批不存在或超出数据范围"))?;
+    let mut tx = pool.begin().await.map_err(db_error)?;
+    let row = devrail_approvals::withdraw(
+        &mut tx,
+        &devrail_approvals::ApprovalDecision {
+            actor,
+            id,
+            decision: "cancelled",
+            reason,
+        },
+    )
+    .await
+    .map_err(db_error)?
+    .ok_or_else(|| ApiError::conflict("审批不是待处理状态或只能撤回自己的审批"))?;
+    repositories::audit_logs::record(
+        &mut tx,
+        Some(actor.user_id),
+        "devrail.approval.cancelled",
+        "devrail_approval",
+        Some(id),
+        json!({"runId": approval.run_id, "reason": reason}),
+    )
+    .await
+    .map_err(db_error)?;
+    tx.commit().await.map_err(db_error)?;
+    supervisor
+        .resolve_approval(approval.run_id, id, false)
+        .await
+        .map_err(|e| ApiError::conflict(e.to_string()))?;
+    Ok(response(row))
+}
+
+pub async fn expire_due(
+    pool: &PgPool,
+    supervisor: &HarnessSupervisor,
+) -> Result<usize, sqlx::Error> {
+    let rows = devrail_approvals::expire_due(pool).await?;
+    for row in &rows {
+        let task_id = devrail_runs::task_id_for_run(pool, row.run_id).await?;
+        let mut tx = pool.begin().await?;
+        let trace = uuid::Uuid::new_v4().to_string();
+        devrail_runs::update_run_terminal(
+            &mut tx,
+            &devrail_runs::TerminalRunUpdate {
+                run_id: row.run_id,
+                status: "failed",
+                exit_reason: "approval_expired",
+                exit_code: None,
+                stderr_summary: None,
+                trace_id: &trace,
+                recovery_suggestion: Some("审批已过期；请重新发起 run"),
+            },
+        )
+        .await?;
+        devrail_runs::update_task_status(&mut tx, task_id, "failed").await?;
+        tx.commit().await?;
+        let _ = supervisor.resolve_approval(row.run_id, row.id, false).await;
+    }
+    Ok(rows.len())
+}
+
 pub async fn expire(
     pool: &PgPool,
     actor: &ActorContext,

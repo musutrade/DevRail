@@ -334,6 +334,16 @@ pub async fn reject_approval(
         .await
         .map(Json)
 }
+pub async fn withdraw_approval(
+    State(s): State<AppState>,
+    auth: RequirePermission<ApprovalReject>,
+    Path(id): Path<i64>,
+    Json(req): Json<DevRailApprovalDecisionRequest>,
+) -> Result<Json<DevRailApprovalResponse>, ApiError> {
+    services::devrail_approvals::withdraw(&s.pool, &auth, &s.supervisor, id, req.reason.as_deref())
+        .await
+        .map(Json)
+}
 
 pub async fn list_run_events(
     State(s): State<AppState>,

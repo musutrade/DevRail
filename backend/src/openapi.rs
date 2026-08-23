@@ -774,6 +774,8 @@ fn get_devrail_approval() {}
 fn approve_devrail_approval() {}
 #[utoipa::path(post, path = "/approvals/{id}/reject", operation_id = "rejectDevRailApproval", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), request_body = DevRailApprovalDecisionRequest, responses((status = 200, body = DevRailApprovalResponse)))]
 fn reject_devrail_approval() {}
+#[utoipa::path(post, path = "/approvals/{id}/withdraw", operation_id = "withdrawDevRailApproval", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), request_body = DevRailApprovalDecisionRequest, responses((status = 200, body = DevRailApprovalResponse)))]
+fn withdraw_devrail_approval() {}
 
 #[derive(OpenApi)]
 #[openapi(
@@ -835,7 +837,7 @@ fn reject_devrail_approval() {}
         get_devrail_task, update_devrail_task, create_devrail_run, list_devrail_runs,
         get_devrail_run, interrupt_devrail_run, list_devrail_run_events
         ,stream_devrail_run_events, retry_devrail_run, list_devrail_approvals,
-        get_devrail_approval, approve_devrail_approval, reject_devrail_approval
+        get_devrail_approval, approve_devrail_approval, reject_devrail_approval, withdraw_devrail_approval
     ),
     components(schemas(
         ErrorEnvelope,

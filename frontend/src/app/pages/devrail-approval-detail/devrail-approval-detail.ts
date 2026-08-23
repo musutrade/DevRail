@@ -30,7 +30,7 @@ export class DevRailApprovalDetailPage implements OnInit {
   setReason(value: string): void {
     this.reason.set(value);
   }
-  async decide(decision: 'approve' | 'reject'): Promise<void> {
+  async decide(decision: 'approve' | 'reject' | 'withdraw'): Promise<void> {
     if (this.busy() || this.approval()?.status !== 'pending') return;
     this.busy.set(true);
     try {
@@ -38,11 +38,17 @@ export class DevRailApprovalDetailPage implements OnInit {
       const result =
         decision === 'approve'
           ? await this.api.approveApproval(this.approvalId, body)
-          : await this.api.rejectApproval(this.approvalId, body);
+          : decision === 'reject'
+            ? await this.api.rejectApproval(this.approvalId, body)
+            : await this.api.withdrawApproval(this.approvalId, body);
       this.approval.set(result);
-      this.snack.open(decision === 'approve' ? '审批已批准' : '审批已拒绝', '关闭', {
-        duration: 2500,
-      });
+      this.snack.open(
+        decision === 'approve' ? '审批已批准' : decision === 'reject' ? '审批已拒绝' : '审批已撤回',
+        '关闭',
+        {
+          duration: 2500,
+        },
+      );
     } catch (e) {
       this.snack.open(apiErrorMessage(e, '审批处理失败'), '关闭', { duration: 5000 });
     } finally {

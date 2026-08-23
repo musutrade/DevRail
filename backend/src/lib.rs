@@ -81,6 +81,7 @@ const DEVRAIL_APPROVALS_PATH: &str = "/api/v1/approvals";
 const DEVRAIL_APPROVAL_PATH: &str = "/api/v1/approvals/{id}";
 const DEVRAIL_APPROVAL_APPROVE_PATH: &str = "/api/v1/approvals/{id}/approve";
 const DEVRAIL_APPROVAL_REJECT_PATH: &str = "/api/v1/approvals/{id}/reject";
+const DEVRAIL_APPROVAL_WITHDRAW_PATH: &str = "/api/v1/approvals/{id}/withdraw";
 const METRICS_PATH: &str = "/metrics";
 
 /// Public HTTP operations generated into `docs/openapi.json`.
@@ -139,6 +140,7 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_APPROVAL_PATH, &["get"]),
     (DEVRAIL_APPROVAL_APPROVE_PATH, &["post"]),
     (DEVRAIL_APPROVAL_REJECT_PATH, &["post"]),
+    (DEVRAIL_APPROVAL_WITHDRAW_PATH, &["post"]),
 ];
 
 #[derive(Clone)]
@@ -343,6 +345,10 @@ fn base_router(state: AppState) -> Router {
         .route(
             DEVRAIL_APPROVAL_REJECT_PATH,
             post(handlers::devrail::reject_approval),
+        )
+        .route(
+            DEVRAIL_APPROVAL_WITHDRAW_PATH,
+            post(handlers::devrail::withdraw_approval),
         )
         .with_state(state)
 }
