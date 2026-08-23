@@ -1,0 +1,16 @@
+.resources-page {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.data-table a {
+  color: inherit;
+  text-decoration: none;
+}
+.data-table strong,
+.data-table small {
+  display: block;
+}
+.data-table small {
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+}

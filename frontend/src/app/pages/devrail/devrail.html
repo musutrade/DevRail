@@ -101,6 +101,20 @@
                   >
                     <mat-icon>task_alt</mat-icon>
                   </a>
+                  <a
+                    class="row-btn"
+                    [routerLink]="['/devrail/projects', project.id, 'repositories']"
+                    title="项目仓库"
+                    aria-label="项目仓库"
+                    ><mat-icon>source</mat-icon></a
+                  >
+                  <a
+                    class="row-btn"
+                    [routerLink]="['/devrail/projects', project.id, 'environments']"
+                    title="运行环境"
+                    aria-label="运行环境"
+                    ><mat-icon>dns</mat-icon></a
+                  >
                   @if (canWrite() && project.status === 'active') {
                     <button
                       class="row-btn danger"

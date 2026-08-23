@@ -1,0 +1,77 @@
+<div class="page resources-page">
+  <div class="page-header">
+    <div>
+      <a routerLink="/devrail/projects">返回 DevRail 项目</a>
+      <h1>{{ kind() === 'repositories' ? '代码仓库' : '运行环境' }}</h1>
+      <p>查看当前项目已配置的资源。</p>
+    </div>
+  </div>
+  @if (loading()) {
+    <div class="loading-wrap" role="status"><mat-progress-spinner diameter="32" /></div>
+  } @else if (error()) {
+    <div class="empty-state" role="alert">{{ error() }}</div>
+  } @else if (kind() === 'repositories') {
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>名称</th>
+          <th>协议</th>
+          <th>默认分支</th>
+          <th>HEAD</th>
+          <th>状态</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of repositories(); track item.id) {
+          <tr>
+            <td>
+              <a [routerLink]="[item.id]"
+                ><strong>{{ item.name }}</strong
+                ><small>{{ item.remoteUrl }}</small></a
+              >
+            </td>
+            <td>{{ item.protocol }}</td>
+            <td>{{ item.defaultBranch }}</td>
+            <td>{{ item.lastHeadSha || '未同步' }}</td>
+            <td>{{ item.lastSyncStatus }}</td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="5">暂无代码仓库</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  } @else {
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>名称</th>
+          <th>工作区</th>
+          <th>网络</th>
+          <th>最长时长</th>
+          <th>状态</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of environments(); track item.id) {
+          <tr>
+            <td>
+              <a [routerLink]="[item.id]"
+                ><strong>{{ item.name }}</strong></a
+              >
+            </td>
+            <td>{{ item.workspaceRoot }}</td>
+            <td>{{ item.networkMode }}</td>
+            <td>{{ item.maxDurationSecs }} 秒</td>
+            <td>{{ item.enabled ? '启用' : '停用' }}</td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="5">暂无运行环境</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</div>

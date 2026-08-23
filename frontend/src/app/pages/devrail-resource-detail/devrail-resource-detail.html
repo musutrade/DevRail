@@ -1,0 +1,39 @@
+<div class="page resource-detail">
+  <div class="page-header">
+    <div>
+      <a [routerLink]="['/devrail/projects', projectId, kind()]">返回资源列表</a>
+      <h1>{{ kind() === 'repositories' ? '仓库详情' : '环境详情' }}</h1>
+    </div>
+  </div>
+  @if (resource(); as item) {
+    <form #resourceForm (submit)="$event.preventDefault(); save(resourceForm)">
+      <label>名称<input name="name" [value]="item.name" required /></label>
+      @if (kind() === 'repositories') {
+        <label>远端 URL<input name="remoteUrl" [value]="$any(item).remoteUrl" required /></label
+        ><label>默认分支<input name="defaultBranch" [value]="$any(item).defaultBranch" /></label>
+      } @else {
+        <label
+          >工作区根目录<input
+            name="workspaceRoot"
+            [value]="$any(item).workspaceRoot"
+            required /></label
+        ><label
+          >网络模式<select name="networkMode" [value]="$any(item).networkMode">
+            <option value="off">关闭</option>
+            <option value="allowlist">白名单</option>
+          </select></label
+        ><label
+          >最长运行时长（秒）<input
+            name="maxDurationSecs"
+            type="number"
+            [value]="$any(item).maxDurationSecs" /></label
+        ><label class="check"
+          ><input name="enabled" type="checkbox" [checked]="$any(item).enabled" />启用环境</label
+        >
+      }
+      <button class="btn-primary" type="submit" [disabled]="busy()">
+        <mat-icon>save</mat-icon>保存
+      </button>
+    </form>
+  }
+</div>

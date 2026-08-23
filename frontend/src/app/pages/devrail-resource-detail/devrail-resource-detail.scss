@@ -1,0 +1,31 @@
+.resource-detail {
+  max-width: 900px;
+  margin: 0 auto;
+}
+form {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: var(--surface-container);
+  border-radius: 0.5rem;
+}
+label {
+  display: grid;
+  gap: 0.4rem;
+  font-weight: 600;
+}
+input,
+select {
+  padding: 0.65rem;
+  border: 1px solid var(--outline-variant);
+  border-radius: 4px;
+  font: inherit;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.check input {
+  width: auto;
+}

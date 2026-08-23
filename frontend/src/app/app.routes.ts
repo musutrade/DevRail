@@ -122,6 +122,38 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'devrail/projects/:projectId/repositories',
+        canActivate: [permissionGuard],
+        data: { permissions: ROUTE_ACCESS.devrail },
+        loadComponent: () =>
+          import('./pages/devrail-resources/devrail-resources').then((m) => m.DevRailResourcesPage),
+      },
+      {
+        path: 'devrail/projects/:projectId/environments',
+        canActivate: [permissionGuard],
+        data: { permissions: ROUTE_ACCESS.devrail },
+        loadComponent: () =>
+          import('./pages/devrail-resources/devrail-resources').then((m) => m.DevRailResourcesPage),
+      },
+      {
+        path: 'devrail/projects/:projectId/repositories/:resourceId',
+        canActivate: [permissionGuard],
+        data: { permissions: ROUTE_ACCESS.devrail },
+        loadComponent: () =>
+          import('./pages/devrail-resource-detail/devrail-resource-detail').then(
+            (m) => m.DevRailResourceDetailPage,
+          ),
+      },
+      {
+        path: 'devrail/projects/:projectId/environments/:resourceId',
+        canActivate: [permissionGuard],
+        data: { permissions: ROUTE_ACCESS.devrail },
+        loadComponent: () =>
+          import('./pages/devrail-resource-detail/devrail-resource-detail').then(
+            (m) => m.DevRailResourceDetailPage,
+          ),
+      },
+      {
         path: 'devrail/runs/:id',
         canActivate: [permissionGuard],
         data: { permissions: ROUTE_ACCESS.devrail },
