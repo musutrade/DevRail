@@ -596,6 +596,17 @@ async fn finish_run(
     recovery: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
+    let quality_gate_failed = status == "completed"
+        && devrail_runs::has_failed_quality_gate(&mut tx, launch.run_id).await?;
+    let (status, reason, recovery) = if quality_gate_failed {
+        (
+            "failed",
+            "quality_gate_failed",
+            Some("质量门禁未通过；请查看门禁结果后重试"),
+        )
+    } else {
+        (status, reason, recovery)
+    };
     let trace = uuid::Uuid::new_v4().to_string();
     let transitioned = devrail_runs::update_run_terminal(
         &mut tx,

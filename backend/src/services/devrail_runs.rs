@@ -121,7 +121,7 @@ async fn create_run_with_resume(
     let cwd = PathBuf::from(&environment.workspace_root);
     let input = bounded_input(req.input.as_deref(), &task.goal)?;
     let snapshot = json!({"taskId":task.id,"projectId":task.project_id,"title":task.title,"goal":task.goal,"background":task.background,"acceptanceCriteria":task.acceptance_criteria,"constraints":task.constraints,"labels":task.labels,"environmentId":environment.id,"workspaceRoot":environment.workspace_root,"networkMode":environment.network_mode,"toolPolicy":environment.tool_policy});
-    let policy = json!({"networkMode":environment.network_mode,"toolPolicy":environment.tool_policy,"secretRefs":[]});
+    let policy = json!({"version":"devrail-policy-v1","networkMode":environment.network_mode,"toolPolicy":environment.tool_policy,"secretRefs":[]});
     let startup_args = json!(["app-server"]);
     let mut tx = pool.begin().await.map_err(db_error)?;
     let snapshot_id =
