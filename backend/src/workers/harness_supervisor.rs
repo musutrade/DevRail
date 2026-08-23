@@ -21,6 +21,8 @@ pub struct RunLaunch {
     pub owner_user_id: i64,
     pub cwd: PathBuf,
     pub input: String,
+    pub resume_thread_id: Option<String>,
+    pub resume_turn_id: Option<String>,
 }
 
 struct ProcessContext {
@@ -238,14 +240,24 @@ async fn run_process(context: ProcessContext) {
         supervisor.controls.lock().await.remove(&launch.run_id);
         return;
     }
+    let thread_method = if launch.resume_thread_id.is_some() {
+        "thread/resume"
+    } else {
+        "thread/start"
+    };
+    let thread_params = if let Some(thread_id) = launch.resume_thread_id.as_deref() {
+        json!({"threadId": thread_id, "cwd": launch.cwd})
+    } else {
+        json!({"cwd": launch.cwd})
+    };
     let _ = write_json(
         &mut stdin,
-        json!({"id":"thread-start","method":"thread/start","params":{"cwd":launch.cwd}}),
+        json!({"id":"thread-start","method":thread_method,"params":thread_params}),
     )
     .await;
     let _ = write_json(
         &mut stdin,
-        json!({"id":"turn-start","method":"turn/start","params":{"input":launch.input}}),
+        json!({"id":"turn-start","method":"turn/start","params":{"input":launch.input,"threadId":launch.resume_thread_id,"resumeFromTurnId":launch.resume_turn_id}}),
     )
     .await;
     let _ = persist_started(&pool, &launch).await;
@@ -255,7 +267,11 @@ async fn run_process(context: ProcessContext) {
         "run_started",
         None,
         json!({"cwd": launch.cwd}),
-        Some("Harness 已启动"),
+        Some(if launch.resume_thread_id.is_some() {
+            "Harness 已恢复原线程"
+        } else {
+            "Harness 已启动"
+        }),
     )
     .await;
     let mut out_line = String::new();

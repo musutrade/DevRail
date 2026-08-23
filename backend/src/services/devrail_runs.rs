@@ -10,6 +10,11 @@ use std::path::PathBuf;
 fn db_error(error: sqlx::Error) -> ApiError {
     ApiError::internal(error)
 }
+#[derive(Debug, Clone)]
+pub struct ResumeContext {
+    pub thread_id: String,
+    pub turn_id: Option<String>,
+}
 fn run_response(row: DevRailRunRow) -> DevRailRunResponse {
     DevRailRunResponse {
         id: row.id,
@@ -73,6 +78,17 @@ pub async fn create_run(
     supervisor: &HarnessSupervisor,
     task_id: i64,
     req: &CreateDevRailRunRequest,
+) -> Result<DevRailRunResponse, ApiError> {
+    create_run_with_resume(pool, actor, supervisor, task_id, req, None).await
+}
+
+async fn create_run_with_resume(
+    pool: &PgPool,
+    actor: &ActorContext,
+    supervisor: &HarnessSupervisor,
+    task_id: i64,
+    req: &CreateDevRailRunRequest,
+    resume: Option<ResumeContext>,
 ) -> Result<DevRailRunResponse, ApiError> {
     let idempotency_key = key(&req.idempotency_key)?;
     if let Some(existing) =
@@ -152,6 +168,8 @@ pub async fn create_run(
             owner_user_id: actor.user_id,
             cwd,
             input,
+            resume_thread_id: resume.as_ref().map(|value| value.thread_id.clone()),
+            resume_turn_id: resume.and_then(|value| value.turn_id),
         })
         .await
     {
@@ -254,7 +272,18 @@ pub async fn retry_run(
         .get("environmentId")
         .and_then(serde_json::Value::as_i64)
         .ok_or_else(|| ApiError::conflict("运行快照缺少环境信息"))?;
-    create_run(
+    let resume = if let Some(turn_id) = req.resume_from_turn_id.as_ref() {
+        Some(ResumeContext {
+            thread_id: previous
+                .thread_id
+                .clone()
+                .ok_or_else(|| ApiError::conflict("原运行尚未建立 Codex thread，无法恢复"))?,
+            turn_id: Some(turn_id.clone()),
+        })
+    } else {
+        None
+    };
+    create_run_with_resume(
         pool,
         actor,
         supervisor,
@@ -265,6 +294,7 @@ pub async fn retry_run(
             model_id: previous.model_id,
             input: req.input.clone(),
         },
+        resume,
     )
     .await
 }

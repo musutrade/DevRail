@@ -1124,6 +1124,7 @@ pub struct CreateDevRailRunRequest {
 pub struct RetryDevRailRunRequest {
     pub idempotency_key: String,
     pub input: Option<String>,
+    pub resume_from_turn_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
