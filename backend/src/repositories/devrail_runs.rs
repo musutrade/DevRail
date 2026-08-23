@@ -112,8 +112,16 @@ pub(crate) async fn update_task_status(
         .map(|_| ())
 }
 
-pub(crate) async fn recover_stale_runs(pool: &PgPool) -> Result<u64, sqlx::Error> {
-    let result = sqlx::query("UPDATE devrail_runs SET status='failed', exit_reason='supervisor_restart', recovery_suggestion='服务重启后活动运行已停止；请使用相同快照重试', completed_at=COALESCE(completed_at,now()), updated_at=now() WHERE status IN ('starting','active','awaiting_approval')")
+pub(crate) async fn list_recoverable_runs(
+    pool: &PgPool,
+) -> Result<Vec<DevRailRunRow>, sqlx::Error> {
+    sqlx::query_as::<_, DevRailRunRow>(AssertSqlSafe(format!("SELECT {RUN_COLUMNS} FROM devrail_runs WHERE status IN ('starting','active') AND thread_id IS NOT NULL ORDER BY id ASC")))
+        .fetch_all(pool)
+        .await
+}
+
+pub(crate) async fn mark_unrecoverable_runs(pool: &PgPool) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query("UPDATE devrail_runs SET status='failed', exit_reason='supervisor_restart', recovery_suggestion='服务重启后运行无法自动恢复；请使用相同快照重试', completed_at=COALESCE(completed_at,now()), updated_at=now() WHERE status IN ('starting','active','awaiting_approval') AND (status='awaiting_approval' OR thread_id IS NULL)")
         .execute(pool)
         .await?;
     Ok(result.rows_affected())
