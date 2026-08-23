@@ -16,7 +16,7 @@ DevRail 的 Codex Harness 开发系统 MVP **尚未实现完成**，因此不能
 - Phase 0 首批产品骨架：`devrail` 业务权限、项目/仓库/环境/任务迁移、受数据范围约束的 Rust CRUD API、OpenAPI/Angular 客户端生成和 `/devrail/projects` 基础页面；
 - Phase 1 Harness 基础闭环：后端 `HarnessSupervisor` 受控启动 `codex app-server`，清空环境变量并限制工作区/并发/时限；运行快照、运行元数据、脱敏 JSONL 事件、单调游标、幂等键、异常退出摘要、优雅中断/强制终止、运行查询和 SSE API 已加入；
 - Phase 1 审批与重试基础闭环：审批迁移、数据范围查询、决策追加审计、Supervisor resolve 控制消息、终态 run 重试 API、指定 turn 的 thread/resume、审批中心 UI、审批撤回和过期 worker 已加入；通知仍未完成；
-- PR #13 已合并到 `main`，合并提交为 `2b7d36c`，合并后的主 CI、`arc-flow platform` 和供应链检查均成功。
+- PR #23（审批撤回与过期 worker）和 PR #24（changeset/质量门禁查询）已合并到 `main`，合并提交分别为 `f50bb5c` 和 `2fc8d0c`，对应 CI、`arc-flow platform` 和供应链检查均成功。
 
 这些内容是产品 MVP 的工程基础或配套能力，不等于需求文档第 2.1 节和第 16 节定义的 DevRail 业务系统已经交付。
 
@@ -47,7 +47,7 @@ DevRail 的 Codex Harness 开发系统 MVP **尚未实现完成**，因此不能
 应按 [requirements.md](requirements.md) 的迭代计划推进：
 
 1. Phase 0：完成项目/仓库/环境/任务 CRUD 的集成测试、成员与策略 API，并完成验收闭环；
-2. Phase 1：补齐审批撤回、过期 worker/通知、中断后的 thread/resume 可恢复状态、changeset 和质量门禁执行器，并完善运行验收；
+2. Phase 1：补齐过期通知、数据库重启后的 thread/resume 可恢复状态、质量门禁执行器，并完善运行验收；审批撤回、过期 worker、changeset/质量门禁查询已完成。
 3. Phase 2：Transactional outbox、站内通知、Web Push、设备/偏好、重试和投递审计；
 4. Phase 3：评论、提及、审查、补丁导出和可选 Git 平台集成。
 
