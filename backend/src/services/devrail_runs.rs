@@ -50,6 +50,15 @@ fn event_response(row: DevRailRunEventRow) -> DevRailRunEventResponse {
         occurred_at: row.occurred_at,
     }
 }
+fn string_field(payload: &serde_json::Value, key: &str) -> Option<String> {
+    payload
+        .get(key)
+        .and_then(|value| value.as_str())
+        .map(str::to_string)
+}
+fn integer_field(payload: &serde_json::Value, key: &str) -> Option<i64> {
+    payload.get(key).and_then(|value| value.as_i64())
+}
 fn key(value: &str) -> Result<String, ApiError> {
     let value = value.trim();
     if value.is_empty()
@@ -313,4 +322,50 @@ pub async fn list_events(
         next_cursor: rows.last().map(|r| r.cursor),
         items: rows.into_iter().map(event_response).collect(),
     })
+}
+
+pub async fn get_changeset(
+    pool: &PgPool,
+    actor: &ActorContext,
+    id: i64,
+) -> Result<DevRailChangesetResponse, ApiError> {
+    let _ = get_run(pool, actor, id).await?;
+    let rows = devrail_runs::list_events(pool, actor, id, 0, 500)
+        .await
+        .map_err(db_error)?;
+    let files = rows
+        .into_iter()
+        .filter(|row| row.event_type == "file_change")
+        .map(|row| DevRailChangeFileResponse {
+            path: string_field(&row.payload, "path").unwrap_or_else(|| "未提供路径".to_string()),
+            status: string_field(&row.payload, "status").unwrap_or_else(|| "modified".to_string()),
+            additions: integer_field(&row.payload, "additions"),
+            deletions: integer_field(&row.payload, "deletions"),
+            summary: row.summary,
+        })
+        .collect();
+    Ok(DevRailChangesetResponse { run_id: id, files })
+}
+
+pub async fn get_quality_gates(
+    pool: &PgPool,
+    actor: &ActorContext,
+    id: i64,
+) -> Result<DevRailQualityGatePage, ApiError> {
+    let _ = get_run(pool, actor, id).await?;
+    let rows = devrail_runs::list_events(pool, actor, id, 0, 500)
+        .await
+        .map_err(db_error)?;
+    let items = rows
+        .into_iter()
+        .filter(|row| row.event_type == "quality_gate")
+        .map(|row| DevRailQualityGateResponse {
+            name: string_field(&row.payload, "name").unwrap_or_else(|| "质量门禁".to_string()),
+            status: string_field(&row.payload, "status").unwrap_or_else(|| "unknown".to_string()),
+            exit_code: integer_field(&row.payload, "exit_code"),
+            duration_ms: integer_field(&row.payload, "duration_ms"),
+            summary: row.summary,
+        })
+        .collect();
+    Ok(DevRailQualityGatePage { run_id: id, items })
 }

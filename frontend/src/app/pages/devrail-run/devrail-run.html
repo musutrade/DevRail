@@ -64,6 +64,44 @@
         </div>
       }
     </section>
+    <section class="event-card" aria-labelledby="changeset-title">
+      <div class="section-heading">
+        <h2 id="changeset-title">文件变更</h2>
+        <span>{{ changes().length }} 个文件</span>
+      </div>
+      <ul class="event-list">
+        @for (file of changes(); track file.path) {
+          <li>
+            <div class="event-meta">
+              <strong>{{ file.status }}</strong
+              ><span>{{ file.path }}</span>
+            </div>
+            <p>{{ file.summary || '暂无摘要' }}</p>
+          </li>
+        } @empty {
+          <li class="table-empty">暂无文件变更</li>
+        }
+      </ul>
+    </section>
+    <section class="event-card" aria-labelledby="quality-gates-title">
+      <div class="section-heading">
+        <h2 id="quality-gates-title">质量门禁</h2>
+        <span>{{ qualityGates().length }} 项</span>
+      </div>
+      <ul class="event-list">
+        @for (gate of qualityGates(); track gate.name) {
+          <li>
+            <div class="event-meta">
+              <strong>{{ gate.name }}</strong
+              ><span>{{ gate.status }}</span>
+            </div>
+            <p>{{ gate.summary || '暂无摘要' }}</p>
+          </li>
+        } @empty {
+          <li class="table-empty">暂无质量门禁结果</li>
+        }
+      </ul>
+    </section>
     <section class="event-card" aria-labelledby="event-title">
       <div class="section-heading">
         <h2 id="event-title">事件时间线</h2>

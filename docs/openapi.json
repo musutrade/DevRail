@@ -3425,6 +3425,42 @@
         ]
       }
     },
+    "/runs/{id}/changeset": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "getDevRailRunChangeset",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailChangesetResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/runs/{id}/events": {
       "get": {
         "tags": [
@@ -3514,6 +3550,42 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DevRailRunResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/runs/{id}/quality-gates": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "getDevRailRunQualityGates",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailQualityGatePage"
                 }
               }
             }
@@ -5093,6 +5165,60 @@
           }
         }
       },
+      "DevRailChangeFileResponse": {
+        "type": "object",
+        "required": [
+          "path",
+          "status"
+        ],
+        "properties": {
+          "additions": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "deletions": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "path": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "DevRailChangesetResponse": {
+        "type": "object",
+        "required": [
+          "runId",
+          "files"
+        ],
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DevRailChangeFileResponse"
+            }
+          },
+          "runId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "DevRailEnvironmentPage": {
         "type": "object",
         "required": [
@@ -5380,6 +5506,60 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "DevRailQualityGatePage": {
+        "type": "object",
+        "required": [
+          "runId",
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DevRailQualityGateResponse"
+            }
+          },
+          "runId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "DevRailQualityGateResponse": {
+        "type": "object",
+        "required": [
+          "name",
+          "status"
+        ],
+        "properties": {
+          "durationMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "exitCode": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },

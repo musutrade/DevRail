@@ -22,6 +22,8 @@ export type { DepartmentStatus } from './models/department-status';
 export type { DevRailApprovalDecisionRequest } from './models/dev-rail-approval-decision-request';
 export type { DevRailApprovalPage } from './models/dev-rail-approval-page';
 export type { DevRailApprovalResponse } from './models/dev-rail-approval-response';
+export type { DevRailChangeFileResponse } from './models/dev-rail-change-file-response';
+export type { DevRailChangesetResponse } from './models/dev-rail-changeset-response';
 export type { DevRailEnvironmentPage } from './models/dev-rail-environment-page';
 export type { DevRailEnvironmentResponse } from './models/dev-rail-environment-response';
 export type { DevRailProjectMemberPage } from './models/dev-rail-project-member-page';
@@ -29,6 +31,8 @@ export type { DevRailProjectMemberResponse } from './models/dev-rail-project-mem
 export type { DevRailProjectPage } from './models/dev-rail-project-page';
 export type { DevRailProjectPolicyResponse } from './models/dev-rail-project-policy-response';
 export type { DevRailProjectResponse } from './models/dev-rail-project-response';
+export type { DevRailQualityGatePage } from './models/dev-rail-quality-gate-page';
+export type { DevRailQualityGateResponse } from './models/dev-rail-quality-gate-response';
 export type { DevRailRepositoryPage } from './models/dev-rail-repository-page';
 export type { DevRailRepositoryResponse } from './models/dev-rail-repository-response';
 export type { DevRailRunEventPage } from './models/dev-rail-run-event-page';

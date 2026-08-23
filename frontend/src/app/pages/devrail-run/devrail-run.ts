@@ -13,7 +13,12 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { apiErrorMessage } from '../../core/api-error';
 import { DevRailApiService } from '../../features/devrail/data-access/devrail-api.service';
-import type { DevRailRunEventResponse, DevRailRunResponse } from '../../generated/api/models';
+import type {
+  DevRailChangeFileResponse,
+  DevRailQualityGateResponse,
+  DevRailRunEventResponse,
+  DevRailRunResponse,
+} from '../../generated/api/models';
 
 @Component({
   selector: 'app-devrail-run',
@@ -25,6 +30,8 @@ import type { DevRailRunEventResponse, DevRailRunResponse } from '../../generate
 export class DevRailRunPage implements OnInit, OnDestroy {
   readonly run = signal<DevRailRunResponse | null>(null);
   readonly events = signal<DevRailRunEventResponse[]>([]);
+  readonly changes = signal<DevRailChangeFileResponse[]>([]);
+  readonly qualityGates = signal<DevRailQualityGateResponse[]>([]);
   readonly loading = signal(true);
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
@@ -95,8 +102,14 @@ export class DevRailRunPage implements OnInit, OnDestroy {
     this.error.set(null);
     try {
       this.run.set(await this.api.getRun(this.runId));
-      const page = await this.api.listRunEvents(this.runId);
+      const [page, changeset, gates] = await Promise.all([
+        this.api.listRunEvents(this.runId),
+        this.api.getRunChangeset(this.runId),
+        this.api.getRunQualityGates(this.runId),
+      ]);
       this.events.set(page.items);
+      this.changes.set(changeset.files);
+      this.qualityGates.set(gates.items);
       this.connectEvents();
     } catch (error) {
       this.error.set(apiErrorMessage(error, '运行加载失败'));

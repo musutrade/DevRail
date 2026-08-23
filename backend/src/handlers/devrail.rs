@@ -361,6 +361,24 @@ pub async fn list_run_events(
     .await
     .map(Json)
 }
+pub async fn get_run_changeset(
+    State(s): State<AppState>,
+    auth: RequirePermission<RunRead>,
+    Path(id): Path<i64>,
+) -> Result<Json<DevRailChangesetResponse>, ApiError> {
+    services::devrail_runs::get_changeset(&s.pool, &auth, id)
+        .await
+        .map(Json)
+}
+pub async fn get_run_quality_gates(
+    State(s): State<AppState>,
+    auth: RequirePermission<RunRead>,
+    Path(id): Path<i64>,
+) -> Result<Json<DevRailQualityGatePage>, ApiError> {
+    services::devrail_runs::get_quality_gates(&s.pool, &auth, id)
+        .await
+        .map(Json)
+}
 
 #[derive(Debug, serde::Deserialize)]
 pub struct RunEventQuery {

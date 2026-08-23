@@ -12,12 +12,13 @@ use crate::models::{
     CreateDevRailRunRequest, CreateDevRailTaskRequest, CreateRoleRequest, CreateUserRequest,
     DashboardStats, DataScopeSchema, DepartmentResponse, DepartmentStatusSchema,
     DevRailApprovalDecisionRequest, DevRailApprovalPage, DevRailApprovalResponse,
-    DevRailEnvironmentPage, DevRailEnvironmentResponse, DevRailListQuery, DevRailProjectMemberPage,
-    DevRailProjectMemberResponse, DevRailProjectPage, DevRailProjectPolicyResponse,
-    DevRailProjectResponse, DevRailRepositoryPage, DevRailRepositoryResponse, DevRailRunEventPage,
-    DevRailRunPage, DevRailRunResponse, DevRailTaskPage, DevRailTaskResponse, HealthResponse,
-    LoginRequest, LoginResponse, LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest,
-    MfaMethodSchema, MfaPasskeyAuthenticationFinishRequest, MfaPasskeyAuthenticationStartRequest,
+    DevRailChangesetResponse, DevRailEnvironmentPage, DevRailEnvironmentResponse, DevRailListQuery,
+    DevRailProjectMemberPage, DevRailProjectMemberResponse, DevRailProjectPage,
+    DevRailProjectPolicyResponse, DevRailProjectResponse, DevRailQualityGatePage,
+    DevRailRepositoryPage, DevRailRepositoryResponse, DevRailRunEventPage, DevRailRunPage,
+    DevRailRunResponse, DevRailTaskPage, DevRailTaskResponse, HealthResponse, LoginRequest,
+    LoginResponse, LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest, MfaMethodSchema,
+    MfaPasskeyAuthenticationFinishRequest, MfaPasskeyAuthenticationStartRequest,
     MfaPasskeyRegistrationFinishRequest, MfaPasskeyRegistrationStartRequest, MfaPasskeyResponse,
     MfaStatusResponse, MfaWebauthnChallengeResponse, ModuleUnlockRequest, ModuleUnlockScopeSchema,
     ModuleUnlockStatusResponse, PageAuditLog, PageQuery, PageUser, PermissionCodes,
@@ -762,6 +763,10 @@ fn get_devrail_run() {}
 fn interrupt_devrail_run() {}
 #[utoipa::path(get, path = "/runs/{id}/events", operation_id = "listDevRailRunEvents", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 200, body = DevRailRunEventPage)))]
 fn list_devrail_run_events() {}
+#[utoipa::path(get, path = "/runs/{id}/changeset", operation_id = "getDevRailRunChangeset", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 200, body = DevRailChangesetResponse)))]
+fn get_devrail_run_changeset() {}
+#[utoipa::path(get, path = "/runs/{id}/quality-gates", operation_id = "getDevRailRunQualityGates", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 200, body = DevRailQualityGatePage)))]
+fn get_devrail_run_quality_gates() {}
 #[utoipa::path(get, path = "/runs/{id}/events/stream", operation_id = "streamDevRailRunEvents", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 200, description = "运行事件 SSE 流")))]
 fn stream_devrail_run_events() {}
 #[utoipa::path(post, path = "/runs/{id}/retry", operation_id = "retryDevRailRun", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), request_body = RetryDevRailRunRequest, responses((status = 202, body = DevRailRunResponse)))]
@@ -835,7 +840,7 @@ fn withdraw_devrail_approval() {}
         list_devrail_environments, create_devrail_environment, get_devrail_environment,
         update_devrail_environment, list_devrail_tasks, create_devrail_task,
         get_devrail_task, update_devrail_task, create_devrail_run, list_devrail_runs,
-        get_devrail_run, interrupt_devrail_run, list_devrail_run_events
+        get_devrail_run, interrupt_devrail_run, list_devrail_run_events, get_devrail_run_changeset, get_devrail_run_quality_gates
         ,stream_devrail_run_events, retry_devrail_run, list_devrail_approvals,
         get_devrail_approval, approve_devrail_approval, reject_devrail_approval, withdraw_devrail_approval
     ),
@@ -897,7 +902,7 @@ fn withdraw_devrail_approval() {}
         UpdateDevRailRepositoryRequest, CreateDevRailEnvironmentRequest,
         UpdateDevRailEnvironmentRequest, CreateDevRailTaskRequest,
         UpdateDevRailTaskRequest, CreateDevRailRunRequest, DevRailRunResponse,
-        DevRailRunPage, DevRailRunEventPage, RetryDevRailRunRequest,
+        DevRailRunPage, DevRailRunEventPage, DevRailChangesetResponse, DevRailQualityGatePage, RetryDevRailRunRequest,
         DevRailApprovalResponse, DevRailApprovalPage, DevRailApprovalDecisionRequest
     )),
     servers((url = "/api/v1", description = "默认 API 根路径")),
