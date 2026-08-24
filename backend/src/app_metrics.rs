@@ -32,7 +32,28 @@ pub fn initialize() {
         describe_gauge!("arc_admin_db_pool_size", "PostgreSQL 连接池当前连接数");
         describe_gauge!("arc_admin_db_pool_idle", "PostgreSQL 连接池空闲连接数");
         describe_gauge!("arc_admin_db_pool_acquired", "PostgreSQL 连接池占用连接数");
+        describe_counter!(
+            "devrail_push_delivery_total",
+            "DevRail Web Push 投递结果总数"
+        );
+        describe_gauge!("devrail_push_delivery_backlog", "待处理 Web Push 投递数量");
+        describe_gauge!(
+            "devrail_push_invalid_devices",
+            "永久失败的 Web Push 设备数量"
+        );
     });
+}
+
+pub fn record_push_delivery(outcome: &str) {
+    counter!("devrail_push_delivery_total", "outcome" => outcome.to_string()).increment(1);
+}
+
+pub fn record_push_backlog(backlog: i64) {
+    gauge!("devrail_push_delivery_backlog").set(backlog.max(0) as f64);
+}
+
+pub fn record_push_invalid_devices(count: i64) {
+    gauge!("devrail_push_invalid_devices").set(count.max(0) as f64);
 }
 
 pub async fn render(State(state): State<AppState>) -> (HeaderMap, String) {

@@ -92,6 +92,12 @@ pub(crate) async fn claim_dispatches(
     Ok(rows)
 }
 
+pub(crate) async fn delivery_metrics(pool: &PgPool) -> Result<(i64, i64), sqlx::Error> {
+    sqlx::query_as("SELECT count(*) FILTER (WHERE status IN ('pending','retrying')), count(*) FILTER (WHERE status='invalid') FROM devrail_push_deliveries")
+        .fetch_one(pool)
+        .await
+}
+
 pub(crate) async fn mark_delivery_sent(
     pool: &PgPool,
     delivery_id: i64,

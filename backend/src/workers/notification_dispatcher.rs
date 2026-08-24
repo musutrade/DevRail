@@ -1,5 +1,6 @@
 //! Asynchronous Web Push delivery from the transactional outbox.
 
+use crate::app_metrics;
 use crate::mfa::MfaConfig;
 use crate::repositories::devrail_push;
 use serde::Deserialize;
@@ -34,11 +35,16 @@ pub fn spawn(
             Err(_) => return,
         };
         loop {
+            if let Ok((backlog, invalid_devices)) = devrail_push::delivery_metrics(&pool).await {
+                app_metrics::record_push_backlog(backlog);
+                app_metrics::record_push_invalid_devices(invalid_devices);
+            }
             if let Ok(rows) = devrail_push::claim_dispatches(&pool, 20).await {
                 for row in rows {
                     let result = send(&client, &mfa, &private_key, &subject, &row).await;
                     match result {
                         Ok(()) => {
+                            app_metrics::record_push_delivery("sent");
                             let _ = devrail_push::mark_delivery_sent(
                                 &pool,
                                 row.delivery_id,
@@ -49,6 +55,11 @@ pub fn spawn(
                         Err(error) => {
                             let text = error.to_string().chars().take(500).collect::<String>();
                             let invalid = text.contains("404") || text.contains("410");
+                            app_metrics::record_push_delivery(if invalid {
+                                "invalid"
+                            } else {
+                                "retrying"
+                            });
                             let _ = devrail_push::mark_delivery_failure(
                                 &pool,
                                 row.delivery_id,
