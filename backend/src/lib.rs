@@ -141,7 +141,7 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_PROJECT_MEMBER_PATH, &["delete"]),
     (DEVRAIL_REPOSITORIES_PATH, &["get", "post"]),
     (DEVRAIL_REPOSITORY_PATH, &["get", "patch"]),
-    (DEVRAIL_REPOSITORY_SYNC_PATH, &["post"]),
+    (DEVRAIL_REPOSITORY_SYNC_PATH, &["get", "post"]),
     (DEVRAIL_REPOSITORY_WORKTREE_PATH, &["get"]),
     (DEVRAIL_ENVIRONMENTS_PATH, &["get", "post"]),
     (DEVRAIL_ENVIRONMENT_PATH, &["get", "patch"]),
@@ -329,7 +329,7 @@ fn base_router(state: AppState) -> Router {
         )
         .route(
             DEVRAIL_REPOSITORY_SYNC_PATH,
-            post(handlers::devrail::sync_repository),
+            get(handlers::devrail::get_repository_sync).post(handlers::devrail::sync_repository),
         )
         .route(
             DEVRAIL_REPOSITORY_WORKTREE_PATH,

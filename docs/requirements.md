@@ -16,7 +16,7 @@
 
 本文件是 DevRail 的第一版产品、架构和验收基线。实现时应继续遵循 arc-admin 的项目公约：
 
-> 实现状态声明：本文件描述的是完整 Codex Harness 开发系统 MVP 的目标，不是当前已交付能力清单。截至 2026-08-23，仓库已完成 arc-admin 基线、`arc-flow` 审计工具生产化、治理文档、Phase 0 项目/仓库/环境 CRUD API、仓库/环境创建入口、成员与项目策略 API/页面、任务列表筛选（含负责人和标签）、任务详情页、仓库/环境列表与详情页、仓库远端 HEAD/默认分支/分支数量同步、受控环境工作树状态检查和环境健康检查，以及 Phase 1 的 Harness Supervisor 基础闭环（受控 app-server、run 快照/事件、SSE、中断、thread/resume）、审批持久化/决策 API、审批中心 UI、审批撤回、审批过期 worker、changeset/质量门禁查询、受限命令质量门禁执行、结构化门禁元数据和终态 run 重试；Phase 2 已完成站内通知事实表、transactional outbox、run 终态通知、审批请求/批准/拒绝/撤回/过期通知、通知 API、用户通知偏好 API/页面、通知中心/设置页面和 Web Push 设备注册/列表/撤销；完整资源同步、更丰富的质量门禁日志后端、VAPID 初始化、Web Push dispatcher、投递重试和投递审计仍未完成。详见 [DevRail 实现状态](devrail-implementation-status.md)。
+> 实现状态声明：本文件描述的是完整 Codex Harness 开发系统 MVP 的目标，不是当前已交付能力清单。截至 2026-08-24，仓库已完成 arc-admin 基线、`arc-flow` 审计工具生产化、治理文档、Phase 0 项目/仓库/环境 CRUD API、仓库/环境创建入口、成员与项目策略 API/页面、任务列表筛选（含负责人和标签）、任务详情页、仓库/环境列表与详情页、仓库远端 HEAD/默认分支/分支数量/分支列表/提交摘要同步、受控环境工作树状态检查和环境健康检查，以及 Phase 1 的 Harness Supervisor 基础闭环（受控 app-server、run 快照/事件、SSE、中断、thread/resume）、审批持久化/决策 API、审批中心 UI、审批撤回、审批过期 worker、changeset/质量门禁查询、受限命令质量门禁执行、结构化门禁元数据和终态 run 重试；Phase 2 已完成站内通知事实表、transactional outbox、run 终态通知、审批请求/批准/拒绝/撤回/过期通知、通知 API、用户通知偏好 API/页面、通知中心/设置页面和 Web Push 设备注册/列表/撤销；更丰富的质量门禁日志后端、VAPID 初始化、Web Push dispatcher、投递重试和投递审计仍未完成。详见 [DevRail 实现状态](devrail-implementation-status.md)。
 
 - 后端调用链固定为 `Router -> Handler -> Service -> Repository -> PostgreSQL`；SQL 写入只允许在 Repository、migration、测试或 seed 层。
 - 前端业务代码放在 `features/<domain>`，共享认证、配置和权限能力放在 `core`。

@@ -7,16 +7,16 @@ import { filter, map } from 'rxjs/operators';
 import { StrictHttpResponse } from '../../strict-http-response';
 import { RequestBuilder } from '../../request-builder';
 
-import { DevRailWorktreeResponse } from '../../models/dev-rail-worktree-response';
+import { DevRailRepositorySyncResponse } from '../../models/dev-rail-repository-sync-response';
 
-export interface InspectDevRailRepositoryWorktree$Params {
+export interface GetDevRailRepositorySync$Params {
   project_id: number;
   id: number;
-  environmentId: number;
+  environmentId?: number;
 }
 
-export function inspectDevRailRepositoryWorktree(http: HttpClient, rootUrl: string, params: InspectDevRailRepositoryWorktree$Params, context?: HttpContext): Observable<StrictHttpResponse<DevRailWorktreeResponse>> {
-  const rb = new RequestBuilder(rootUrl, inspectDevRailRepositoryWorktree.PATH, 'get');
+export function getDevRailRepositorySync(http: HttpClient, rootUrl: string, params: GetDevRailRepositorySync$Params, context?: HttpContext): Observable<StrictHttpResponse<DevRailRepositorySyncResponse>> {
+  const rb = new RequestBuilder(rootUrl, getDevRailRepositorySync.PATH, 'get');
   if (params) {
     rb.path('project_id', params.project_id, {});
     rb.path('id', params.id, {});
@@ -28,9 +28,9 @@ export function inspectDevRailRepositoryWorktree(http: HttpClient, rootUrl: stri
   ).pipe(
     filter((r: any): r is HttpResponse<any> => r instanceof HttpResponse),
     map((r: HttpResponse<any>) => {
-      return r as StrictHttpResponse<DevRailWorktreeResponse>;
+      return r as StrictHttpResponse<DevRailRepositorySyncResponse>;
     })
   );
 }
 
-inspectDevRailRepositoryWorktree.PATH = '/projects/{project_id}/repositories/{id}/worktree';
+getDevRailRepositorySync.PATH = '/projects/{project_id}/repositories/{id}/sync';

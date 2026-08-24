@@ -28,6 +28,9 @@ export class DevRailResourceDetailPage implements OnInit {
     ReturnType<DevRailApiService['inspectRepositoryWorktree']>
   > | null>(null);
   readonly environments = signal<DevRailEnvironmentResponse[]>([]);
+  readonly repositorySync = signal<Awaited<
+    ReturnType<DevRailApiService['getRepositorySync']>
+  > | null>(null);
   projectId = 0;
   resourceId = 0;
   private readonly route = inject(ActivatedRoute);
@@ -80,6 +83,17 @@ export class DevRailResourceDetailPage implements OnInit {
       this.snack.open('仓库同步检查已完成', '关闭', { duration: 2500 });
     } catch (e) {
       this.snack.open(apiErrorMessage(e, '仓库同步失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
+  async loadRepositorySync(): Promise<void> {
+    this.busy.set(true);
+    try {
+      this.repositorySync.set(await this.api.getRepositorySync(this.projectId, this.resourceId));
+      this.snack.open('仓库资源同步已完成', '关闭', { duration: 2500 });
+    } catch (e) {
+      this.snack.open(apiErrorMessage(e, '仓库资源同步失败'), '关闭', { duration: 5000 });
     } finally {
       this.busy.set(false);
     }

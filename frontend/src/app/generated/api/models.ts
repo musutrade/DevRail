@@ -38,8 +38,11 @@ export type { DevRailProjectResponse } from './models/dev-rail-project-response'
 export type { DevRailPushDeviceResponse } from './models/dev-rail-push-device-response';
 export type { DevRailQualityGatePage } from './models/dev-rail-quality-gate-page';
 export type { DevRailQualityGateResponse } from './models/dev-rail-quality-gate-response';
+export type { DevRailRepositoryBranchResponse } from './models/dev-rail-repository-branch-response';
+export type { DevRailRepositoryCommitResponse } from './models/dev-rail-repository-commit-response';
 export type { DevRailRepositoryPage } from './models/dev-rail-repository-page';
 export type { DevRailRepositoryResponse } from './models/dev-rail-repository-response';
+export type { DevRailRepositorySyncResponse } from './models/dev-rail-repository-sync-response';
 export type { DevRailRunEventPage } from './models/dev-rail-run-event-page';
 export type { DevRailRunEventResponse } from './models/dev-rail-run-event-response';
 export type { DevRailRunPage } from './models/dev-rail-run-page';
