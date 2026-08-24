@@ -53,6 +53,9 @@ import { createDevRailTaskComment } from '../../../generated/api/fn/devrail/crea
 import { updateDevRailTaskComment } from '../../../generated/api/fn/devrail/update-dev-rail-task-comment';
 import { deleteDevRailTaskComment } from '../../../generated/api/fn/devrail/delete-dev-rail-task-comment';
 import { getDevRailRepositorySync } from '../../../generated/api/fn/devrail/get-dev-rail-repository-sync';
+import { listDevRailReviews } from '../../../generated/api/fn/devrail/list-dev-rail-reviews';
+import { createDevRailReview } from '../../../generated/api/fn/devrail/create-dev-rail-review';
+import { decideDevRailReview } from '../../../generated/api/fn/devrail/decide-dev-rail-review';
 import type {
   CreateDevRailEnvironmentRequest,
   CreateDevRailProjectRequest,
@@ -92,6 +95,10 @@ import type {
   DevRailTaskCommentResponse,
   CreateDevRailTaskCommentRequest,
   UpdateDevRailTaskCommentRequest,
+  DevRailReviewPage,
+  DevRailReviewResponse,
+  CreateDevRailReviewRequest,
+  DecideDevRailReviewRequest,
 } from '../../../generated/api/models';
 
 @Injectable({ providedIn: 'root' })
@@ -134,6 +141,15 @@ export class DevRailApiService {
   }
   listApprovals(page = 1, pageSize = 20): Promise<DevRailApprovalPage> {
     return this.api.invoke(listDevRailApprovals, { page, pageSize });
+  }
+  listReviews(page = 1, pageSize = 20): Promise<DevRailReviewPage> {
+    return this.api.invoke(listDevRailReviews, { page, pageSize });
+  }
+  createReview(body: CreateDevRailReviewRequest): Promise<DevRailReviewResponse> {
+    return this.api.invoke(createDevRailReview, { body });
+  }
+  decideReview(id: number, body: DecideDevRailReviewRequest): Promise<DevRailReviewResponse> {
+    return this.api.invoke(decideDevRailReview, { id, body });
   }
   getApproval(id: number): Promise<DevRailApprovalResponse> {
     return this.api.invoke(getDevRailApproval, { id });

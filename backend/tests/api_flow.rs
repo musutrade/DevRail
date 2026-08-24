@@ -1036,6 +1036,8 @@ async fn login_and_user_crud_flow() {
             "devrail:approval:read",
             "devrail:approval:approve",
             "devrail:approval:reject",
+            "devrail:review:read",
+            "devrail:review:write",
             "devrail:member:read",
             "devrail:member:write",
             "devrail:notification:read",

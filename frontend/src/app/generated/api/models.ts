@@ -11,6 +11,7 @@ export type { CreateDepartmentRequest } from './models/create-department-request
 export type { CreateDevRailEnvironmentRequest } from './models/create-dev-rail-environment-request';
 export type { CreateDevRailProjectRequest } from './models/create-dev-rail-project-request';
 export type { CreateDevRailRepositoryRequest } from './models/create-dev-rail-repository-request';
+export type { CreateDevRailReviewRequest } from './models/create-dev-rail-review-request';
 export type { CreateDevRailRunRequest } from './models/create-dev-rail-run-request';
 export type { CreateDevRailTaskCommentRequest } from './models/create-dev-rail-task-comment-request';
 export type { CreateDevRailTaskRequest } from './models/create-dev-rail-task-request';
@@ -18,6 +19,7 @@ export type { CreateRoleRequest } from './models/create-role-request';
 export type { CreateUserRequest } from './models/create-user-request';
 export type { DashboardStats } from './models/dashboard-stats';
 export type { DataScope } from './models/data-scope';
+export type { DecideDevRailReviewRequest } from './models/decide-dev-rail-review-request';
 export type { DepartmentResponse } from './models/department-response';
 export type { DepartmentStatus } from './models/department-status';
 export type { DevRailApprovalDecisionRequest } from './models/dev-rail-approval-decision-request';
@@ -46,6 +48,8 @@ export type { DevRailRepositoryCommitResponse } from './models/dev-rail-reposito
 export type { DevRailRepositoryPage } from './models/dev-rail-repository-page';
 export type { DevRailRepositoryResponse } from './models/dev-rail-repository-response';
 export type { DevRailRepositorySyncResponse } from './models/dev-rail-repository-sync-response';
+export type { DevRailReviewPage } from './models/dev-rail-review-page';
+export type { DevRailReviewResponse } from './models/dev-rail-review-response';
 export type { DevRailRunEventPage } from './models/dev-rail-run-event-page';
 export type { DevRailRunEventResponse } from './models/dev-rail-run-event-response';
 export type { DevRailRunPage } from './models/dev-rail-run-page';

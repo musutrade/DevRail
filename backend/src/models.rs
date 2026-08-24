@@ -1345,6 +1345,58 @@ pub struct DevRailTaskPage {
     pub page_size: i64,
 }
 
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct DevRailReviewRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub task_id: i64,
+    pub run_id: i64,
+    pub requested_by: i64,
+    pub reviewer_user_id: i64,
+    pub status: String,
+    pub summary: Option<String>,
+    pub decision_reason: Option<String>,
+    pub decided_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailReviewResponse {
+    pub id: i64,
+    pub task_id: i64,
+    pub run_id: i64,
+    pub requested_by: i64,
+    pub reviewer_user_id: i64,
+    pub status: String,
+    pub summary: Option<String>,
+    pub decision_reason: Option<String>,
+    pub decided_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+}
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailReviewPage {
+    pub items: Vec<DevRailReviewResponse>,
+    pub total: i64,
+    pub page: i64,
+    pub page_size: i64,
+}
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateDevRailReviewRequest {
+    pub run_id: i64,
+    pub reviewer_user_id: i64,
+    pub summary: Option<String>,
+}
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DecideDevRailReviewRequest {
+    pub decision: String,
+    pub reason: Option<String>,
+}
+
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DevRailTaskCommentResponse {

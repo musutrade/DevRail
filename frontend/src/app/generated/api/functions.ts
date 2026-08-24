@@ -83,6 +83,12 @@ export type { RegisterDevRailPushDevice$Params as RegisterDevRailPushDevice$Para
 export { registerDevRailPushDevice as registerDevRailPushDevice } from './fn/devrail/register-dev-rail-push-device';
 export type { RevokeDevRailPushDevice$Params as RevokeDevRailPushDevice$Params } from './fn/devrail/revoke-dev-rail-push-device';
 export { revokeDevRailPushDevice as revokeDevRailPushDevice } from './fn/devrail/revoke-dev-rail-push-device';
+export type { ListDevRailReviews$Params as ListDevRailReviews$Params } from './fn/devrail/list-dev-rail-reviews';
+export { listDevRailReviews as listDevRailReviews } from './fn/devrail/list-dev-rail-reviews';
+export type { CreateDevRailReview$Params as CreateDevRailReview$Params } from './fn/devrail/create-dev-rail-review';
+export { createDevRailReview as createDevRailReview } from './fn/devrail/create-dev-rail-review';
+export type { DecideDevRailReview$Params as DecideDevRailReview$Params } from './fn/devrail/decide-dev-rail-review';
+export { decideDevRailReview as decideDevRailReview } from './fn/devrail/decide-dev-rail-review';
 export type { GetDevRailRun$Params as GetDevRailRun$Params } from './fn/devrail/get-dev-rail-run';
 export { getDevRailRun as getDevRailRun } from './fn/devrail/get-dev-rail-run';
 export type { GetDevRailRunChangeset$Params as GetDevRailRunChangeset$Params } from './fn/devrail/get-dev-rail-run-changeset';
