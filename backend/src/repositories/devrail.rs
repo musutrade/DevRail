@@ -12,7 +12,7 @@ use sqlx::{AssertSqlSafe, PgConnection, PgPool};
 const PROJECT_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, slug, name, description, status, default_repository_id, default_environment_id, notification_policy, quality_gate_template, created_at, updated_at, archived_at";
 const REPOSITORY_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, name, remote_url, protocol, default_branch, credential_ref, last_sync_status, last_head_sha, last_remote_branch, last_remote_branch_count, created_at, updated_at, archived_at";
 const ENVIRONMENT_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, name, workspace_root, network_mode, tool_policy, secret_refs, max_duration_secs, enabled, created_at, updated_at, archived_at";
-const TASK_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, assignee_user_id, title, goal, background, acceptance_criteria, constraints, priority, status, labels, due_at, created_at, updated_at, archived_at";
+const TASK_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, repository_id, environment_id, assignee_user_id, title, goal, background, acceptance_criteria, constraints, priority, status, labels, due_at, created_at, updated_at, archived_at";
 
 pub(crate) struct NewProject<'a> {
     pub slug: &'a str,
@@ -84,6 +84,8 @@ pub(crate) struct EnvironmentUpdate<'a> {
 }
 pub(crate) struct NewTask<'a> {
     pub project_id: i64,
+    pub repository_id: Option<i64>,
+    pub environment_id: Option<i64>,
     pub assignee_user_id: Option<i64>,
     pub title: &'a str,
     pub goal: &'a str,
@@ -111,6 +113,10 @@ pub(crate) struct TaskUpdate<'a> {
     pub labels: Option<&'a Value>,
     pub due_at_set: bool,
     pub due_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub repository_set: bool,
+    pub repository_id: Option<i64>,
+    pub environment_set: bool,
+    pub environment_id: Option<i64>,
 }
 
 fn scope_sql(alias: &str) -> String {
@@ -497,12 +503,14 @@ pub(crate) async fn create_task(
     actor: &ActorContext,
     n: &NewTask<'_>,
 ) -> Result<DevRailTaskRow, sqlx::Error> {
-    let sql=format!("INSERT INTO devrail_tasks (organization_id,department_id,owner_user_id,project_id,assignee_user_id,title,goal,background,acceptance_criteria,constraints,priority,labels,due_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING {TASK_COLUMNS}");
+    let sql=format!("INSERT INTO devrail_tasks (organization_id,department_id,owner_user_id,project_id,repository_id,environment_id,assignee_user_id,title,goal,background,acceptance_criteria,constraints,priority,labels,due_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING {TASK_COLUMNS}");
     sqlx::query_as::<_, DevRailTaskRow>(AssertSqlSafe(sql))
         .bind(actor.organization_id)
         .bind(n.department_id)
         .bind(actor.user_id)
         .bind(n.project_id)
+        .bind(n.repository_id)
+        .bind(n.environment_id)
         .bind(n.assignee_user_id)
         .bind(n.title)
         .bind(n.goal)
@@ -522,6 +530,6 @@ pub(crate) async fn update_task(
     id: i64,
     u: &TaskUpdate<'_>,
 ) -> Result<bool, sqlx::Error> {
-    let r=sqlx::query("UPDATE devrail_tasks SET title=COALESCE($5,title),goal=COALESCE($6,goal),background=CASE WHEN $7 THEN $8 ELSE background END,acceptance_criteria=CASE WHEN $9 THEN $10 ELSE acceptance_criteria END,constraints=CASE WHEN $11 THEN $12 ELSE constraints END,priority=COALESCE($13,priority),status=COALESCE($14,status),assignee_user_id=CASE WHEN $15 THEN $16 ELSE assignee_user_id END,labels=COALESCE($17,labels),due_at=CASE WHEN $18 THEN $19 ELSE due_at END,archived_at=CASE WHEN $14='archived' THEN COALESCE(archived_at,now()) WHEN $14 IS NOT NULL THEN NULL ELSE archived_at END,updated_at=now() WHERE id=$1 AND project_id=$2 AND organization_id=$3 AND ($4='all' OR owner_user_id=$20 OR $4='organization' OR ($4 IN ('department','department_and_children') AND department_id=$21)) AND archived_at IS NULL").bind(id).bind(project_id).bind(actor.organization_id).bind(actor.data_scope.as_str()).bind(u.title).bind(u.goal).bind(u.background_set).bind(u.background).bind(u.acceptance_set).bind(u.acceptance_criteria).bind(u.constraints_set).bind(u.constraints).bind(u.priority).bind(u.status).bind(u.assignee_set).bind(u.assignee_user_id).bind(u.labels).bind(u.due_at_set).bind(u.due_at).bind(actor.user_id).bind(actor.department_id).execute(c).await?;
+    let r=sqlx::query("UPDATE devrail_tasks SET title=COALESCE($5,title),goal=COALESCE($6,goal),background=CASE WHEN $7 THEN $8 ELSE background END,acceptance_criteria=CASE WHEN $9 THEN $10 ELSE acceptance_criteria END,constraints=CASE WHEN $11 THEN $12 ELSE constraints END,priority=COALESCE($13,priority),status=COALESCE($14,status),assignee_user_id=CASE WHEN $15 THEN $16 ELSE assignee_user_id END,labels=COALESCE($17,labels),due_at=CASE WHEN $18 THEN $19 ELSE due_at END,repository_id=CASE WHEN $20 THEN $21 ELSE repository_id END,environment_id=CASE WHEN $22 THEN $23 ELSE environment_id END,archived_at=CASE WHEN $14='archived' THEN COALESCE(archived_at,now()) WHEN $14 IS NOT NULL THEN NULL ELSE archived_at END,updated_at=now() WHERE id=$1 AND project_id=$2 AND organization_id=$3 AND ($4='all' OR owner_user_id=$24 OR $4='organization' OR ($4 IN ('department','department_and_children') AND department_id=$25)) AND archived_at IS NULL").bind(id).bind(project_id).bind(actor.organization_id).bind(actor.data_scope.as_str()).bind(u.title).bind(u.goal).bind(u.background_set).bind(u.background).bind(u.acceptance_set).bind(u.acceptance_criteria).bind(u.constraints_set).bind(u.constraints).bind(u.priority).bind(u.status).bind(u.assignee_set).bind(u.assignee_user_id).bind(u.labels).bind(u.due_at_set).bind(u.due_at).bind(u.repository_set).bind(u.repository_id).bind(u.environment_set).bind(u.environment_id).bind(actor.user_id).bind(actor.department_id).execute(c).await?;
     Ok(r.rows_affected() > 0)
 }

@@ -7,9 +7,11 @@ export interface UpdateDevRailTaskRequest {
   background?: (string | null);
   constraints?: (string | null);
   dueAt?: (string | null);
+  environmentId?: (number | null);
   goal?: (string | null);
   labels?: (Array<string> | null);
   priority?: (string | null);
+  repositoryId?: (number | null);
   status?: (string | null);
   title?: (string | null);
 }

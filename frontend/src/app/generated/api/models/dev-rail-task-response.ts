@@ -10,6 +10,7 @@ export interface DevRailTaskResponse {
   createdAt: string;
   departmentId?: (number | null);
   dueAt?: (string | null);
+  environmentId?: (number | null);
   goal: string;
   id: number;
   labels: any;
@@ -17,6 +18,7 @@ export interface DevRailTaskResponse {
   ownerUserId: number;
   priority: string;
   projectId: number;
+  repositoryId?: (number | null);
   status: string;
   title: string;
   updatedAt: string;

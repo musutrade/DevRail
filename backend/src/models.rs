@@ -202,6 +202,8 @@ pub struct DevRailTaskRow {
     pub department_id: Option<i64>,
     pub owner_user_id: i64,
     pub project_id: i64,
+    pub repository_id: Option<i64>,
+    pub environment_id: Option<i64>,
     pub assignee_user_id: Option<i64>,
     pub title: String,
     pub goal: String,
@@ -964,6 +966,8 @@ pub struct DevRailTaskResponse {
     pub department_id: Option<i64>,
     pub owner_user_id: i64,
     pub project_id: i64,
+    pub repository_id: Option<i64>,
+    pub environment_id: Option<i64>,
     pub assignee_user_id: Option<i64>,
     pub title: String,
     pub goal: String,
@@ -1371,6 +1375,8 @@ pub struct CreateDevRailTaskRequest {
     pub labels: Option<Vec<String>>,
     pub due_at: Option<DateTime<Utc>>,
     pub department_id: Option<i64>,
+    pub repository_id: Option<i64>,
+    pub environment_id: Option<i64>,
 }
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -1397,6 +1403,12 @@ pub struct UpdateDevRailTaskRequest {
     #[serde(default)]
     #[schema(value_type = Option<String>, nullable = true)]
     pub due_at: NullablePatch<DateTime<Utc>>,
+    #[serde(default)]
+    #[schema(value_type = Option<i64>, nullable = true)]
+    pub repository_id: NullablePatch<i64>,
+    #[serde(default)]
+    #[schema(value_type = Option<i64>, nullable = true)]
+    pub environment_id: NullablePatch<i64>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]

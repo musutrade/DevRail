@@ -8,8 +8,10 @@ export interface CreateDevRailTaskRequest {
   constraints?: (string | null);
   departmentId?: (number | null);
   dueAt?: (string | null);
+  environmentId?: (number | null);
   goal: string;
   labels?: (Array<string> | null);
   priority?: (string | null);
+  repositoryId?: (number | null);
   title: string;
 }
