@@ -45,6 +45,7 @@ utoipa = { version = "5.5.0", features = ["chrono"] }
 url = "2"
 uuid = { version = "1", features = ["serde", "v4"] }
 webauthn-rs = { version = "0.5.5", features = ["danger-allow-state-serialisation"] }
+web-push = "0.11"
 
 [dev-dependencies]
 http-body-util = "0.1"

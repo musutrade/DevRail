@@ -1205,6 +1205,20 @@ pub struct DevRailPushDeviceRow {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct DevRailPushDispatchRow {
+    pub delivery_id: i64,
+    pub outbox_event_id: i64,
+    pub device_id: i64,
+    pub user_id: i64,
+    pub endpoint_ciphertext: Vec<u8>,
+    pub keys_ciphertext: Vec<u8>,
+    pub title: String,
+    pub summary: String,
+    pub deep_link: Option<String>,
+    pub notification_id: i64,
+}
+
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DevRailPushDeviceResponse {
