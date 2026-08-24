@@ -5,7 +5,9 @@ use crate::repositories::devrail_runs;
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap, future::Future, path::PathBuf, pin::Pin, sync::Arc, time::Duration,
+};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process::{Child, ChildStdin, ChildStdout, Command},
@@ -85,71 +87,76 @@ impl HarnessSupervisor {
         }
     }
 
-    pub async fn launch(&self, launch: RunLaunch) -> Result<(), SupervisorError> {
-        if !launch.cwd.starts_with(self.workspace_root.as_ref()) {
-            return Err(SupervisorError::Workspace);
-        }
-        let slot = self
-            .slots
-            .clone()
-            .try_acquire_owned()
-            .map_err(|_| SupervisorError::Capacity)?;
-        let (tx, rx) = mpsc::channel(2);
-        self.controls.lock().await.insert(launch.run_id, tx);
-
-        let mut command = Command::new(self.command.as_str());
-        command
-            .arg("app-server")
-            .current_dir(&launch.cwd)
-            .env_clear()
-            .env("DEVRAIL_RUN_ID", launch.run_id.to_string())
-            .env("DEVRAIL_TASK_ID", launch.task_id.to_string())
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .kill_on_drop(true);
-        // PATH and HOME are the only inherited values; credentials and the
-        // server's connection environment are deliberately not propagated.
-        if let Ok(path) = std::env::var("PATH") {
-            command.env("PATH", path);
-        }
-        if let Ok(home) = std::env::var("HOME") {
-            command.env("HOME", home);
-        }
-        let mut child = match command.spawn() {
-            Ok(child) => child,
-            Err(error) => {
-                self.controls.lock().await.remove(&launch.run_id);
-                return Err(SupervisorError::Spawn(error.to_string()));
+    pub fn launch(
+        &self,
+        launch: RunLaunch,
+    ) -> Pin<Box<dyn Future<Output = Result<(), SupervisorError>> + Send + '_>> {
+        Box::pin(async move {
+            if !launch.cwd.starts_with(self.workspace_root.as_ref()) {
+                return Err(SupervisorError::Workspace);
             }
-        };
-        let stdin = child
-            .stdin
-            .take()
-            .ok_or_else(|| SupervisorError::Spawn("stdin 不可用".into()))?;
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or_else(|| SupervisorError::Spawn("stdout 不可用".into()))?;
-        let stderr = child
-            .stderr
-            .take()
-            .ok_or_else(|| SupervisorError::Spawn("stderr 不可用".into()))?;
-        let supervisor = self.clone();
-        tokio::spawn(async move {
-            run_process(ProcessContext {
-                supervisor,
-                launch,
-                child,
-                stdin,
-                stdout,
-                stderr,
-                controls: rx,
-                _slot: slot,
-            })
-            .await;
-        });
-        Ok(())
+            let slot = self
+                .slots
+                .clone()
+                .try_acquire_owned()
+                .map_err(|_| SupervisorError::Capacity)?;
+            let (tx, rx) = mpsc::channel(2);
+            self.controls.lock().await.insert(launch.run_id, tx);
+
+            let mut command = Command::new(self.command.as_str());
+            command
+                .arg("app-server")
+                .current_dir(&launch.cwd)
+                .env_clear()
+                .env("DEVRAIL_RUN_ID", launch.run_id.to_string())
+                .env("DEVRAIL_TASK_ID", launch.task_id.to_string())
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .kill_on_drop(true);
+            // PATH and HOME are the only inherited values; credentials and the
+            // server's connection environment are deliberately not propagated.
+            if let Ok(path) = std::env::var("PATH") {
+                command.env("PATH", path);
+            }
+            if let Ok(home) = std::env::var("HOME") {
+                command.env("HOME", home);
+            }
+            let mut child = match command.spawn() {
+                Ok(child) => child,
+                Err(error) => {
+                    self.controls.lock().await.remove(&launch.run_id);
+                    return Err(SupervisorError::Spawn(error.to_string()));
+                }
+            };
+            let stdin = child
+                .stdin
+                .take()
+                .ok_or_else(|| SupervisorError::Spawn("stdin 不可用".into()))?;
+            let stdout = child
+                .stdout
+                .take()
+                .ok_or_else(|| SupervisorError::Spawn("stdout 不可用".into()))?;
+            let stderr = child
+                .stderr
+                .take()
+                .ok_or_else(|| SupervisorError::Spawn("stderr 不可用".into()))?;
+            let supervisor = self.clone();
+            tokio::spawn(async move {
+                run_process(ProcessContext {
+                    supervisor,
+                    launch,
+                    child,
+                    stdin,
+                    stdout,
+                    stderr,
+                    controls: rx,
+                    _slot: slot,
+                })
+                .await;
+            });
+            Ok(())
+        })
     }
 
     pub async fn interrupt(&self, run_id: i64) -> Result<(), SupervisorError> {
@@ -221,6 +228,46 @@ impl HarnessSupervisor {
         }
         let _ = devrail_runs::mark_unrecoverable_runs(&self.pool).await?;
         Ok(recovered)
+    }
+
+    async fn recover_transport(&self, launch: &RunLaunch, reason: &str) {
+        let Ok(true) =
+            devrail_runs::prepare_transport_recovery(&self.pool, launch.run_id, reason).await
+        else {
+            let _ = finish_run(
+                &self.pool,
+                launch,
+                "failed",
+                reason,
+                None,
+                None,
+                Some("Harness 多次连接中断；自动恢复已达到上限，请人工重试"),
+            )
+            .await;
+            return;
+        };
+        let _ = persist_event(
+            &self.pool,
+            launch,
+            "run_recovery",
+            None,
+            json!({"reason": reason, "automatic": true}),
+            Some("Harness 连接中断，正在自动恢复"),
+        )
+        .await;
+        self.controls.lock().await.remove(&launch.run_id);
+        if self.launch(launch.clone()).await.is_err() {
+            let _ = finish_run(
+                &self.pool,
+                launch,
+                "failed",
+                "recovery_spawn_failed",
+                None,
+                None,
+                Some("Harness 自动恢复启动失败；请人工重试"),
+            )
+            .await;
+        }
     }
 }
 
@@ -330,7 +377,11 @@ async fn run_process(context: ProcessContext) {
             }
             result = out_reader.read_line(&mut out_line) => {
                 match result {
-                    Ok(0) => {},
+                    Ok(0) => {
+                        protocol_failed = true;
+                        append_summary(&mut stderr_summary, "transport read error: EOF");
+                        let _ = child.start_kill();
+                    },
                     Ok(_) => {
                         let line = out_line.trim();
                         if !line.is_empty() && !handle_stdout(&pool, &launch, line).await { protocol_failed = true; let _ = child.start_kill(); }
@@ -361,6 +412,10 @@ async fn run_process(context: ProcessContext) {
             result = child.wait() => {
                 let code = result.ok().and_then(|s| s.code());
                 let reason = classify_failure(protocol_failed, &stderr_summary);
+                if protocol_failed && matches!(reason, "transport_disconnect" | "transport_read_error" | "transport_write_error") {
+                    supervisor.recover_transport(&launch, reason).await;
+                    break;
+                }
                 let (status, reason, recovery) = if protocol_failed || code != Some(0) {
                     ("failed", reason, Some(recovery_for_failure(protocol_failed, &stderr_summary)))
                 } else { ("completed", "completed", None) };

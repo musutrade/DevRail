@@ -12,6 +12,7 @@ export interface DevRailRunResponse {
   idempotencyKey: string;
   modelId?: (string | null);
   policy: any;
+  recoveryAttempts: number;
   recoverySuggestion?: (string | null);
   snapshotId: number;
   startedAt?: (string | null);

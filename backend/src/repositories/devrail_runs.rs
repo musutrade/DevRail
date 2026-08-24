@@ -5,8 +5,9 @@ use crate::models::{DevRailRunEventRow, DevRailRunRow};
 use serde_json::Value;
 use sqlx::{AssertSqlSafe, PgConnection, PgPool};
 
-const RUN_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, status, thread_id, turn_id, harness_version, model_id, cwd, policy, startup_args_summary, exit_reason, exit_code, stderr_summary, trace_id, recovery_suggestion, started_at, completed_at, created_at, updated_at";
+const RUN_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, status, thread_id, turn_id, harness_version, model_id, cwd, policy, startup_args_summary, exit_reason, exit_code, stderr_summary, trace_id, recovery_suggestion, recovery_attempts, started_at, completed_at, created_at, updated_at";
 const EVENT_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, run_id, cursor, event_type, source_event_id, idempotency_key, payload, summary, occurred_at";
+const MAX_TRANSPORT_RECOVERY_ATTEMPTS: i32 = 2;
 
 fn scope(alias: &str) -> String {
     format!(
@@ -97,6 +98,20 @@ pub(crate) async fn update_run_terminal(
 ) -> Result<bool, sqlx::Error> {
     sqlx::query("UPDATE devrail_runs SET status=$2, exit_reason=$3, exit_code=$4, stderr_summary=$5, trace_id=$6, recovery_suggestion=$7, completed_at=COALESCE(completed_at,now()), updated_at=now() WHERE id=$1 AND status NOT IN ('completed','failed','cancelled')")
         .bind(input.run_id).bind(input.status).bind(input.exit_reason).bind(input.exit_code).bind(input.stderr_summary).bind(input.trace_id).bind(input.recovery_suggestion).execute(c).await.map(|result| result.rows_affected() == 1)
+}
+
+pub(crate) async fn prepare_transport_recovery(
+    pool: &PgPool,
+    run_id: i64,
+    reason: &str,
+) -> Result<bool, sqlx::Error> {
+    Ok(sqlx::query("UPDATE devrail_runs SET status='starting', recovery_attempts=recovery_attempts+1, exit_reason=$2, exit_code=NULL, stderr_summary=NULL, completed_at=NULL, recovery_suggestion='Harness 连接中断；系统正在自动恢复', updated_at=now() WHERE id=$1 AND status IN ('starting','active') AND recovery_attempts < $3")
+        .bind(run_id)
+        .bind(reason)
+        .bind(MAX_TRANSPORT_RECOVERY_ATTEMPTS)
+        .execute(pool)
+        .await?
+        .rows_affected() == 1)
 }
 
 pub(crate) async fn update_task_status(
