@@ -19,6 +19,7 @@ import type {
   DevRailRunEventResponse,
   DevRailRunResponse,
   DevRailReviewResponse,
+  DevRailReviewCommentResponse,
 } from '../../generated/api/models';
 
 @Component({
@@ -36,6 +37,10 @@ export class DevRailRunPage implements OnInit, OnDestroy {
   readonly reviews = signal<DevRailReviewResponse[]>([]);
   readonly reviewerUserId = signal('');
   readonly reviewSummary = signal('');
+  readonly reviewComments = signal<DevRailReviewCommentResponse[]>([]);
+  readonly selectedReviewId = signal<number | null>(null);
+  readonly commentFilePath = signal('');
+  readonly commentBody = signal('');
   readonly loading = signal(true);
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
@@ -133,6 +138,36 @@ export class DevRailRunPage implements OnInit, OnDestroy {
       });
     } catch (error) {
       this.snack.open(apiErrorMessage(error, '处理审查失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  onCommentFilePathInput(event: Event): void {
+    this.commentFilePath.set((event.target as HTMLInputElement).value);
+  }
+  onCommentBodyInput(event: Event): void {
+    this.commentBody.set((event.target as HTMLInputElement).value);
+  }
+  async selectReview(review: DevRailReviewResponse): Promise<void> {
+    this.selectedReviewId.set(review.id);
+    this.reviewComments.set(await this.api.listReviewComments(review.id));
+  }
+  async createReviewComment(): Promise<void> {
+    const reviewId = this.selectedReviewId();
+    if (!reviewId || !this.commentFilePath().trim() || !this.commentBody().trim() || this.busy())
+      return;
+    this.busy.set(true);
+    try {
+      const comment = await this.api.createReviewComment(reviewId, {
+        filePath: this.commentFilePath().trim(),
+        body: this.commentBody().trim(),
+      });
+      this.reviewComments.update((items) => [...items, comment]);
+      this.commentFilePath.set('');
+      this.commentBody.set('');
+    } catch (error) {
+      this.snack.open(apiErrorMessage(error, '添加审查意见失败'), '关闭', { duration: 5000 });
     } finally {
       this.busy.set(false);
     }

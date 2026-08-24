@@ -3462,6 +3462,52 @@
         }
       }
     },
+    "/review-comments/{id}": {
+      "patch": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "updateDevRailReviewComment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDevRailReviewCommentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailReviewCommentResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/reviews": {
       "get": {
         "tags": [
@@ -3570,6 +3616,89 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DevRailReviewResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/reviews/{id}/comments": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "listDevRailReviewComments",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DevRailReviewCommentResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "createDevRailReviewComment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDevRailReviewCommentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailReviewCommentResponse"
                 }
               }
             }
@@ -5733,6 +5862,35 @@
           }
         }
       },
+      "CreateDevRailReviewCommentRequest": {
+        "type": "object",
+        "required": [
+          "filePath",
+          "body"
+        ],
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "filePath": {
+            "type": "string"
+          },
+          "lineEnd": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "lineStart": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "CreateDevRailReviewRequest": {
         "type": "object",
         "required": [
@@ -7153,6 +7311,60 @@
             "type": "string"
           },
           "syncedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DevRailReviewCommentResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "reviewId",
+          "authorUserId",
+          "filePath",
+          "body",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "authorUserId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "body": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "filePath": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lineEnd": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "lineStart": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "reviewId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAt": {
             "type": "string",
             "format": "date-time"
           }
@@ -8676,6 +8888,17 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "UpdateDevRailReviewCommentRequest": {
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "properties": {
+          "body": {
+            "type": "string"
           }
         }
       },

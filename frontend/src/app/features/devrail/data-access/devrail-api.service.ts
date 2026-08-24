@@ -56,6 +56,9 @@ import { getDevRailRepositorySync } from '../../../generated/api/fn/devrail/get-
 import { listDevRailReviews } from '../../../generated/api/fn/devrail/list-dev-rail-reviews';
 import { createDevRailReview } from '../../../generated/api/fn/devrail/create-dev-rail-review';
 import { decideDevRailReview } from '../../../generated/api/fn/devrail/decide-dev-rail-review';
+import { listDevRailReviewComments } from '../../../generated/api/fn/devrail/list-dev-rail-review-comments';
+import { createDevRailReviewComment } from '../../../generated/api/fn/devrail/create-dev-rail-review-comment';
+import { updateDevRailReviewComment } from '../../../generated/api/fn/devrail/update-dev-rail-review-comment';
 import type {
   CreateDevRailEnvironmentRequest,
   CreateDevRailProjectRequest,
@@ -99,6 +102,9 @@ import type {
   DevRailReviewResponse,
   CreateDevRailReviewRequest,
   DecideDevRailReviewRequest,
+  DevRailReviewCommentResponse,
+  CreateDevRailReviewCommentRequest,
+  UpdateDevRailReviewCommentRequest,
 } from '../../../generated/api/models';
 
 @Injectable({ providedIn: 'root' })
@@ -150,6 +156,21 @@ export class DevRailApiService {
   }
   decideReview(id: number, body: DecideDevRailReviewRequest): Promise<DevRailReviewResponse> {
     return this.api.invoke(decideDevRailReview, { id, body });
+  }
+  listReviewComments(reviewId: number): Promise<DevRailReviewCommentResponse[]> {
+    return this.api.invoke(listDevRailReviewComments, { id: reviewId });
+  }
+  createReviewComment(
+    reviewId: number,
+    body: CreateDevRailReviewCommentRequest,
+  ): Promise<DevRailReviewCommentResponse> {
+    return this.api.invoke(createDevRailReviewComment, { id: reviewId, body });
+  }
+  updateReviewComment(
+    id: number,
+    body: UpdateDevRailReviewCommentRequest,
+  ): Promise<DevRailReviewCommentResponse> {
+    return this.api.invoke(updateDevRailReviewComment, { id, body });
   }
   getApproval(id: number): Promise<DevRailApprovalResponse> {
     return this.api.invoke(getDevRailApproval, { id });

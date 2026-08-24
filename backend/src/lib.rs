@@ -95,6 +95,8 @@ const DEVRAIL_PUSH_DEVICE_PATH: &str = "/api/v1/push/devices/{id}";
 const DEVRAIL_APPROVALS_PATH: &str = "/api/v1/approvals";
 const DEVRAIL_REVIEWS_PATH: &str = "/api/v1/reviews";
 const DEVRAIL_REVIEW_DECIDE_PATH: &str = "/api/v1/reviews/{id}/decide";
+const DEVRAIL_REVIEW_COMMENTS_PATH: &str = "/api/v1/reviews/{id}/comments";
+const DEVRAIL_REVIEW_COMMENT_PATH: &str = "/api/v1/review-comments/{id}";
 const DEVRAIL_APPROVAL_PATH: &str = "/api/v1/approvals/{id}";
 const DEVRAIL_APPROVAL_APPROVE_PATH: &str = "/api/v1/approvals/{id}/approve";
 const DEVRAIL_APPROVAL_RECOVER_PATH: &str = "/api/v1/approvals/{id}/recover";
@@ -170,6 +172,8 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_APPROVALS_PATH, &["get"]),
     (DEVRAIL_REVIEWS_PATH, &["get", "post"]),
     (DEVRAIL_REVIEW_DECIDE_PATH, &["post"]),
+    (DEVRAIL_REVIEW_COMMENTS_PATH, &["get", "post"]),
+    (DEVRAIL_REVIEW_COMMENT_PATH, &["patch"]),
     (DEVRAIL_APPROVAL_PATH, &["get"]),
     (DEVRAIL_APPROVAL_APPROVE_PATH, &["post"]),
     (DEVRAIL_APPROVAL_RECOVER_PATH, &["post"]),
@@ -454,6 +458,15 @@ fn base_router(state: AppState) -> Router {
         .route(
             DEVRAIL_REVIEW_DECIDE_PATH,
             post(handlers::devrail::decide_review),
+        )
+        .route(
+            DEVRAIL_REVIEW_COMMENTS_PATH,
+            get(handlers::devrail::list_review_comments)
+                .post(handlers::devrail::create_review_comment),
+        )
+        .route(
+            DEVRAIL_REVIEW_COMMENT_PATH,
+            patch(handlers::devrail::update_review_comment),
         )
         .route(
             DEVRAIL_APPROVAL_APPROVE_PATH,

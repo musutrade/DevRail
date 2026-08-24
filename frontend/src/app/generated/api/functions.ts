@@ -83,10 +83,16 @@ export type { RegisterDevRailPushDevice$Params as RegisterDevRailPushDevice$Para
 export { registerDevRailPushDevice as registerDevRailPushDevice } from './fn/devrail/register-dev-rail-push-device';
 export type { RevokeDevRailPushDevice$Params as RevokeDevRailPushDevice$Params } from './fn/devrail/revoke-dev-rail-push-device';
 export { revokeDevRailPushDevice as revokeDevRailPushDevice } from './fn/devrail/revoke-dev-rail-push-device';
+export type { UpdateDevRailReviewComment$Params as UpdateDevRailReviewComment$Params } from './fn/devrail/update-dev-rail-review-comment';
+export { updateDevRailReviewComment as updateDevRailReviewComment } from './fn/devrail/update-dev-rail-review-comment';
 export type { ListDevRailReviews$Params as ListDevRailReviews$Params } from './fn/devrail/list-dev-rail-reviews';
 export { listDevRailReviews as listDevRailReviews } from './fn/devrail/list-dev-rail-reviews';
 export type { CreateDevRailReview$Params as CreateDevRailReview$Params } from './fn/devrail/create-dev-rail-review';
 export { createDevRailReview as createDevRailReview } from './fn/devrail/create-dev-rail-review';
+export type { ListDevRailReviewComments$Params as ListDevRailReviewComments$Params } from './fn/devrail/list-dev-rail-review-comments';
+export { listDevRailReviewComments as listDevRailReviewComments } from './fn/devrail/list-dev-rail-review-comments';
+export type { CreateDevRailReviewComment$Params as CreateDevRailReviewComment$Params } from './fn/devrail/create-dev-rail-review-comment';
+export { createDevRailReviewComment as createDevRailReviewComment } from './fn/devrail/create-dev-rail-review-comment';
 export type { DecideDevRailReview$Params as DecideDevRailReview$Params } from './fn/devrail/decide-dev-rail-review';
 export { decideDevRailReview as decideDevRailReview } from './fn/devrail/decide-dev-rail-review';
 export type { GetDevRailRun$Params as GetDevRailRun$Params } from './fn/devrail/get-dev-rail-run';
