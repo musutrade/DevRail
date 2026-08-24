@@ -7,12 +7,42 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect changed components
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      workflow: ${{ steps.filter.outputs.workflow }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'AGENTS.md'
+            frontend:
+              - 'frontend/**'
+              - 'backend/src/openapi.rs'
+              - 'backend/src/models.rs'
+              - 'docs/openapi.json'
+              - 'AGENTS.md'
+            workflow:
+              - 'codex-audit-pipeline/**'
+              - 'scripts/**'
+              - '.github/workflows/**'
+              - 'AGENTS.md'
+
   quality:
     name: Quality gate
     runs-on: ubuntu-latest
@@ -45,6 +75,8 @@ jobs:
 
   backend:
     name: Backend verification
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -83,6 +115,8 @@ jobs:
 
   frontend:
     name: Frontend verification
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
