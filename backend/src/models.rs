@@ -867,6 +867,7 @@ pub struct DevRailRepositoryResponse {
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 #[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Query)]
 pub struct DevRailWorktreeQuery {
     pub environment_id: i64,
 }
@@ -889,6 +890,38 @@ pub struct DevRailWorktreeResponse {
     pub commit_summary: Option<String>,
     pub changed_files: Vec<DevRailWorktreeFileResponse>,
     pub checked_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Query)]
+pub struct DevRailRepositorySyncQuery {
+    pub environment_id: Option<i64>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailRepositoryBranchResponse {
+    pub name: String,
+    pub sha: String,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailRepositoryCommitResponse {
+    pub sha: String,
+    pub summary: String,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailRepositorySyncResponse {
+    pub repository_id: i64,
+    pub status: String,
+    pub default_branch: String,
+    pub branches: Vec<DevRailRepositoryBranchResponse>,
+    pub commits: Vec<DevRailRepositoryCommitResponse>,
+    pub synced_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]

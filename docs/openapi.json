@@ -2893,6 +2893,58 @@
       }
     },
     "/projects/{project_id}/repositories/{id}/sync": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "getDevRailRepositorySync",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "environmentId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailRepositorySyncResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      },
       "post": {
         "tags": [
           "devrail"
@@ -2964,7 +3016,7 @@
           },
           {
             "name": "environmentId",
-            "in": "path",
+            "in": "query",
             "required": true,
             "schema": {
               "type": "integer",
@@ -6286,6 +6338,36 @@
           }
         }
       },
+      "DevRailRepositoryBranchResponse": {
+        "type": "object",
+        "required": [
+          "name",
+          "sha"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "sha": {
+            "type": "string"
+          }
+        }
+      },
+      "DevRailRepositoryCommitResponse": {
+        "type": "object",
+        "required": [
+          "sha",
+          "summary"
+        ],
+        "properties": {
+          "sha": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        }
+      },
       "DevRailRepositoryPage": {
         "type": "object",
         "required": [
@@ -6404,6 +6486,45 @@
             "type": "string"
           },
           "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DevRailRepositorySyncResponse": {
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "status",
+          "defaultBranch",
+          "branches",
+          "commits",
+          "syncedAt"
+        ],
+        "properties": {
+          "branches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DevRailRepositoryBranchResponse"
+            }
+          },
+          "commits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DevRailRepositoryCommitResponse"
+            }
+          },
+          "defaultBranch": {
+            "type": "string"
+          },
+          "repositoryId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string"
+          },
+          "syncedAt": {
             "type": "string",
             "format": "date-time"
           }

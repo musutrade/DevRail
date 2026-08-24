@@ -69,6 +69,28 @@
         <button class="btn-secondary" type="button" (click)="syncRepository()" [disabled]="busy()">
           <mat-icon>sync</mat-icon>同步远端
         </button>
+        <button
+          class="btn-secondary"
+          type="button"
+          (click)="loadRepositorySync()"
+          [disabled]="busy()"
+        >
+          <mat-icon>inventory_2</mat-icon>加载完整资源
+        </button>
+        @if (repositorySync(); as sync) {
+          <div class="sync-summary">
+            <span>同步状态：{{ sync.status }}</span>
+            <span>默认分支：{{ sync.defaultBranch }}</span>
+            <span>分支列表（{{ sync.branches.length }}）</span>
+            @for (branch of sync.branches; track branch.name) {
+              <span>{{ branch.name }} · {{ branch.sha }}</span>
+            }
+            <span>最近提交（{{ sync.commits.length }}）</span>
+            @for (commit of sync.commits; track commit.sha) {
+              <span>{{ commit.sha.slice(0, 8) }} · {{ commit.summary }}</span>
+            }
+          </div>
+        }
       } @else {
         <button
           class="btn-secondary"

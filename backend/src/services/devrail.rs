@@ -661,6 +661,93 @@ async fn git_output(root: &str, args: &[&str]) -> Result<String, ApiError> {
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
+pub async fn get_repository_sync(
+    pool: &PgPool,
+    actor: &ActorContext,
+    project_id: i64,
+    repository_id: i64,
+    environment_id: Option<i64>,
+    controlled_workspace_root: &Path,
+) -> Result<DevRailRepositorySyncResponse, ApiError> {
+    let repository = get_repository(pool, actor, project_id, repository_id).await?;
+    let output = tokio::time::timeout(
+        Duration::from_secs(30),
+        Command::new("git")
+            .arg("-c")
+            .arg("credential.helper=")
+            .arg("ls-remote")
+            .arg("--heads")
+            .arg(&repository.remote_url)
+            .env_clear()
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .output(),
+    )
+    .await
+    .map_err(|_| ApiError::internal("远端分支同步超时"))?
+    .map_err(ApiError::internal)?;
+    if !output.status.success() {
+        return Err(ApiError::validation("无法读取仓库远端分支"));
+    }
+    let mut branches = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            let sha = fields.next()?.trim();
+            let reference = fields.next()?.strip_prefix("refs/heads/")?;
+            if sha.len() != 40 || !sha.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                return None;
+            }
+            Some(DevRailRepositoryBranchResponse {
+                name: reference.chars().take(128).collect(),
+                sha: sha.to_owned(),
+            })
+        })
+        .take(500)
+        .collect::<Vec<_>>();
+    branches.sort_by(|left, right| left.name.cmp(&right.name));
+
+    let mut commits = Vec::new();
+    if let Some(environment_id) = environment_id {
+        let environment = get_environment(pool, actor, project_id, environment_id).await?;
+        let controlled_root = tokio::fs::canonicalize(controlled_workspace_root)
+            .await
+            .map_err(ApiError::internal)?;
+        let workspace = tokio::fs::canonicalize(environment.workspace_root.trim())
+            .await
+            .map_err(|_| ApiError::validation("环境工作区不存在或不可访问"))?;
+        if !workspace.starts_with(controlled_root) {
+            return Err(ApiError::validation("环境工作区不在受控根目录内"));
+        }
+        let root = workspace
+            .to_str()
+            .ok_or_else(|| ApiError::validation("环境工作区路径无效"))?;
+        let log = git_output(root, &["log", "-20", "--format=%H%x00%s"]).await?;
+        for line in log.lines() {
+            let mut fields = line.splitn(2, '\0');
+            let sha = fields.next().unwrap_or_default();
+            let summary = fields.next().unwrap_or_default().trim();
+            if sha.len() == 40 && !summary.is_empty() {
+                commits.push(DevRailRepositoryCommitResponse {
+                    sha: sha.to_owned(),
+                    summary: summary.chars().take(200).collect(),
+                });
+            }
+        }
+    }
+    Ok(DevRailRepositorySyncResponse {
+        repository_id,
+        status: "synced".to_string(),
+        default_branch: repository.default_branch,
+        branches,
+        commits,
+        synced_at: chrono::Utc::now(),
+    })
+}
+
 pub async fn inspect_repository_worktree(
     pool: &PgPool,
     actor: &ActorContext,
