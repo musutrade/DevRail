@@ -287,3 +287,21 @@ pub async fn list_events(
         .fetch_all(pool)
         .await
 }
+
+pub async fn find_quality_gate_log(
+    pool: &PgPool,
+    actor: &ActorContext,
+    run_id: i64,
+    log_ref: &str,
+) -> Result<Option<DevRailRunEventRow>, sqlx::Error> {
+    let sql = format!("WITH RECURSIVE visible_departments AS (SELECT id FROM departments WHERE id=$4 AND organization_id=$2 UNION SELECT child.id FROM departments child JOIN visible_departments parent ON child.parent_id=parent.id WHERE child.organization_id=$2) SELECT {EVENT_COLUMNS} FROM devrail_run_events e WHERE e.run_id=$5 AND e.event_type='quality_gate' AND e.payload->>'log_ref'=$6 AND {} LIMIT 1", scope("e"));
+    sqlx::query_as::<_, DevRailRunEventRow>(AssertSqlSafe(sql))
+        .bind(actor.data_scope.as_str())
+        .bind(actor.organization_id)
+        .bind(actor.user_id)
+        .bind(actor.department_id)
+        .bind(run_id)
+        .bind(log_ref)
+        .fetch_optional(pool)
+        .await
+}

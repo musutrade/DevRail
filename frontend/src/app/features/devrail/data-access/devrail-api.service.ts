@@ -26,6 +26,7 @@ import { retryDevRailRun } from '../../../generated/api/fn/devrail/retry-dev-rai
 import { getDevRailRunChangeset } from '../../../generated/api/fn/devrail/get-dev-rail-run-changeset';
 import { getDevRailRunQualityGates } from '../../../generated/api/fn/devrail/get-dev-rail-run-quality-gates';
 import { executeDevRailRunQualityGates } from '../../../generated/api/fn/devrail/execute-dev-rail-run-quality-gates';
+import { getDevRailRunQualityGateLog } from '../../../generated/api/fn/devrail/get-dev-rail-run-quality-gate-log';
 import { listDevRailProjectMembers } from '../../../generated/api/fn/devrail/list-dev-rail-project-members';
 import { addDevRailProjectMember } from '../../../generated/api/fn/devrail/add-dev-rail-project-member';
 import { removeDevRailProjectMember } from '../../../generated/api/fn/devrail/remove-dev-rail-project-member';
@@ -65,6 +66,7 @@ import type {
   DevRailRunResponse,
   DevRailChangesetResponse,
   DevRailQualityGatePage,
+  DevRailQualityGateLogPage,
   RetryDevRailRunRequest,
   AddDevRailProjectMemberRequest,
   DevRailProjectMemberPage,
@@ -263,6 +265,19 @@ export class DevRailApiService {
   }
   getRunQualityGates(id: number): Promise<DevRailQualityGatePage> {
     return this.api.invoke(getDevRailRunQualityGates, { id });
+  }
+  getRunQualityGateLog(
+    id: number,
+    logRef: string,
+    afterCursor = 0,
+    limit = 100,
+  ): Promise<DevRailQualityGateLogPage> {
+    return this.api.invoke(getDevRailRunQualityGateLog, {
+      id,
+      log_ref: logRef,
+      after_cursor: afterCursor,
+      limit,
+    });
   }
   executeRunQualityGates(id: number): Promise<DevRailQualityGatePage> {
     return this.api.invoke(executeDevRailRunQualityGates, { id });

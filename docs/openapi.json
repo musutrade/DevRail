@@ -4040,6 +4040,74 @@
         ]
       }
     },
+    "/runs/{id}/quality-gate-log": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "getDevRailRunQualityGateLog",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "log_ref",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "after_cursor",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailQualityGateLogPage"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/runs/{id}/quality-gates": {
       "get": {
         "tags": [
@@ -6277,6 +6345,44 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "DevRailQualityGateLogPage": {
+        "type": "object",
+        "required": [
+          "runId",
+          "logRef",
+          "name",
+          "status",
+          "lines"
+        ],
+        "properties": {
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "logRef": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nextCursor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "runId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string"
           }
         }
       },
