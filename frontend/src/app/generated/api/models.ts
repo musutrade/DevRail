@@ -12,6 +12,7 @@ export type { CreateDevRailEnvironmentRequest } from './models/create-dev-rail-e
 export type { CreateDevRailProjectRequest } from './models/create-dev-rail-project-request';
 export type { CreateDevRailRepositoryRequest } from './models/create-dev-rail-repository-request';
 export type { CreateDevRailRunRequest } from './models/create-dev-rail-run-request';
+export type { CreateDevRailTaskCommentRequest } from './models/create-dev-rail-task-comment-request';
 export type { CreateDevRailTaskRequest } from './models/create-dev-rail-task-request';
 export type { CreateRoleRequest } from './models/create-role-request';
 export type { CreateUserRequest } from './models/create-user-request';
@@ -49,6 +50,8 @@ export type { DevRailRunEventPage } from './models/dev-rail-run-event-page';
 export type { DevRailRunEventResponse } from './models/dev-rail-run-event-response';
 export type { DevRailRunPage } from './models/dev-rail-run-page';
 export type { DevRailRunResponse } from './models/dev-rail-run-response';
+export type { DevRailTaskCommentPage } from './models/dev-rail-task-comment-page';
+export type { DevRailTaskCommentResponse } from './models/dev-rail-task-comment-response';
 export type { DevRailTaskPage } from './models/dev-rail-task-page';
 export type { DevRailTaskResponse } from './models/dev-rail-task-response';
 export type { DevRailWorktreeFileResponse } from './models/dev-rail-worktree-file-response';

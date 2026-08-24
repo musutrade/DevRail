@@ -72,5 +72,35 @@
         <mat-icon>save</mat-icon>保存任务
       </button>
     </form>
+    <section class="comments" aria-labelledby="comments-title">
+      <h2 id="comments-title">评论</h2>
+      @for (comment of comments(); track comment.id) {
+        <article class="comment">
+          <header>
+            <strong>{{ comment.authorDisplayName }}</strong>
+            <small>@{{ comment.authorUsername }}</small
+            ><time>{{ comment.createdAt | date: 'yyyy-MM-dd HH:mm' }}</time>
+          </header>
+          <p>{{ comment.body }}</p>
+        </article>
+      } @empty {
+        <p class="empty">暂无评论</p>
+      }
+      <form
+        class="comment-form"
+        #commentForm
+        (submit)="$event.preventDefault(); addComment(commentForm)"
+      >
+        <label
+          >发表评论（可使用 @用户名 提及成员）<textarea
+            name="body"
+            rows="3"
+            maxlength="10000"
+            required
+          ></textarea>
+        </label>
+        <button class="btn-primary" type="submit" [disabled]="busy()">发布评论</button>
+      </form>
+    </section>
   }
 </div>

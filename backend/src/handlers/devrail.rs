@@ -340,6 +340,32 @@ pub async fn list_tasks(
         .await
         .map(Json)
 }
+pub async fn list_task_comments(
+    State(s): State<AppState>,
+    auth: RequirePermission<CommentRead>,
+    Path(task_id): Path<i64>,
+    Query(q): Query<DevRailListQuery>,
+) -> Result<Json<DevRailTaskCommentPage>, ApiError> {
+    services::devrail_comments::list(
+        &s.pool,
+        &auth,
+        task_id,
+        q.page.unwrap_or(1).max(1),
+        q.page_size.unwrap_or(20).clamp(1, 100),
+    )
+    .await
+    .map(Json)
+}
+pub async fn create_task_comment(
+    State(s): State<AppState>,
+    auth: RequirePermission<CommentWrite>,
+    Path(task_id): Path<i64>,
+    Json(request): Json<CreateDevRailTaskCommentRequest>,
+) -> Result<(StatusCode, Json<DevRailTaskCommentResponse>), ApiError> {
+    services::devrail_comments::create(&s.pool, &auth, task_id, &request)
+        .await
+        .map(|v| (StatusCode::CREATED, Json(v)))
+}
 pub async fn get_task(
     State(s): State<AppState>,
     auth: RequirePermission<TaskRead>,

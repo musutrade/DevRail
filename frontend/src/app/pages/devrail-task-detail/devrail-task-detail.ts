@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -10,10 +11,11 @@ import type {
   DevRailEnvironmentResponse,
   DevRailRepositoryResponse,
 } from '../../generated/api/models';
+import type { DevRailTaskCommentResponse } from '../../generated/api/models';
 
 @Component({
   selector: 'app-devrail-task-detail',
-  imports: [MatIconModule, MatProgressSpinnerModule, MatSnackBarModule, RouterLink],
+  imports: [DatePipe, MatIconModule, MatProgressSpinnerModule, MatSnackBarModule, RouterLink],
   templateUrl: './devrail-task-detail.html',
   styleUrl: './devrail-task-detail.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -24,6 +26,7 @@ export class DevRailTaskDetailPage implements OnInit {
   readonly busy = signal(false);
   readonly repositories = signal<DevRailRepositoryResponse[]>([]);
   readonly environments = signal<DevRailEnvironmentResponse[]>([]);
+  readonly comments = signal<DevRailTaskCommentResponse[]>([]);
   private readonly route = inject(ActivatedRoute);
   private readonly api = inject(DevRailApiService);
   private readonly snack = inject(MatSnackBar);
@@ -60,16 +63,33 @@ export class DevRailTaskDetailPage implements OnInit {
     }
   }
 
+  async addComment(form: HTMLFormElement): Promise<void> {
+    const body = new FormData(form).get('body');
+    if (typeof body !== 'string' || !body.trim()) return;
+    this.busy.set(true);
+    try {
+      const comment = await this.api.createTaskComment(this.taskId, { body: body.trim() });
+      this.comments.update((items) => [...items, comment]);
+      form.reset();
+    } catch (error) {
+      this.snack.open(apiErrorMessage(error, '评论发布失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
   private async load(): Promise<void> {
     try {
-      const [task, repositories, environments] = await Promise.all([
+      const [task, repositories, environments, comments] = await Promise.all([
         this.api.getTask(this.projectId, this.taskId),
         this.api.listRepositories(this.projectId),
         this.api.listEnvironments(this.projectId),
+        this.api.listTaskComments(this.taskId),
       ]);
       this.task.set(task);
       this.repositories.set(repositories.items);
       this.environments.set(environments.items);
+      this.comments.set(comments.items);
     } catch (error) {
       this.snack.open(apiErrorMessage(error, '任务加载失败'), '关闭', { duration: 5000 });
     } finally {

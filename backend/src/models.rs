@@ -219,6 +219,20 @@ pub struct DevRailTaskRow {
     pub archived_at: Option<DateTime<Utc>>,
 }
 
+#[derive(Debug, Clone, FromRow)]
+pub struct DevRailTaskCommentRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub task_id: i64,
+    pub author_user_id: i64,
+    pub author_username: String,
+    pub author_display_name: String,
+    pub body: String,
+    pub mentions: Value,
+    pub created_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct DevRailProjectMemberRow {
     pub id: i64,
@@ -1325,6 +1339,34 @@ pub struct DevRailTaskPage {
     pub total: i64,
     pub page: i64,
     pub page_size: i64,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailTaskCommentResponse {
+    pub id: i64,
+    pub task_id: i64,
+    pub author_user_id: i64,
+    pub author_username: String,
+    pub author_display_name: String,
+    pub body: String,
+    pub mentions: Vec<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailTaskCommentPage {
+    pub items: Vec<DevRailTaskCommentResponse>,
+    pub total: i64,
+    pub page: i64,
+    pub page_size: i64,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateDevRailTaskCommentRequest {
+    pub body: String,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
