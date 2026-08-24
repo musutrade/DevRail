@@ -43,6 +43,7 @@ import { updateDevRailNotificationPreferences } from '../../../generated/api/fn/
 import { listDevRailPushDevices } from '../../../generated/api/fn/devrail/list-dev-rail-push-devices';
 import { registerDevRailPushDevice } from '../../../generated/api/fn/devrail/register-dev-rail-push-device';
 import { revokeDevRailPushDevice } from '../../../generated/api/fn/devrail/revoke-dev-rail-push-device';
+import { getDevRailPushConfig } from '../../../generated/api/fn/devrail/get-dev-rail-push-config';
 import { syncDevRailRepository } from '../../../generated/api/fn/devrail/sync-dev-rail-repository';
 import { healthCheckDevRailEnvironment } from '../../../generated/api/fn/devrail/health-check-dev-rail-environment';
 import { inspectDevRailRepositoryWorktree } from '../../../generated/api/fn/devrail/inspect-dev-rail-repository-worktree';
@@ -81,6 +82,7 @@ import type {
   DevRailRepositorySyncResponse,
   DevRailPushDeviceResponse,
   RegisterDevRailPushDeviceRequest,
+  DevRailPushConfigResponse,
 } from '../../../generated/api/models';
 
 @Injectable({ providedIn: 'root' })
@@ -165,6 +167,9 @@ export class DevRailApiService {
   }
   listPushDevices(): Promise<DevRailPushDeviceResponse[]> {
     return this.api.invoke(listDevRailPushDevices, {});
+  }
+  getPushConfig(): Promise<DevRailPushConfigResponse> {
+    return this.api.invoke(getDevRailPushConfig, {});
   }
   registerPushDevice(body: RegisterDevRailPushDeviceRequest): Promise<DevRailPushDeviceResponse> {
     return this.api.invoke(registerDevRailPushDevice, { body });
