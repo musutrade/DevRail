@@ -88,6 +88,7 @@ const DEVRAIL_RUN_QUALITY_GATES_EXECUTE_PATH: &str = "/api/v1/runs/{id}/quality-
 const DEVRAIL_RUN_QUALITY_GATE_LOG_PATH: &str = "/api/v1/runs/{id}/quality-gate-log";
 const DEVRAIL_RUN_EVENTS_STREAM_PATH: &str = "/api/v1/runs/{id}/events/stream";
 const DEVRAIL_PUSH_DEVICES_PATH: &str = "/api/v1/push/devices";
+const DEVRAIL_PUSH_CONFIG_PATH: &str = "/api/v1/push/config";
 const DEVRAIL_PUSH_DEVICE_PATH: &str = "/api/v1/push/devices/{id}";
 const DEVRAIL_APPROVALS_PATH: &str = "/api/v1/approvals";
 const DEVRAIL_APPROVAL_PATH: &str = "/api/v1/approvals/{id}";
@@ -166,6 +167,7 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_APPROVAL_WITHDRAW_PATH, &["post"]),
     (DEVRAIL_NOTIFICATIONS_PATH, &["get"]),
     (DEVRAIL_PUSH_DEVICES_PATH, &["get", "post"]),
+    (DEVRAIL_PUSH_CONFIG_PATH, &["get"]),
     (DEVRAIL_PUSH_DEVICE_PATH, &["delete"]),
     (DEVRAIL_NOTIFICATION_PREFERENCES_PATH, &["get", "patch"]),
     (DEVRAIL_NOTIFICATION_READ_PATH, &["post"]),
@@ -179,6 +181,7 @@ pub struct AppState {
     pub mfa: Arc<mfa::MfaConfig>,
     pub supervisor: Arc<workers::harness_supervisor::HarnessSupervisor>,
     pub run_workspace_root: Arc<PathBuf>,
+    pub web_push_public_key: Option<Arc<str>>,
 }
 
 async fn healthz() -> Json<models::HealthResponse> {
@@ -402,6 +405,10 @@ fn base_router(state: AppState) -> Router {
         .route(
             DEVRAIL_PUSH_DEVICES_PATH,
             get(handlers::devrail::list_push_devices).post(handlers::devrail::register_push_device),
+        )
+        .route(
+            DEVRAIL_PUSH_CONFIG_PATH,
+            get(handlers::devrail::get_push_config),
         )
         .route(
             DEVRAIL_PUSH_DEVICE_PATH,

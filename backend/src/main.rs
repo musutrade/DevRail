@@ -123,6 +123,7 @@ async fn run(config: AppConfig, metadata: TelemetryMetadata) -> anyhow::Result<(
         )?),
         supervisor,
         run_workspace_root: Arc::new(PathBuf::from(&config.run_workspace_root)),
+        web_push_public_key: config.web_push_public_key.clone().map(Arc::<str>::from),
     };
     arc_admin_backend::workers::approval_expiry::spawn(
         state.pool.clone(),

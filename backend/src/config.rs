@@ -79,6 +79,9 @@ pub struct AppConfig {
     pub run_max_duration_secs: i64,
     pub run_workspace_root: String,
     pub run_graceful_interrupt_secs: i64,
+    pub web_push_public_key: Option<String>,
+    pub web_push_private_key: Option<String>,
+    pub web_push_subject: Option<String>,
     allowed_origins: Vec<HeaderValue>,
 }
 
@@ -118,6 +121,9 @@ struct ConfigValues {
     run_max_duration_secs: Option<String>,
     run_workspace_root: Option<String>,
     run_graceful_interrupt_secs: Option<String>,
+    web_push_public_key: Option<String>,
+    web_push_private_key: Option<String>,
+    web_push_subject: Option<String>,
 }
 
 impl AppConfig {
@@ -160,6 +166,9 @@ impl AppConfig {
             run_max_duration_secs: std::env::var("DEVRAIL_RUN_MAX_DURATION_SECS").ok(),
             run_workspace_root: std::env::var("DEVRAIL_RUN_WORKSPACE_ROOT").ok(),
             run_graceful_interrupt_secs: std::env::var("DEVRAIL_RUN_GRACEFUL_INTERRUPT_SECS").ok(),
+            web_push_public_key: std::env::var("WEB_PUSH_VAPID_PUBLIC_KEY").ok(),
+            web_push_private_key: std::env::var("WEB_PUSH_VAPID_PRIVATE_KEY").ok(),
+            web_push_subject: std::env::var("WEB_PUSH_SUBJECT").ok(),
         })
     }
 
@@ -199,6 +208,9 @@ impl AppConfig {
             run_max_duration_secs,
             run_workspace_root,
             run_graceful_interrupt_secs,
+            web_push_public_key,
+            web_push_private_key,
+            web_push_subject,
         } = values;
         let database_url = database_url.context(
             "DATABASE_URL is required; configure it in backend/.env or the process environment",
@@ -338,6 +350,18 @@ impl AppConfig {
             bail!("DEVRAIL_RUN_WORKSPACE_ROOT must be an absolute controlled path");
         }
 
+        let web_push_public_key =
+            non_empty_optional(web_push_public_key, "WEB_PUSH_VAPID_PUBLIC_KEY")?;
+        let web_push_private_key =
+            non_empty_optional(web_push_private_key, "WEB_PUSH_VAPID_PRIVATE_KEY")?;
+        let web_push_subject = non_empty_optional(web_push_subject, "WEB_PUSH_SUBJECT")?;
+        if web_push_subject
+            .as_deref()
+            .is_some_and(|value| !value.starts_with("mailto:") && !value.starts_with("https://"))
+        {
+            bail!("WEB_PUSH_SUBJECT must start with mailto: or https://");
+        }
+
         Ok(Self {
             database_url,
             database_pool,
@@ -366,6 +390,9 @@ impl AppConfig {
             run_max_duration_secs,
             run_workspace_root,
             run_graceful_interrupt_secs,
+            web_push_public_key,
+            web_push_private_key,
+            web_push_subject,
             allowed_origins,
         })
     }
@@ -453,6 +480,18 @@ fn parse_origins(value: Option<String>) -> anyhow::Result<Vec<HeaderValue>> {
                 .with_context(|| format!("invalid CORS origin {origin:?}"))
         })
         .collect()
+}
+
+fn non_empty_optional(value: Option<String>, name: &str) -> anyhow::Result<Option<String>> {
+    value
+        .map(|value| {
+            if value.trim().is_empty() {
+                Err(anyhow::anyhow!("{name} must not be empty when configured"))
+            } else {
+                Ok(value)
+            }
+        })
+        .transpose()
 }
 
 fn parse_trusted_proxy_cidrs(value: Option<String>) -> anyhow::Result<Vec<IpNet>> {

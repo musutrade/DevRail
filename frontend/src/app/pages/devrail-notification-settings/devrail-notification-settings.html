@@ -13,9 +13,17 @@
         ><input type="checkbox" name="inAppEnabled" [(ngModel)]="inAppEnabled" />启用站内通知</label
       >
       <label class="check-row disabled-row"
-        ><input type="checkbox" name="pushEnabled" [ngModel]="false" disabled />启用 Web
-        Push（设备注册尚未完成）</label
+        ><input type="checkbox" name="pushEnabled" [ngModel]="pushEnabled" disabled />启用 Web
+        Push</label
       >
+      <button
+        class="row-btn"
+        type="button"
+        (click)="enablePush()"
+        [disabled]="!pushConfig()?.enabled"
+      >
+        初始化 Web Push
+      </button>
       <label
         >通知类型（逗号分隔）<textarea
           name="eventTypes"
@@ -35,7 +43,11 @@
     </form>
     <section class="device-section" aria-labelledby="push-devices-title">
       <h2 id="push-devices-title">已注册推送设备</h2>
-      <p>设备端点和密钥由服务端加密保存；当前浏览器尚未配置 VAPID 订阅初始化。</p>
+      <p>
+        设备端点和密钥由服务端加密保存；VAPID 状态：{{
+          pushConfig()?.enabled ? '已配置' : '未配置'
+        }}。
+      </p>
       @if (devices().length === 0) {
         <div class="empty-state">暂无已注册设备</div>
       } @else {

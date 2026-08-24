@@ -3281,6 +3281,31 @@
         ]
       }
     },
+    "/push/config": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "getDevRailPushConfig",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailPushConfigResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/push/devices": {
       "get": {
         "tags": [
@@ -6271,6 +6296,23 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "DevRailPushConfigResponse": {
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "publicKey": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },

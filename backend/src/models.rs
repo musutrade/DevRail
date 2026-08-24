@@ -1223,6 +1223,13 @@ pub struct DevRailPushDeviceResponse {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailPushConfigResponse {
+    pub enabled: bool,
+    pub public_key: Option<String>,
+}
+
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterDevRailPushDeviceRequest {

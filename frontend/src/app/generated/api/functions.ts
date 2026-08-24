@@ -73,6 +73,8 @@ export type { GetDevRailTask$Params as GetDevRailTask$Params } from './fn/devrai
 export { getDevRailTask as getDevRailTask } from './fn/devrail/get-dev-rail-task';
 export type { UpdateDevRailTask$Params as UpdateDevRailTask$Params } from './fn/devrail/update-dev-rail-task';
 export { updateDevRailTask as updateDevRailTask } from './fn/devrail/update-dev-rail-task';
+export type { GetDevRailPushConfig$Params as GetDevRailPushConfig$Params } from './fn/devrail/get-dev-rail-push-config';
+export { getDevRailPushConfig as getDevRailPushConfig } from './fn/devrail/get-dev-rail-push-config';
 export type { ListDevRailPushDevices$Params as ListDevRailPushDevices$Params } from './fn/devrail/list-dev-rail-push-devices';
 export { listDevRailPushDevices as listDevRailPushDevices } from './fn/devrail/list-dev-rail-push-devices';
 export type { RegisterDevRailPushDevice$Params as RegisterDevRailPushDevice$Params } from './fn/devrail/register-dev-rail-push-device';

@@ -77,6 +77,16 @@ pub async fn list_push_devices(
 ) -> Result<Json<Vec<DevRailPushDeviceResponse>>, ApiError> {
     services::devrail_push::list(&s.pool, &auth).await.map(Json)
 }
+
+pub async fn get_push_config(
+    State(s): State<AppState>,
+    _auth: RequirePermission<PushDeviceRead>,
+) -> Result<Json<DevRailPushConfigResponse>, ApiError> {
+    Ok(Json(DevRailPushConfigResponse {
+        enabled: s.web_push_public_key.is_some(),
+        public_key: s.web_push_public_key.as_deref().map(str::to_string),
+    }))
+}
 pub async fn register_push_device(
     State(s): State<AppState>,
     auth: RequirePermission<PushDeviceWrite>,
