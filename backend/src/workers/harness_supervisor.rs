@@ -351,13 +351,43 @@ async fn run_process(context: ProcessContext) {
             }
             result = child.wait() => {
                 let code = result.ok().and_then(|s| s.code());
-                let (status, reason, recovery) = if protocol_failed || code != Some(0) { ("failed", "process_exit", Some("检查 Harness stderr 摘要并重试")) } else { ("completed", "completed", None) };
+                let (status, reason, recovery) = if protocol_failed || code != Some(0) {
+                    ("failed", classify_failure(protocol_failed, &stderr_summary), Some(recovery_for_failure(protocol_failed, &stderr_summary)))
+                } else { ("completed", "completed", None) };
                 let _ = finish_run(&pool, &launch, status, reason, code, Some(&stderr_summary), recovery).await;
                 break;
             }
         }
     }
     supervisor.controls.lock().await.remove(&launch.run_id);
+}
+
+fn classify_failure(protocol_failed: bool, stderr: &str) -> &'static str {
+    let value = stderr.to_ascii_lowercase();
+    if value.contains("broken pipe")
+        || value.contains("connection reset")
+        || value.contains("connection closed")
+    {
+        "transport_disconnect"
+    } else if value.contains("read") || value.contains("eof") {
+        "transport_read_error"
+    } else if value.contains("write") || value.contains("flush") {
+        "transport_write_error"
+    } else if protocol_failed {
+        "protocol_error"
+    } else {
+        "process_exit"
+    }
+}
+
+fn recovery_for_failure(protocol_failed: bool, stderr: &str) -> &'static str {
+    match classify_failure(protocol_failed, stderr) {
+        "transport_disconnect" | "transport_read_error" | "transport_write_error" => {
+            "Harness 连接中断；保留已持久化事件后从最近回合恢复或重试"
+        }
+        "protocol_error" => "Harness 协议异常；请检查事件摘要后重试",
+        _ => "检查 Harness stderr 摘要并重试",
+    }
 }
 
 async fn write_json(stdin: &mut tokio::process::ChildStdin, value: Value) -> std::io::Result<()> {
@@ -707,5 +737,19 @@ mod tests {
             classify_event(&json!({"type":"reasoning_summary","summary":"private"}));
         assert_eq!(kind, "reasoning_summary");
         assert_eq!(payload, json!({"summary":"private"}));
+    }
+
+    #[test]
+    fn transport_failures_are_classified_for_recovery() {
+        assert_eq!(
+            classify_failure(true, "broken pipe"),
+            "transport_disconnect"
+        );
+        assert_eq!(classify_failure(true, "read EOF"), "transport_read_error");
+        assert_eq!(
+            classify_failure(true, "write flush failed"),
+            "transport_write_error"
+        );
+        assert!(recovery_for_failure(true, "connection reset").contains("恢复"));
     }
 }
