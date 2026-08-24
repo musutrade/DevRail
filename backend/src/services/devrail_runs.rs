@@ -37,6 +37,7 @@ fn run_response(row: DevRailRunRow) -> DevRailRunResponse {
         stderr_summary: row.stderr_summary,
         trace_id: row.trace_id,
         recovery_suggestion: row.recovery_suggestion,
+        recovery_attempts: row.recovery_attempts,
         started_at: row.started_at,
         completed_at: row.completed_at,
         created_at: row.created_at,

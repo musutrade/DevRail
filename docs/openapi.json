@@ -7012,6 +7012,7 @@
           "cwd",
           "policy",
           "startupArgsSummary",
+          "recoveryAttempts",
           "createdAt",
           "updatedAt"
         ],
@@ -7063,6 +7064,10 @@
             ]
           },
           "policy": {},
+          "recoveryAttempts": {
+            "type": "integer",
+            "format": "int32"
+          },
           "recoverySuggestion": {
             "type": [
               "string",
