@@ -5299,6 +5299,13 @@
             ],
             "format": "date-time"
           },
+          "environmentId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
           "goal": {
             "type": "string"
           },
@@ -5316,6 +5323,13 @@
               "string",
               "null"
             ]
+          },
+          "repositoryId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
           },
           "title": {
             "type": "string"
@@ -6827,6 +6841,13 @@
             ],
             "format": "date-time"
           },
+          "environmentId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
           "goal": {
             "type": "string"
           },
@@ -6848,6 +6869,13 @@
           },
           "projectId": {
             "type": "integer",
+            "format": "int64"
+          },
+          "repositoryId": {
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64"
           },
           "status": {
@@ -7891,6 +7919,13 @@
               "null"
             ]
           },
+          "environmentId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
           "goal": {
             "type": [
               "string",
@@ -7911,6 +7946,13 @@
               "string",
               "null"
             ]
+          },
+          "repositoryId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
           },
           "status": {
             "type": [

@@ -6,6 +6,10 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { apiErrorMessage } from '../../core/api-error';
 import { DevRailApiService } from '../../features/devrail/data-access/devrail-api.service';
 import type { DevRailTask } from '../../features/devrail/models/devrail.model';
+import type {
+  DevRailEnvironmentResponse,
+  DevRailRepositoryResponse,
+} from '../../generated/api/models';
 
 @Component({
   selector: 'app-devrail-task-detail',
@@ -18,6 +22,8 @@ export class DevRailTaskDetailPage implements OnInit {
   readonly task = signal<DevRailTask | null>(null);
   readonly loading = signal(true);
   readonly busy = signal(false);
+  readonly repositories = signal<DevRailRepositoryResponse[]>([]);
+  readonly environments = signal<DevRailEnvironmentResponse[]>([]);
   private readonly route = inject(ActivatedRoute);
   private readonly api = inject(DevRailApiService);
   private readonly snack = inject(MatSnackBar);
@@ -42,6 +48,8 @@ export class DevRailTaskDetailPage implements OnInit {
         background: String(data.get('background') || '') || null,
         acceptanceCriteria: String(data.get('acceptanceCriteria') || '') || null,
         constraints: String(data.get('constraints') || '') || null,
+        repositoryId: data.get('repositoryId') ? Number(data.get('repositoryId')) : null,
+        environmentId: data.get('environmentId') ? Number(data.get('environmentId')) : null,
       });
       this.task.set(updated);
       this.snack.open('任务已保存', '关闭', { duration: 2500 });
@@ -54,7 +62,14 @@ export class DevRailTaskDetailPage implements OnInit {
 
   private async load(): Promise<void> {
     try {
-      this.task.set(await this.api.getTask(this.projectId, this.taskId));
+      const [task, repositories, environments] = await Promise.all([
+        this.api.getTask(this.projectId, this.taskId),
+        this.api.listRepositories(this.projectId),
+        this.api.listEnvironments(this.projectId),
+      ]);
+      this.task.set(task);
+      this.repositories.set(repositories.items);
+      this.environments.set(environments.items);
     } catch (error) {
       this.snack.open(apiErrorMessage(error, '任务加载失败'), '关闭', { duration: 5000 });
     } finally {

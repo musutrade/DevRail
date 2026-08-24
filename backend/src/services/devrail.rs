@@ -182,6 +182,8 @@ fn task_response(row: DevRailTaskRow) -> DevRailTaskResponse {
         department_id: row.department_id,
         owner_user_id: row.owner_user_id,
         project_id: row.project_id,
+        repository_id: row.repository_id,
+        environment_id: row.environment_id,
         assignee_user_id: row.assignee_user_id,
         title: row.title,
         goal: row.goal,
@@ -1160,6 +1162,37 @@ pub async fn get_task(
         .map(task_response)
         .ok_or_else(|| ApiError::not_found("任务不存在或超出数据范围"))
 }
+
+async fn validate_task_resources(
+    pool: &PgPool,
+    actor: &ActorContext,
+    project_id: i64,
+    repository_id: Option<i64>,
+    environment_id: Option<i64>,
+) -> Result<(), ApiError> {
+    if let Some(repository_id) = repository_id {
+        if get_repository(pool, actor, project_id, repository_id)
+            .await
+            .is_err()
+        {
+            return Err(ApiError::validation(
+                "任务仓库必须属于当前项目且在数据范围内",
+            ));
+        }
+    }
+    if let Some(environment_id) = environment_id {
+        if get_environment(pool, actor, project_id, environment_id)
+            .await
+            .is_err()
+        {
+            return Err(ApiError::validation(
+                "任务环境必须属于当前项目且在数据范围内",
+            ));
+        }
+    }
+    Ok(())
+}
+
 pub async fn create_task(
     pool: &PgPool,
     actor: &ActorContext,
@@ -1172,12 +1205,22 @@ pub async fn create_task(
     let priority = priority(req.priority.as_deref().unwrap_or("normal"))?;
     let labels = json!(req.labels.clone().unwrap_or_default());
     let department_id = scope_department(actor, req.department_id)?;
+    validate_task_resources(
+        pool,
+        actor,
+        project_id,
+        req.repository_id,
+        req.environment_id,
+    )
+    .await?;
     let mut tx = pool.begin().await.map_err(db_error)?;
     let row = devrail::create_task(
         &mut tx,
         actor,
         &devrail::NewTask {
             project_id,
+            repository_id: req.repository_id,
+            environment_id: req.environment_id,
             assignee_user_id: req.assignee_user_id,
             title: &title,
             goal: &goal,
@@ -1198,7 +1241,7 @@ pub async fn create_task(
         "devrail.task.create",
         "devrail_task",
         Some(row.id),
-        json!({"projectId":project_id,"title":title}),
+        json!({"projectId":project_id,"title":title,"repositoryId":req.repository_id,"environmentId":req.environment_id}),
     )
     .await
     .map_err(db_error)?;
@@ -1229,6 +1272,8 @@ pub async fn update_task(
     let (constraints_set, constraints) = nullable_patch(&req.constraints);
     let (assignee_set, assignee_user_id) = nullable_patch(&req.assignee_user_id);
     let (due_at_set, due_at) = nullable_patch(&req.due_at);
+    let (repository_set, repository_id) = nullable_patch(&req.repository_id);
+    let (environment_set, environment_id) = nullable_patch(&req.environment_id);
     if title.is_none()
         && goal.is_none()
         && !background_set
@@ -1239,10 +1284,29 @@ pub async fn update_task(
         && !assignee_set
         && req.labels.is_none()
         && !due_at_set
+        && !repository_set
+        && !environment_set
     {
         return Err(ApiError::validation("至少需要提供一个待更新字段"));
     }
     let labels = req.labels.as_ref().map(|v| json!(v));
+    let current = get_task(pool, actor, project_id, id).await?;
+    validate_task_resources(
+        pool,
+        actor,
+        project_id,
+        if repository_set {
+            repository_id
+        } else {
+            current.repository_id
+        },
+        if environment_set {
+            environment_id
+        } else {
+            current.environment_id
+        },
+    )
+    .await?;
     let mut tx = pool.begin().await.map_err(db_error)?;
     if !devrail::update_task(
         &mut tx,
@@ -1265,6 +1329,10 @@ pub async fn update_task(
             labels: labels.as_ref(),
             due_at_set,
             due_at,
+            repository_set,
+            repository_id,
+            environment_set,
+            environment_id,
         },
     )
     .await
@@ -1278,7 +1346,7 @@ pub async fn update_task(
         "devrail.task.update",
         "devrail_task",
         Some(id),
-        json!({"projectId":project_id}),
+        json!({"projectId":project_id,"repositoryId":if repository_set { repository_id } else { current.repository_id },"environmentId":if environment_set { environment_id } else { current.environment_id }}),
     )
     .await
     .map_err(db_error)?;

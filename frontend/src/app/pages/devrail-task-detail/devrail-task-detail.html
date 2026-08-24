@@ -33,6 +33,30 @@
           </select></label
         >
       </div>
+      <div class="form-grid">
+        <label
+          >关联仓库<select name="repositoryId">
+            <option value="">未关联</option>
+            @for (repository of repositories(); track repository.id) {
+              <option [value]="repository.id" [selected]="repository.id === current.repositoryId">
+                {{ repository.name }}
+              </option>
+            }
+          </select></label
+        ><label
+          >关联环境<select name="environmentId">
+            <option value="">未关联</option>
+            @for (environment of environments(); track environment.id) {
+              <option
+                [value]="environment.id"
+                [selected]="environment.id === current.environmentId"
+              >
+                {{ environment.name }}
+              </option>
+            }
+          </select></label
+        >
+      </div>
       <label
         >背景<textarea name="background" rows="4">{{ current.background || '' }}</textarea>
       </label>
