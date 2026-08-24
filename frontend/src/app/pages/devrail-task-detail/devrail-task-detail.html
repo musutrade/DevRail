@@ -81,7 +81,32 @@
             <small>@{{ comment.authorUsername }}</small
             ><time>{{ comment.createdAt | date: 'yyyy-MM-dd HH:mm' }}</time>
           </header>
-          <p>{{ comment.body }}</p>
+          @if (comment.deleted) {
+            <p class="deleted-comment">评论已删除</p>
+          } @else if (editingCommentId() === comment.id) {
+            <form
+              #editCommentForm
+              (submit)="$event.preventDefault(); saveComment(comment, editCommentForm)"
+            >
+              <textarea
+                name="body"
+                rows="3"
+                [value]="comment.body"
+                maxlength="10000"
+                required
+              ></textarea>
+              <div class="comment-actions">
+                <button type="submit" class="btn-primary" [disabled]="busy()">保存</button
+                ><button type="button" (click)="cancelEdit()">取消</button>
+              </div>
+            </form>
+          } @else {
+            <p>{{ comment.body }}</p>
+            <div class="comment-actions">
+              <button type="button" (click)="startEdit(comment)">编辑</button
+              ><button type="button" (click)="removeComment(comment)">删除</button>
+            </div>
+          }
         </article>
       } @empty {
         <p class="empty">暂无评论</p>

@@ -99,6 +99,10 @@ export type { ExecuteDevRailRunQualityGates$Params as ExecuteDevRailRunQualityGa
 export { executeDevRailRunQualityGates as executeDevRailRunQualityGates } from './fn/devrail/execute-dev-rail-run-quality-gates';
 export type { RetryDevRailRun$Params as RetryDevRailRun$Params } from './fn/devrail/retry-dev-rail-run';
 export { retryDevRailRun as retryDevRailRun } from './fn/devrail/retry-dev-rail-run';
+export type { DeleteDevRailTaskComment$Params as DeleteDevRailTaskComment$Params } from './fn/devrail/delete-dev-rail-task-comment';
+export { deleteDevRailTaskComment as deleteDevRailTaskComment } from './fn/devrail/delete-dev-rail-task-comment';
+export type { UpdateDevRailTaskComment$Params as UpdateDevRailTaskComment$Params } from './fn/devrail/update-dev-rail-task-comment';
+export { updateDevRailTaskComment as updateDevRailTaskComment } from './fn/devrail/update-dev-rail-task-comment';
 export type { ListDevRailTaskComments$Params as ListDevRailTaskComments$Params } from './fn/devrail/list-dev-rail-task-comments';
 export { listDevRailTaskComments as listDevRailTaskComments } from './fn/devrail/list-dev-rail-task-comments';
 export type { CreateDevRailTaskComment$Params as CreateDevRailTaskComment$Params } from './fn/devrail/create-dev-rail-task-comment';

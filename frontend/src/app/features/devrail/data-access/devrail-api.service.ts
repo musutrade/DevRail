@@ -49,6 +49,8 @@ import { healthCheckDevRailEnvironment } from '../../../generated/api/fn/devrail
 import { inspectDevRailRepositoryWorktree } from '../../../generated/api/fn/devrail/inspect-dev-rail-repository-worktree';
 import { listDevRailTaskComments } from '../../../generated/api/fn/devrail/list-dev-rail-task-comments';
 import { createDevRailTaskComment } from '../../../generated/api/fn/devrail/create-dev-rail-task-comment';
+import { updateDevRailTaskComment } from '../../../generated/api/fn/devrail/update-dev-rail-task-comment';
+import { deleteDevRailTaskComment } from '../../../generated/api/fn/devrail/delete-dev-rail-task-comment';
 import { getDevRailRepositorySync } from '../../../generated/api/fn/devrail/get-dev-rail-repository-sync';
 import type {
   CreateDevRailEnvironmentRequest,
@@ -88,6 +90,7 @@ import type {
   DevRailTaskCommentPage,
   DevRailTaskCommentResponse,
   CreateDevRailTaskCommentRequest,
+  UpdateDevRailTaskCommentRequest,
 } from '../../../generated/api/models';
 
 @Injectable({ providedIn: 'root' })
@@ -270,6 +273,15 @@ export class DevRailApiService {
     body: CreateDevRailTaskCommentRequest,
   ): Promise<DevRailTaskCommentResponse> {
     return this.api.invoke(createDevRailTaskComment, { task_id: taskId, body });
+  }
+  updateTaskComment(
+    id: number,
+    body: UpdateDevRailTaskCommentRequest,
+  ): Promise<DevRailTaskCommentResponse> {
+    return this.api.invoke(updateDevRailTaskComment, { id, body });
+  }
+  deleteTaskComment(id: number): Promise<void> {
+    return this.api.invoke(deleteDevRailTaskComment, { id });
   }
 
   getRun(id: number): Promise<DevRailRunResponse> {

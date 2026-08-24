@@ -4251,6 +4251,79 @@
         ]
       }
     },
+    "/task-comments/{id}": {
+      "delete": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "deleteDevRailTaskComment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "updateDevRailTaskComment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDevRailTaskCommentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailTaskCommentResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/tasks/{task_id}/comments": {
       "get": {
         "tags": [
@@ -7084,7 +7157,8 @@
           "authorDisplayName",
           "body",
           "mentions",
-          "createdAt"
+          "createdAt",
+          "deleted"
         ],
         "properties": {
           "authorDisplayName": {
@@ -7102,6 +7176,16 @@
           },
           "createdAt": {
             "type": "string",
+            "format": "date-time"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "editedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "id": {
@@ -8256,6 +8340,17 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "UpdateDevRailTaskCommentRequest": {
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "properties": {
+          "body": {
+            "type": "string"
           }
         }
       },

@@ -2,7 +2,7 @@
 
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::routing::{delete, get, post, put};
+use axum::routing::{delete, get, patch, post, put};
 use axum::{Json, Router};
 use sqlx::PgPool;
 use std::path::PathBuf;
@@ -79,6 +79,7 @@ const DEVRAIL_TASKS_PATH: &str = "/api/v1/projects/{project_id}/tasks";
 const DEVRAIL_TASK_PATH: &str = "/api/v1/projects/{project_id}/tasks/{id}";
 const DEVRAIL_TASK_RUNS_PATH: &str = "/api/v1/tasks/{task_id}/runs";
 const DEVRAIL_TASK_COMMENTS_PATH: &str = "/api/v1/tasks/{task_id}/comments";
+const DEVRAIL_TASK_COMMENT_PATH: &str = "/api/v1/task-comments/{id}";
 const DEVRAIL_RUN_PATH: &str = "/api/v1/runs/{id}";
 const DEVRAIL_RUN_INTERRUPT_PATH: &str = "/api/v1/runs/{id}/interrupt";
 const DEVRAIL_RUN_RETRY_PATH: &str = "/api/v1/runs/{id}/retry";
@@ -153,6 +154,7 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_TASK_PATH, &["get", "patch"]),
     (DEVRAIL_TASK_RUNS_PATH, &["get", "post"]),
     (DEVRAIL_TASK_COMMENTS_PATH, &["get", "post"]),
+    (DEVRAIL_TASK_COMMENT_PATH, &["patch", "delete"]),
     (DEVRAIL_RUN_PATH, &["get"]),
     (DEVRAIL_RUN_INTERRUPT_PATH, &["post"]),
     (DEVRAIL_RUN_RETRY_PATH, &["post"]),
@@ -369,6 +371,11 @@ fn base_router(state: AppState) -> Router {
         .route(
             DEVRAIL_TASK_COMMENTS_PATH,
             get(handlers::devrail::list_task_comments).post(handlers::devrail::create_task_comment),
+        )
+        .route(
+            DEVRAIL_TASK_COMMENT_PATH,
+            patch(handlers::devrail::update_task_comment)
+                .delete(handlers::devrail::delete_task_comment),
         )
         .route(DEVRAIL_RUN_PATH, get(handlers::devrail::get_run))
         .route(

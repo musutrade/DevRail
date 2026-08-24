@@ -1,7 +1,7 @@
 use crate::access::ActorContext;
 use crate::error::{db_error, ApiError};
 use crate::models::*;
-use crate::repositories::{devrail_comments, devrail_notifications};
+use crate::repositories::{audit_logs, devrail_comments, devrail_notifications};
 use serde_json::json;
 use sqlx::PgPool;
 
@@ -42,7 +42,58 @@ fn response(row: DevRailTaskCommentRow) -> DevRailTaskCommentResponse {
             })
             .unwrap_or_default(),
         created_at: row.created_at,
+        edited_at: row.edited_at,
+        deleted: row.deleted_at.is_some(),
     }
+}
+
+pub async fn update(
+    pool: &PgPool,
+    actor: &ActorContext,
+    id: i64,
+    request: &UpdateDevRailTaskCommentRequest,
+) -> Result<DevRailTaskCommentResponse, ApiError> {
+    let body = valid_body(&request.body)?;
+    let names = mentions(&body);
+    let mut tx = pool.begin().await.map_err(db_error)?;
+    let row = devrail_comments::update(&mut tx, actor, id, &body, &json!(names))
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("评论不存在、已删除或无权修改"))?;
+    audit_logs::record(
+        &mut tx,
+        Some(actor.user_id),
+        "devrail.comment.update",
+        "devrail_task_comment",
+        Some(id),
+        json!({"taskId": row.task_id, "mentionCount": names.len()}),
+    )
+    .await
+    .map_err(db_error)?;
+    tx.commit().await.map_err(db_error)?;
+    Ok(response(row))
+}
+
+pub async fn delete(pool: &PgPool, actor: &ActorContext, id: i64) -> Result<(), ApiError> {
+    let mut tx = pool.begin().await.map_err(db_error)?;
+    if !devrail_comments::soft_delete(&mut tx, actor, id)
+        .await
+        .map_err(db_error)?
+    {
+        return Err(ApiError::not_found("评论不存在、已删除或无权删除"));
+    }
+    audit_logs::record(
+        &mut tx,
+        Some(actor.user_id),
+        "devrail.comment.delete",
+        "devrail_task_comment",
+        Some(id),
+        json!({"redacted": true}),
+    )
+    .await
+    .map_err(db_error)?;
+    tx.commit().await.map_err(db_error)?;
+    Ok(())
 }
 pub async fn list(
     pool: &PgPool,

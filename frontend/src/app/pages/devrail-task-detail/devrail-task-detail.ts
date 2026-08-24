@@ -27,6 +27,7 @@ export class DevRailTaskDetailPage implements OnInit {
   readonly repositories = signal<DevRailRepositoryResponse[]>([]);
   readonly environments = signal<DevRailEnvironmentResponse[]>([]);
   readonly comments = signal<DevRailTaskCommentResponse[]>([]);
+  readonly editingCommentId = signal<number | null>(null);
   private readonly route = inject(ActivatedRoute);
   private readonly api = inject(DevRailApiService);
   private readonly snack = inject(MatSnackBar);
@@ -73,6 +74,46 @@ export class DevRailTaskDetailPage implements OnInit {
       form.reset();
     } catch (error) {
       this.snack.open(apiErrorMessage(error, '评论发布失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
+  startEdit(comment: DevRailTaskCommentResponse): void {
+    this.editingCommentId.set(comment.id);
+  }
+  cancelEdit(): void {
+    this.editingCommentId.set(null);
+  }
+  async saveComment(comment: DevRailTaskCommentResponse, form: HTMLFormElement): Promise<void> {
+    const body = new FormData(form).get('body');
+    if (typeof body !== 'string' || !body.trim()) return;
+    this.busy.set(true);
+    try {
+      const updated = await this.api.updateTaskComment(comment.id, { body: body.trim() });
+      this.comments.update((items) =>
+        items.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      this.editingCommentId.set(null);
+    } catch (error) {
+      this.snack.open(apiErrorMessage(error, '评论保存失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
+  async removeComment(comment: DevRailTaskCommentResponse): Promise<void> {
+    if (!window.confirm('确定删除这条评论吗？')) return;
+    this.busy.set(true);
+    try {
+      await this.api.deleteTaskComment(comment.id);
+      this.comments.update((items) =>
+        items.map((item) =>
+          item.id === comment.id
+            ? { ...item, body: '[评论已删除]', deleted: true, mentions: [] }
+            : item,
+        ),
+      );
+    } catch (error) {
+      this.snack.open(apiErrorMessage(error, '评论删除失败'), '关闭', { duration: 5000 });
     } finally {
       this.busy.set(false);
     }
