@@ -1095,6 +1095,24 @@ pub struct DevRailQualityGateResponse {
     pub summary: Option<String>,
 }
 
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailQualityGateLogPage {
+    pub run_id: i64,
+    pub log_ref: String,
+    pub name: String,
+    pub status: String,
+    pub lines: Vec<String>,
+    pub next_cursor: Option<i64>,
+}
+
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub struct QualityGateLogQuery {
+    pub log_ref: String,
+    pub after_cursor: Option<i64>,
+    pub limit: Option<i64>,
+}
+
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct DevRailNotificationRow {
     pub id: i64,

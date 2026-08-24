@@ -106,7 +106,9 @@
             <p>{{ gate.summary || '暂无摘要' }}</p>
             <small
               >{{ gate.commandSummary || '未提供命令摘要' }} ·
-              {{ gate.executorVersion || '未提供执行器版本' }}</small
+              {{ gate.executorVersion || '未提供执行器版本' }} · 日志引用：{{
+                gate.logRef || '未提供'
+              }}</small
             >
           </li>
         } @empty {

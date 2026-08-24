@@ -16,20 +16,21 @@ use crate::models::{
     DevRailEnvironmentResponse, DevRailListQuery, DevRailNotificationPage,
     DevRailNotificationPreferencesResponse, DevRailNotificationResponse, DevRailProjectMemberPage,
     DevRailProjectMemberResponse, DevRailProjectPage, DevRailProjectPolicyResponse,
-    DevRailProjectResponse, DevRailPushDeviceResponse, DevRailQualityGatePage,
-    DevRailRepositoryBranchResponse, DevRailRepositoryCommitResponse, DevRailRepositoryPage,
-    DevRailRepositoryResponse, DevRailRepositorySyncQuery, DevRailRepositorySyncResponse,
-    DevRailRunEventPage, DevRailRunPage, DevRailRunResponse, DevRailTaskPage, DevRailTaskResponse,
-    DevRailWorktreeFileResponse, DevRailWorktreeQuery, DevRailWorktreeResponse, HealthResponse,
-    LoginRequest, LoginResponse, LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest,
-    MfaMethodSchema, MfaPasskeyAuthenticationFinishRequest, MfaPasskeyAuthenticationStartRequest,
-    MfaPasskeyRegistrationFinishRequest, MfaPasskeyRegistrationStartRequest, MfaPasskeyResponse,
-    MfaStatusResponse, MfaWebauthnChallengeResponse, ModuleUnlockRequest, ModuleUnlockScopeSchema,
+    DevRailProjectResponse, DevRailPushDeviceResponse, DevRailQualityGateLogPage,
+    DevRailQualityGatePage, DevRailRepositoryBranchResponse, DevRailRepositoryCommitResponse,
+    DevRailRepositoryPage, DevRailRepositoryResponse, DevRailRepositorySyncQuery,
+    DevRailRepositorySyncResponse, DevRailRunEventPage, DevRailRunPage, DevRailRunResponse,
+    DevRailTaskPage, DevRailTaskResponse, DevRailWorktreeFileResponse, DevRailWorktreeQuery,
+    DevRailWorktreeResponse, HealthResponse, LoginRequest, LoginResponse, LoginStatusSchema,
+    MfaCodeRequest, MfaFactorRevokeRequest, MfaMethodSchema, MfaPasskeyAuthenticationFinishRequest,
+    MfaPasskeyAuthenticationStartRequest, MfaPasskeyRegistrationFinishRequest,
+    MfaPasskeyRegistrationStartRequest, MfaPasskeyResponse, MfaStatusResponse,
+    MfaWebauthnChallengeResponse, ModuleUnlockRequest, ModuleUnlockScopeSchema,
     ModuleUnlockStatusResponse, PageAuditLog, PageQuery, PageUser, PermissionCodes,
-    PermissionGroupResponse, PermissionResponse, PermissionTypeSchema, ReadinessResponse,
-    RecoveryCodesResponse, RegisterDevRailPushDeviceRequest, RetryDevRailRunRequest,
-    RoleColorSchema, RolePermissions, RoleResponse, SortDirectionSchema, StepUpRequest,
-    StepUpResponse, UpdateDepartmentRequest, UpdateDevRailEnvironmentRequest,
+    PermissionGroupResponse, PermissionResponse, PermissionTypeSchema, QualityGateLogQuery,
+    ReadinessResponse, RecoveryCodesResponse, RegisterDevRailPushDeviceRequest,
+    RetryDevRailRunRequest, RoleColorSchema, RolePermissions, RoleResponse, SortDirectionSchema,
+    StepUpRequest, StepUpResponse, UpdateDepartmentRequest, UpdateDevRailEnvironmentRequest,
     UpdateDevRailNotificationPreferencesRequest, UpdateDevRailProjectPolicyRequest,
     UpdateDevRailProjectRequest, UpdateDevRailRepositoryRequest, UpdateDevRailTaskRequest,
     UpdateRolePermissionsRequest, UpdateRoleRequest, UpdateUserRequest, UserResponse,
@@ -782,6 +783,8 @@ fn get_devrail_run_changeset() {}
 fn get_devrail_run_quality_gates() {}
 #[utoipa::path(post, path = "/runs/{id}/quality-gates/execute", operation_id = "executeDevRailRunQualityGates", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 200, body = DevRailQualityGatePage)))]
 fn execute_devrail_run_quality_gates() {}
+#[utoipa::path(get, path = "/runs/{id}/quality-gate-log", operation_id = "getDevRailRunQualityGateLog", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path), QualityGateLogQuery), responses((status = 200, body = DevRailQualityGateLogPage)))]
+fn get_devrail_run_quality_gate_log() {}
 #[utoipa::path(get, path = "/runs/{id}/events/stream", operation_id = "streamDevRailRunEvents", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 200, description = "运行事件 SSE 流")))]
 fn stream_devrail_run_events() {}
 #[utoipa::path(post, path = "/runs/{id}/retry", operation_id = "retryDevRailRun", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), request_body = RetryDevRailRunRequest, responses((status = 202, body = DevRailRunResponse)))]
@@ -871,7 +874,7 @@ fn withdraw_devrail_approval() {}
         list_devrail_environments, create_devrail_environment, get_devrail_environment,
         update_devrail_environment, health_check_devrail_environment, list_devrail_tasks, create_devrail_task,
         get_devrail_task, update_devrail_task, create_devrail_run, list_devrail_runs,
-        get_devrail_run, interrupt_devrail_run, list_devrail_run_events, get_devrail_run_changeset, get_devrail_run_quality_gates, execute_devrail_run_quality_gates
+        get_devrail_run, interrupt_devrail_run, list_devrail_run_events, get_devrail_run_changeset, get_devrail_run_quality_gates, execute_devrail_run_quality_gates, get_devrail_run_quality_gate_log
         ,stream_devrail_run_events, retry_devrail_run, list_devrail_approvals,
         get_devrail_approval, approve_devrail_approval, reject_devrail_approval, withdraw_devrail_approval, list_devrail_notifications, mark_devrail_notification_read, mark_all_devrail_notifications_read, get_devrail_notification_preferences, update_devrail_notification_preferences, list_devrail_push_devices, register_devrail_push_device, revoke_devrail_push_device
     ),
@@ -933,7 +936,7 @@ fn withdraw_devrail_approval() {}
         UpdateDevRailRepositoryRequest, CreateDevRailEnvironmentRequest,
         UpdateDevRailEnvironmentRequest, DevRailEnvironmentHealthResponse, CreateDevRailTaskRequest,
         UpdateDevRailTaskRequest, CreateDevRailRunRequest, DevRailRunResponse,
-        DevRailRunPage, DevRailRunEventPage, DevRailChangesetResponse, DevRailQualityGatePage, DevRailNotificationPage, DevRailNotificationResponse, DevRailNotificationPreferencesResponse, UpdateDevRailNotificationPreferencesRequest, DevRailPushDeviceResponse, RegisterDevRailPushDeviceRequest, RetryDevRailRunRequest,
+        DevRailRunPage, DevRailRunEventPage, DevRailChangesetResponse, DevRailQualityGatePage, DevRailQualityGateLogPage, DevRailNotificationPage, DevRailNotificationResponse, DevRailNotificationPreferencesResponse, UpdateDevRailNotificationPreferencesRequest, DevRailPushDeviceResponse, RegisterDevRailPushDeviceRequest, RetryDevRailRunRequest,
         DevRailApprovalResponse, DevRailApprovalPage, DevRailApprovalDecisionRequest
     )),
     servers((url = "/api/v1", description = "默认 API 根路径")),

@@ -140,6 +140,31 @@ fn gate_summary(output: &[u8]) -> String {
         .collect()
 }
 
+fn gate_log_lines(output: &[u8]) -> Vec<String> {
+    String::from_utf8_lossy(output)
+        .lines()
+        .take(200)
+        .map(|line| {
+            let lowered = line.to_ascii_lowercase();
+            if [
+                "authorization",
+                "cookie",
+                "token",
+                "password",
+                "private key",
+                "secret",
+            ]
+            .iter()
+            .any(|needle| lowered.contains(needle))
+            {
+                "[日志已脱敏]".to_string()
+            } else {
+                line.chars().take(1000).collect()
+            }
+        })
+        .collect()
+}
+
 pub async fn create_run(
     pool: &PgPool,
     actor: &ActorContext,
@@ -432,6 +457,54 @@ pub async fn get_quality_gates(
     Ok(DevRailQualityGatePage { run_id: id, items })
 }
 
+pub async fn get_quality_gate_log(
+    pool: &PgPool,
+    actor: &ActorContext,
+    id: i64,
+    log_ref: &str,
+    after_cursor: i64,
+    limit: i64,
+) -> Result<DevRailQualityGateLogPage, ApiError> {
+    let _ = get_run(pool, actor, id).await?;
+    let expected_prefix = format!("run-event:{id}:quality-gate:");
+    if !log_ref.starts_with(&expected_prefix) {
+        return Err(ApiError::validation("日志引用与运行不匹配"));
+    }
+    let row = devrail_runs::find_quality_gate_log(pool, actor, id, log_ref)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("质量门禁日志不存在或超出数据范围"))?;
+    let lines = row
+        .payload
+        .get("log_lines")
+        .and_then(serde_json::Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let start = after_cursor.max(0) as usize;
+    let page_size = limit.clamp(1, 200) as usize;
+    let page = lines
+        .iter()
+        .skip(start)
+        .take(page_size)
+        .cloned()
+        .collect::<Vec<_>>();
+    let next_cursor = (start + page.len() < lines.len()).then_some((start + page.len()) as i64);
+    Ok(DevRailQualityGateLogPage {
+        run_id: id,
+        log_ref: log_ref.to_string(),
+        name: string_field(&row.payload, "name").unwrap_or_else(|| "质量门禁".to_string()),
+        status: string_field(&row.payload, "status").unwrap_or_else(|| "unknown".to_string()),
+        lines: page,
+        next_cursor,
+    })
+}
+
 pub async fn execute_quality_gates(
     pool: &PgPool,
     actor: &ActorContext,
@@ -467,10 +540,10 @@ pub async fn execute_quality_gates(
         )
         .await;
         let (status, exit_code, summary) = match output {
-            Ok(Ok(output)) if output.status.success() => {
+            Ok(Ok(ref output)) if output.status.success() => {
                 ("passed", output.status.code(), gate_summary(&output.stdout))
             }
-            Ok(Ok(output)) => {
+            Ok(Ok(ref output)) => {
                 failed = true;
                 ("failed", output.status.code(), gate_summary(&output.stderr))
             }
@@ -491,6 +564,10 @@ pub async fn execute_quality_gates(
             "log_ref": format!("run-event:{id}:quality-gate:{index}"),
             "exit_code": exit_code,
             "duration_ms": started.elapsed().as_millis() as i64,
+            "log_lines": gate_log_lines(match &output {
+                Ok(Ok(output)) => if output.status.success() { &output.stdout } else { &output.stderr },
+                _ => &[],
+            }),
         });
         let mut tx = pool.begin().await.map_err(db_error)?;
         devrail_runs::append_event(

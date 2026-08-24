@@ -503,6 +503,24 @@ pub async fn get_run_quality_gates(
         .await
         .map(Json)
 }
+
+pub async fn get_run_quality_gate_log(
+    State(s): State<AppState>,
+    auth: RequirePermission<RunRead>,
+    Path(id): Path<i64>,
+    Query(query): Query<QualityGateLogQuery>,
+) -> Result<Json<DevRailQualityGateLogPage>, ApiError> {
+    services::devrail_runs::get_quality_gate_log(
+        &s.pool,
+        &auth,
+        id,
+        &query.log_ref,
+        query.after_cursor.unwrap_or(0),
+        query.limit.unwrap_or(100),
+    )
+    .await
+    .map(Json)
+}
 pub async fn execute_run_quality_gates(
     State(s): State<AppState>,
     auth: RequirePermission<RunExecute>,
