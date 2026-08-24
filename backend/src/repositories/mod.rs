@@ -7,6 +7,7 @@ pub mod devrail_comments;
 pub mod devrail_members;
 pub mod devrail_notifications;
 pub mod devrail_push;
+pub mod devrail_reviews;
 pub mod devrail_runs;
 pub mod mfa;
 pub mod module_unlock;

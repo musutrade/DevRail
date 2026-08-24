@@ -493,6 +493,39 @@ pub async fn get_approval(
         .await
         .map(Json)
 }
+pub async fn list_reviews(
+    State(s): State<AppState>,
+    auth: RequirePermission<ReviewRead>,
+    Query(q): Query<DevRailListQuery>,
+) -> Result<Json<DevRailReviewPage>, ApiError> {
+    services::devrail_reviews::list(
+        &s.pool,
+        &auth,
+        q.page.unwrap_or(1).max(1),
+        q.page_size.unwrap_or(20).clamp(1, 100),
+    )
+    .await
+    .map(Json)
+}
+pub async fn create_review(
+    State(s): State<AppState>,
+    auth: RequirePermission<ReviewWrite>,
+    Json(req): Json<CreateDevRailReviewRequest>,
+) -> Result<(StatusCode, Json<DevRailReviewResponse>), ApiError> {
+    services::devrail_reviews::create(&s.pool, &auth, &req)
+        .await
+        .map(|v| (StatusCode::CREATED, Json(v)))
+}
+pub async fn decide_review(
+    State(s): State<AppState>,
+    auth: RequirePermission<ReviewWrite>,
+    Path(id): Path<i64>,
+    Json(req): Json<DecideDevRailReviewRequest>,
+) -> Result<Json<DevRailReviewResponse>, ApiError> {
+    services::devrail_reviews::decide(&s.pool, &auth, id, &req)
+        .await
+        .map(Json)
+}
 pub async fn approve_approval(
     State(s): State<AppState>,
     auth: RequirePermission<ApprovalApprove>,

@@ -18,6 +18,7 @@ import type {
   DevRailQualityGateResponse,
   DevRailRunEventResponse,
   DevRailRunResponse,
+  DevRailReviewResponse,
 } from '../../generated/api/models';
 
 @Component({
@@ -32,6 +33,9 @@ export class DevRailRunPage implements OnInit, OnDestroy {
   readonly events = signal<DevRailRunEventResponse[]>([]);
   readonly changes = signal<DevRailChangeFileResponse[]>([]);
   readonly qualityGates = signal<DevRailQualityGateResponse[]>([]);
+  readonly reviews = signal<DevRailReviewResponse[]>([]);
+  readonly reviewerUserId = signal('');
+  readonly reviewSummary = signal('');
   readonly loading = signal(true);
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
@@ -86,6 +90,54 @@ export class DevRailRunPage implements OnInit, OnDestroy {
     }
   }
 
+  onReviewerUserIdInput(event: Event): void {
+    this.reviewerUserId.set((event.target as HTMLInputElement).value);
+  }
+
+  onReviewSummaryInput(event: Event): void {
+    this.reviewSummary.set((event.target as HTMLInputElement).value);
+  }
+
+  async createReview(): Promise<void> {
+    const reviewerUserId = Number(this.reviewerUserId());
+    if (!Number.isInteger(reviewerUserId) || reviewerUserId <= 0 || this.busy()) return;
+    this.busy.set(true);
+    try {
+      await this.api.createReview({
+        runId: this.runId,
+        reviewerUserId,
+        summary: this.reviewSummary().trim() || null,
+      });
+      this.reviewerUserId.set('');
+      this.reviewSummary.set('');
+      await this.loadReviews();
+      this.snack.open('审查请求已创建', '关闭', { duration: 2500 });
+    } catch (error) {
+      this.snack.open(apiErrorMessage(error, '创建审查请求失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  async decideReview(
+    review: DevRailReviewResponse,
+    decision: 'approved' | 'rejected',
+  ): Promise<void> {
+    if (review.status !== 'pending' || this.busy()) return;
+    this.busy.set(true);
+    try {
+      await this.api.decideReview(review.id, { decision });
+      await this.loadReviews();
+      this.snack.open(decision === 'approved' ? '审查已通过' : '审查已驳回', '关闭', {
+        duration: 2500,
+      });
+    } catch (error) {
+      this.snack.open(apiErrorMessage(error, '处理审查失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
   private async performRetry(resume: boolean): Promise<void> {
     const current = this.run();
     if (!current || this.busy()) return;
@@ -126,12 +178,18 @@ export class DevRailRunPage implements OnInit, OnDestroy {
       this.events.set(page.items);
       this.changes.set(changeset.files);
       this.qualityGates.set(gates.items);
+      await this.loadReviews();
       this.connectEvents();
     } catch (error) {
       this.error.set(apiErrorMessage(error, '运行加载失败'));
     } finally {
       this.loading.set(false);
     }
+  }
+
+  private async loadReviews(): Promise<void> {
+    const page = await this.api.listReviews(1, 50);
+    this.reviews.set(page.items.filter((review) => review.runId === this.runId));
   }
 
   private connectEvents(): void {

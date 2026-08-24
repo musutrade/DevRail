@@ -62,6 +62,27 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.review-form {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.35fr) minmax(14rem, 1fr) auto;
+  gap: 0.75rem;
+  align-items: end;
+  margin: 1rem 0;
+}
+.review-form label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+.review-form input {
+  min-height: 2.5rem;
+  padding: 0 0.65rem;
+  border: 1px solid var(--outline-variant);
+  border-radius: 0.35rem;
+  background: var(--surface);
+  color: var(--text-primary);
+}
 @media (max-width: 700px) {
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -69,5 +90,8 @@
   .page-header {
     align-items: flex-start;
     gap: 1rem;
+  }
+  .review-form {
+    grid-template-columns: 1fr;
   }
 }

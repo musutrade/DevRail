@@ -116,6 +116,69 @@
         }
       </ul>
     </section>
+    <section class="event-card" aria-labelledby="reviews-title">
+      <div class="section-heading">
+        <h2 id="reviews-title">代码审查</h2>
+        <span>{{ reviews().length }} 条</span>
+      </div>
+      <div class="review-form">
+        <label
+          >审查人用户 ID
+          <input
+            type="number"
+            min="1"
+            inputmode="numeric"
+            [value]="reviewerUserId()"
+            (input)="onReviewerUserIdInput($event)"
+          />
+        </label>
+        <label
+          >审查摘要
+          <input type="text" [value]="reviewSummary()" (input)="onReviewSummaryInput($event)" />
+        </label>
+        <button
+          class="btn-primary"
+          type="button"
+          (click)="createReview()"
+          [disabled]="busy() || !reviewerUserId()"
+        >
+          <mat-icon>rate_review</mat-icon>发起审查
+        </button>
+      </div>
+      <ul class="event-list">
+        @for (review of reviews(); track review.id) {
+          <li>
+            <div class="event-meta">
+              <strong>#{{ review.id }} · {{ review.status }}</strong
+              ><span>审查人 {{ review.reviewerUserId }}</span>
+            </div>
+            <p>{{ review.summary || '暂无摘要' }}</p>
+            @if (review.status === 'pending') {
+              <div class="run-actions">
+                <button
+                  class="btn-outline"
+                  type="button"
+                  (click)="decideReview(review, 'approved')"
+                  [disabled]="busy()"
+                >
+                  <mat-icon>check</mat-icon>通过
+                </button>
+                <button
+                  class="btn-outline"
+                  type="button"
+                  (click)="decideReview(review, 'rejected')"
+                  [disabled]="busy()"
+                >
+                  <mat-icon>close</mat-icon>驳回
+                </button>
+              </div>
+            }
+          </li>
+        } @empty {
+          <li class="table-empty">暂无审查请求</li>
+        }
+      </ul>
+    </section>
     <section class="event-card" aria-labelledby="event-title">
       <div class="section-heading">
         <h2 id="event-title">事件时间线</h2>

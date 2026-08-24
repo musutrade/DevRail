@@ -40,6 +40,14 @@ pub struct CommentWrite;
 impl PermissionRequirement for CommentWrite {
     const CODE: &'static str = "devrail:comment:write";
 }
+pub struct ReviewRead;
+impl PermissionRequirement for ReviewRead {
+    const CODE: &'static str = "devrail:review:read";
+}
+pub struct ReviewWrite;
+impl PermissionRequirement for ReviewWrite {
+    const CODE: &'static str = "devrail:review:write";
+}
 pub struct MemberRead;
 impl PermissionRequirement for MemberRead {
     const CODE: &'static str = "devrail:member:read";
