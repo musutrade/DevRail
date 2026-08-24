@@ -40,6 +40,7 @@ export class DevRailRunPage implements OnInit, OnDestroy {
   private readonly snack = inject(MatSnackBar);
   private eventSource?: EventSource;
   private runId = 0;
+  private lastEventCursor = 0;
 
   ngOnInit(): void {
     this.runId = Number(this.route.snapshot.paramMap.get('id'));
@@ -97,6 +98,7 @@ export class DevRailRunPage implements OnInit, OnDestroy {
       });
       this.snack.open(`已创建新的运行 #${next.id}`, '关闭', { duration: 3000 });
       this.runId = next.id;
+      this.lastEventCursor = 0;
       this.run.set(next);
       this.events.set([]);
       this.connectEvents();
@@ -134,9 +136,12 @@ export class DevRailRunPage implements OnInit, OnDestroy {
 
   private connectEvents(): void {
     this.eventSource?.close();
-    this.eventSource = new EventSource(`/api/v1/runs/${this.runId}/events/stream`, {
-      withCredentials: true,
-    });
+    this.eventSource = new EventSource(
+      `/api/v1/runs/${this.runId}/events/stream?after_cursor=${this.lastEventCursor}`,
+      {
+        withCredentials: true,
+      },
+    );
     this.eventSource.onmessage = (message) => this.appendEvent(message.data);
     this.eventSource.addEventListener('run_started', (event) =>
       this.appendEvent((event as MessageEvent).data),
@@ -158,6 +163,7 @@ export class DevRailRunPage implements OnInit, OnDestroy {
       this.events.update((items) =>
         items.some((item) => item.cursor === event.cursor) ? items : [...items, event],
       );
+      this.lastEventCursor = Math.max(this.lastEventCursor, event.cursor);
     } catch {
       // SSE payloads are server-generated JSON; malformed data is ignored safely.
     }

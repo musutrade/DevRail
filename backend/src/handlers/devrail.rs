@@ -552,16 +552,17 @@ pub async fn stream_run_events(
     auth: RequirePermission<RunRead>,
     Path(id): Path<i64>,
     headers: HeaderMap,
+    Query(query): Query<RunEventQuery>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
     let _ = services::devrail_runs::get_run(&s.pool, &auth, id).await?;
     let pool = s.pool.clone();
     let actor = auth.actor.clone();
-    let initial_cursor = headers
+    let header_cursor = headers
         .get("last-event-id")
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.parse::<i64>().ok())
-        .unwrap_or(0)
-        .max(0);
+        .unwrap_or(0);
+    let initial_cursor = query.after_cursor.unwrap_or(header_cursor).max(0);
     let stream = async_stream::stream! {
         let mut cursor = initial_cursor;
         let mut interval = tokio::time::interval(Duration::from_secs(1));
@@ -576,5 +577,9 @@ pub async fn stream_run_events(
             if let Ok(run) = services::devrail_runs::get_run(&pool, &actor, id).await { if matches!(run.status.as_str(), "completed"|"failed"|"cancelled") { break; } }
         }
     };
-    Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
+    Ok(Sse::new(stream).keep_alive(
+        KeepAlive::new()
+            .interval(Duration::from_secs(10))
+            .text("heartbeat"),
+    ))
 }
