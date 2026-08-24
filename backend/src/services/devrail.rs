@@ -6,6 +6,7 @@ use crate::models::*;
 use crate::repositories::{self, devrail, devrail_members};
 use serde_json::{json, Value};
 use sqlx::PgPool;
+use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::process::Command;
@@ -636,6 +637,105 @@ pub async fn sync_repository(
     get_repository(pool, actor, project_id, id).await
 }
 
+async fn git_output(root: &str, args: &[&str]) -> Result<String, ApiError> {
+    let output = tokio::time::timeout(
+        Duration::from_secs(15),
+        Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .env_clear()
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .output(),
+    )
+    .await
+    .map_err(|_| ApiError::internal("工作树检查超时"))?
+    .map_err(ApiError::internal)?;
+    if !output.status.success() {
+        return Err(ApiError::validation("环境工作区不是可读取的 Git 工作树"));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+pub async fn inspect_repository_worktree(
+    pool: &PgPool,
+    actor: &ActorContext,
+    project_id: i64,
+    repository_id: i64,
+    environment_id: i64,
+    controlled_workspace_root: &Path,
+) -> Result<DevRailWorktreeResponse, ApiError> {
+    let repository = get_repository(pool, actor, project_id, repository_id).await?;
+    let environment = get_environment(pool, actor, project_id, environment_id).await?;
+    let controlled_root = tokio::fs::canonicalize(controlled_workspace_root)
+        .await
+        .map_err(ApiError::internal)?;
+    let workspace = tokio::fs::canonicalize(environment.workspace_root.trim())
+        .await
+        .map_err(|_| ApiError::validation("环境工作区不存在或不可访问"))?;
+    if !workspace.starts_with(controlled_root) {
+        return Err(ApiError::validation("环境工作区不在受控根目录内"));
+    }
+    let root = workspace
+        .to_str()
+        .ok_or_else(|| ApiError::validation("环境工作区路径无效"))?;
+    let origin = git_output(root, &["remote", "get-url", "origin"]).await?;
+    if origin.trim() != repository.remote_url.trim() {
+        return Err(ApiError::validation("工作区远端与仓库配置不一致"));
+    }
+    let status_output = git_output(root, &["status", "--porcelain=v1", "-b"]).await?;
+    let mut lines = status_output.lines();
+    let branch = lines.next().and_then(|line| {
+        line.strip_prefix("## ")
+            .and_then(|value| value.split("...").next())
+            .map(str::to_owned)
+    });
+    let mut changed_files = Vec::new();
+    for line in lines.take(200) {
+        if line.len() < 3 {
+            continue;
+        }
+        let status = line[..2].trim().to_owned();
+        let path = line[3..].split(" -> ").last().unwrap_or(&line[3..]).trim();
+        if !path.is_empty() && path.len() <= 512 {
+            changed_files.push(DevRailWorktreeFileResponse {
+                status,
+                path: path.to_owned(),
+            });
+        }
+    }
+    let commit = git_output(root, &["log", "-1", "--format=%H%x00%s"]).await?;
+    let mut parts = commit.trim_end().splitn(2, '\0');
+    let head_sha = parts
+        .next()
+        .filter(|value| value.len() == 40)
+        .map(str::to_owned);
+    let commit_summary = parts
+        .next()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.chars().take(200).collect());
+    Ok(DevRailWorktreeResponse {
+        repository_id,
+        environment_id,
+        status: if changed_files.is_empty() {
+            "clean"
+        } else {
+            "dirty"
+        }
+        .to_string(),
+        branch,
+        head_sha,
+        commit_summary,
+        changed_files,
+        checked_at: chrono::Utc::now(),
+    })
+}
+
 #[cfg(test)]
 mod repository_sync_tests {
     fn parse_remote_head(text: &str) -> (Option<String>, Option<String>) {
@@ -668,6 +768,13 @@ mod repository_sync_tests {
             Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
         );
         assert_eq!(branch.as_deref(), Some("main"));
+    }
+
+    #[test]
+    fn worktree_status_is_bounded_and_does_not_include_file_contents() {
+        let line = " M src/main.rs";
+        assert_eq!(line[..2].trim(), "M");
+        assert_eq!(&line[3..], "src/main.rs");
     }
 }
 

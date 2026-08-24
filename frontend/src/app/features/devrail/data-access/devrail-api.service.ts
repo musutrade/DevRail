@@ -44,6 +44,7 @@ import { registerDevRailPushDevice } from '../../../generated/api/fn/devrail/reg
 import { revokeDevRailPushDevice } from '../../../generated/api/fn/devrail/revoke-dev-rail-push-device';
 import { syncDevRailRepository } from '../../../generated/api/fn/devrail/sync-dev-rail-repository';
 import { healthCheckDevRailEnvironment } from '../../../generated/api/fn/devrail/health-check-dev-rail-environment';
+import { inspectDevRailRepositoryWorktree } from '../../../generated/api/fn/devrail/inspect-dev-rail-repository-worktree';
 import type {
   CreateDevRailEnvironmentRequest,
   CreateDevRailProjectRequest,
@@ -73,6 +74,7 @@ import type {
   DevRailNotificationPage,
   DevRailNotificationPreferencesResponse,
   UpdateDevRailNotificationPreferencesRequest,
+  DevRailWorktreeResponse,
   DevRailPushDeviceResponse,
   RegisterDevRailPushDeviceRequest,
 } from '../../../generated/api/models';
@@ -181,6 +183,17 @@ export class DevRailApiService {
   }
   syncRepository(projectId: number, id: number) {
     return this.api.invoke(syncDevRailRepository, { project_id: projectId, id });
+  }
+  inspectRepositoryWorktree(
+    projectId: number,
+    repositoryId: number,
+    environmentId: number,
+  ): Promise<DevRailWorktreeResponse> {
+    return this.api.invoke(inspectDevRailRepositoryWorktree, {
+      project_id: projectId,
+      id: repositoryId,
+      environmentId,
+    });
   }
 
   listEnvironments(projectId: number, page = 1, pageSize = 20): Promise<DevRailEnvironmentPage> {

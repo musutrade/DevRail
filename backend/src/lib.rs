@@ -5,6 +5,7 @@ use axum::http::StatusCode;
 use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use sqlx::PgPool;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 
@@ -68,6 +69,8 @@ const DEVRAIL_PROJECT_MEMBER_PATH: &str = "/api/v1/projects/{project_id}/members
 const DEVRAIL_REPOSITORIES_PATH: &str = "/api/v1/projects/{project_id}/repositories";
 const DEVRAIL_REPOSITORY_PATH: &str = "/api/v1/projects/{project_id}/repositories/{id}";
 const DEVRAIL_REPOSITORY_SYNC_PATH: &str = "/api/v1/projects/{project_id}/repositories/{id}/sync";
+const DEVRAIL_REPOSITORY_WORKTREE_PATH: &str =
+    "/api/v1/projects/{project_id}/repositories/{id}/worktree";
 const DEVRAIL_ENVIRONMENTS_PATH: &str = "/api/v1/projects/{project_id}/environments";
 const DEVRAIL_ENVIRONMENT_PATH: &str = "/api/v1/projects/{project_id}/environments/{id}";
 const DEVRAIL_ENVIRONMENT_HEALTH_PATH: &str =
@@ -139,6 +142,7 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_REPOSITORIES_PATH, &["get", "post"]),
     (DEVRAIL_REPOSITORY_PATH, &["get", "patch"]),
     (DEVRAIL_REPOSITORY_SYNC_PATH, &["post"]),
+    (DEVRAIL_REPOSITORY_WORKTREE_PATH, &["get"]),
     (DEVRAIL_ENVIRONMENTS_PATH, &["get", "post"]),
     (DEVRAIL_ENVIRONMENT_PATH, &["get", "patch"]),
     (DEVRAIL_ENVIRONMENT_HEALTH_PATH, &["post"]),
@@ -172,6 +176,7 @@ pub struct AppState {
     pub auth: Arc<auth::AuthSessionConfig>,
     pub mfa: Arc<mfa::MfaConfig>,
     pub supervisor: Arc<workers::harness_supervisor::HarnessSupervisor>,
+    pub run_workspace_root: Arc<PathBuf>,
 }
 
 async fn healthz() -> Json<models::HealthResponse> {
@@ -325,6 +330,10 @@ fn base_router(state: AppState) -> Router {
         .route(
             DEVRAIL_REPOSITORY_SYNC_PATH,
             post(handlers::devrail::sync_repository),
+        )
+        .route(
+            DEVRAIL_REPOSITORY_WORKTREE_PATH,
+            get(handlers::devrail::inspect_repository_worktree),
         )
         .route(
             DEVRAIL_ENVIRONMENTS_PATH,

@@ -491,6 +491,7 @@ async fn login_and_user_crud_flow() {
             "/tmp/devrail-test".to_string(),
             1,
         )),
+        run_workspace_root: Arc::new(std::path::PathBuf::from("/tmp/devrail-workspaces")),
     })
     .layer(MockConnectInfo(
         "10.2.0.5:4567"

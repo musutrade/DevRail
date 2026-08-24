@@ -7,7 +7,7 @@ use arc_admin_backend::telemetry::{self, TelemetryMetadata};
 use arc_admin_backend::workers::harness_supervisor::HarnessSupervisor;
 use arc_admin_backend::{build_router_with_metadata_and_cors, db, AppState};
 use std::process::ExitCode;
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 use tracing::Instrument;
 
 #[tokio::main]
@@ -122,6 +122,7 @@ async fn run(config: AppConfig, metadata: TelemetryMetadata) -> anyhow::Result<(
             &config.webauthn_rp_name,
         )?),
         supervisor,
+        run_workspace_root: Arc::new(PathBuf::from(&config.run_workspace_root)),
     };
     arc_admin_backend::workers::approval_expiry::spawn(
         state.pool.clone(),

@@ -234,6 +234,23 @@ pub async fn sync_repository(
         .await
         .map(Json)
 }
+pub async fn inspect_repository_worktree(
+    State(s): State<AppState>,
+    auth: RequirePermission<RepositoryRead>,
+    Path((project_id, repository_id)): Path<(i64, i64)>,
+    Query(query): Query<DevRailWorktreeQuery>,
+) -> Result<Json<DevRailWorktreeResponse>, ApiError> {
+    services::devrail::inspect_repository_worktree(
+        &s.pool,
+        &auth,
+        project_id,
+        repository_id,
+        query.environment_id,
+        s.run_workspace_root.as_ref(),
+    )
+    .await
+    .map(Json)
+}
 
 pub async fn list_environments(
     State(s): State<AppState>,

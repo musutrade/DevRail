@@ -865,6 +865,32 @@ pub struct DevRailRepositoryResponse {
     pub archived_at: Option<DateTime<Utc>>,
 }
 
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailWorktreeQuery {
+    pub environment_id: i64,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailWorktreeFileResponse {
+    pub status: String,
+    pub path: String,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailWorktreeResponse {
+    pub repository_id: i64,
+    pub environment_id: i64,
+    pub status: String,
+    pub branch: Option<String>,
+    pub head_sha: Option<String>,
+    pub commit_summary: Option<String>,
+    pub changed_files: Vec<DevRailWorktreeFileResponse>,
+    pub checked_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DevRailEnvironmentResponse {
