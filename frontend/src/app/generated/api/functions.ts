@@ -7,6 +7,8 @@ export type { GetDevRailApproval$Params as GetDevRailApproval$Params } from './f
 export { getDevRailApproval as getDevRailApproval } from './fn/devrail/get-dev-rail-approval';
 export type { ApproveDevRailApproval$Params as ApproveDevRailApproval$Params } from './fn/devrail/approve-dev-rail-approval';
 export { approveDevRailApproval as approveDevRailApproval } from './fn/devrail/approve-dev-rail-approval';
+export type { RecoverDevRailApproval$Params as RecoverDevRailApproval$Params } from './fn/devrail/recover-dev-rail-approval';
+export { recoverDevRailApproval as recoverDevRailApproval } from './fn/devrail/recover-dev-rail-approval';
 export type { RejectDevRailApproval$Params as RejectDevRailApproval$Params } from './fn/devrail/reject-dev-rail-approval';
 export { rejectDevRailApproval as rejectDevRailApproval } from './fn/devrail/reject-dev-rail-approval';
 export type { WithdrawDevRailApproval$Params as WithdrawDevRailApproval$Params } from './fn/devrail/withdraw-dev-rail-approval';

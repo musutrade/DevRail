@@ -55,6 +55,9 @@
           >
             <mat-icon>undo</mat-icon>撤回
           </button>
+          <button class="btn-outline" type="button" (click)="recover()" [disabled]="busy()">
+            <mat-icon>restart_alt</mat-icon>恢复运行
+          </button>
         </div>
       }
     </section>

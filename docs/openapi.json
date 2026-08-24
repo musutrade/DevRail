@@ -184,6 +184,42 @@
         ]
       }
     },
+    "/approvals/{id}/recover": {
+      "post": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "recoverDevRailApproval",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailApprovalResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/approvals/{id}/reject": {
       "post": {
         "tags": [

@@ -503,6 +503,15 @@ pub async fn approve_approval(
         .await
         .map(Json)
 }
+pub async fn recover_approval(
+    State(s): State<AppState>,
+    auth: RequirePermission<ApprovalApprove>,
+    Path(id): Path<i64>,
+) -> Result<Json<DevRailApprovalResponse>, ApiError> {
+    services::devrail_approvals::recover(&s.pool, &auth, &s.supervisor, id)
+        .await
+        .map(Json)
+}
 pub async fn reject_approval(
     State(s): State<AppState>,
     auth: RequirePermission<ApprovalReject>,

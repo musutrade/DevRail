@@ -55,6 +55,18 @@ export class DevRailApprovalDetailPage implements OnInit {
       this.busy.set(false);
     }
   }
+  async recover(): Promise<void> {
+    if (this.busy() || this.approval()?.status !== 'pending') return;
+    this.busy.set(true);
+    try {
+      this.approval.set(await this.api.recoverApproval(this.approvalId));
+      this.snack.open('运行已恢复，可继续处理审批', '关闭', { duration: 3000 });
+    } catch (error) {
+      this.snack.open(apiErrorMessage(error, '运行恢复失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
   private async load(): Promise<void> {
     try {
       this.approval.set(await this.api.getApproval(this.approvalId));
