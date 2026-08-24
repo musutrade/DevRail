@@ -2,7 +2,7 @@ use crate::access::ActorContext;
 use crate::models::{CreateDevRailTaskCommentRequest, DevRailTaskCommentRow};
 use sqlx::{AssertSqlSafe, PgConnection, PgPool};
 
-const COLUMNS: &str = "c.id, c.organization_id, c.department_id, c.task_id, c.author_user_id, u.username AS author_username, u.display_name AS author_display_name, c.body, c.mentions, c.created_at";
+const COLUMNS: &str = "c.id, c.organization_id, c.department_id, c.task_id, c.author_user_id, u.username AS author_username, u.display_name AS author_display_name, c.body, c.mentions, c.created_at, c.edited_at, c.deleted_at";
 
 pub async fn list(
     pool: &PgPool,
@@ -26,8 +26,27 @@ pub async fn create<'a>(
     request: &'a CreateDevRailTaskCommentRequest,
     mentions: &'a serde_json::Value,
 ) -> Result<DevRailTaskCommentRow, sqlx::Error> {
-    sqlx::query_as::<_, DevRailTaskCommentRow>(AssertSqlSafe("INSERT INTO devrail_task_comments (organization_id,department_id,task_id,author_user_id,body,mentions) SELECT t.organization_id,t.department_id,t.id,$1,$2,$3 FROM devrail_tasks t WHERE t.id=$4 AND t.organization_id=$5 RETURNING id,organization_id,department_id,task_id,author_user_id,'' AS author_username,'' AS author_display_name,body,mentions,created_at"))
+    sqlx::query_as::<_, DevRailTaskCommentRow>(AssertSqlSafe("INSERT INTO devrail_task_comments (organization_id,department_id,task_id,author_user_id,body,mentions) SELECT t.organization_id,t.department_id,t.id,$1,$2,$3 FROM devrail_tasks t WHERE t.id=$4 AND t.organization_id=$5 RETURNING id,organization_id,department_id,task_id,author_user_id,'' AS author_username,'' AS author_display_name,body,mentions,created_at,edited_at,deleted_at"))
         .bind(actor.user_id).bind(request.body.trim()).bind(mentions).bind(task_id).bind(actor.organization_id).fetch_one(c).await
+}
+
+pub async fn update(
+    c: &mut PgConnection,
+    actor: &ActorContext,
+    id: i64,
+    body: &str,
+    mentions: &serde_json::Value,
+) -> Result<Option<DevRailTaskCommentRow>, sqlx::Error> {
+    sqlx::query_as::<_, DevRailTaskCommentRow>(AssertSqlSafe(format!("UPDATE devrail_task_comments c SET body=$1, mentions=$2, edited_at=now() FROM devrail_tasks t WHERE c.id=$3 AND c.task_id=t.id AND c.organization_id=$4 AND c.deleted_at IS NULL AND (c.author_user_id=$5 OR $6 IN ('all','organization')) RETURNING {COLUMNS}")))
+        .bind(body).bind(mentions).bind(id).bind(actor.organization_id).bind(actor.user_id).bind(actor.data_scope.as_str()).fetch_optional(c).await
+}
+
+pub async fn soft_delete(
+    c: &mut PgConnection,
+    actor: &ActorContext,
+    id: i64,
+) -> Result<bool, sqlx::Error> {
+    Ok(sqlx::query("UPDATE devrail_task_comments SET deleted_at=now(), body='[评论已删除]', mentions='[]'::jsonb WHERE id=$1 AND organization_id=$2 AND deleted_at IS NULL AND (author_user_id=$3 OR $4 IN ('all','organization'))").bind(id).bind(actor.organization_id).bind(actor.user_id).bind(actor.data_scope.as_str()).execute(c).await?.rows_affected() == 1)
 }
 
 pub async fn mentioned_users(

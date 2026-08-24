@@ -33,9 +33,9 @@ use crate::models::{
     RetryDevRailRunRequest, RoleColorSchema, RolePermissions, RoleResponse, SortDirectionSchema,
     StepUpRequest, StepUpResponse, UpdateDepartmentRequest, UpdateDevRailEnvironmentRequest,
     UpdateDevRailNotificationPreferencesRequest, UpdateDevRailProjectPolicyRequest,
-    UpdateDevRailProjectRequest, UpdateDevRailRepositoryRequest, UpdateDevRailTaskRequest,
-    UpdateRolePermissionsRequest, UpdateRoleRequest, UpdateUserRequest, UserResponse,
-    UserSortBySchema, UserStatusSchema,
+    UpdateDevRailProjectRequest, UpdateDevRailRepositoryRequest, UpdateDevRailTaskCommentRequest,
+    UpdateDevRailTaskRequest, UpdateRolePermissionsRequest, UpdateRoleRequest, UpdateUserRequest,
+    UserResponse, UserSortBySchema, UserStatusSchema,
 };
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::openapi::OpenApi as OpenApiDocument;
@@ -772,6 +772,10 @@ fn update_devrail_task() {}
 fn list_devrail_task_comments() {}
 #[utoipa::path(post, path = "/tasks/{task_id}/comments", operation_id = "createDevRailTaskComment", tag = "devrail", security(("cookieAuth" = [])), params(("task_id" = i64, Path)), request_body = CreateDevRailTaskCommentRequest, responses((status = 201, body = DevRailTaskCommentResponse)))]
 fn create_devrail_task_comment() {}
+#[utoipa::path(patch, path = "/task-comments/{id}", operation_id = "updateDevRailTaskComment", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), request_body = UpdateDevRailTaskCommentRequest, responses((status = 200, body = DevRailTaskCommentResponse)))]
+fn update_devrail_task_comment() {}
+#[utoipa::path(delete, path = "/task-comments/{id}", operation_id = "deleteDevRailTaskComment", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 204)))]
+fn delete_devrail_task_comment() {}
 
 #[utoipa::path(post, path = "/tasks/{task_id}/runs", operation_id = "createDevRailRun", tag = "devrail", security(("cookieAuth" = [])), params(("task_id" = i64, Path)), request_body = CreateDevRailRunRequest, responses((status = 202, body = DevRailRunResponse)))]
 fn create_devrail_run() {}
@@ -881,7 +885,7 @@ fn withdraw_devrail_approval() {}
         create_devrail_repository, get_devrail_repository, update_devrail_repository, sync_devrail_repository, get_devrail_repository_sync, inspect_devrail_repository_worktree,
         list_devrail_environments, create_devrail_environment, get_devrail_environment,
         update_devrail_environment, health_check_devrail_environment, list_devrail_tasks, create_devrail_task,
-        get_devrail_task, update_devrail_task, list_devrail_task_comments, create_devrail_task_comment, create_devrail_run, list_devrail_runs,
+        get_devrail_task, update_devrail_task, list_devrail_task_comments, create_devrail_task_comment, update_devrail_task_comment, delete_devrail_task_comment, create_devrail_run, list_devrail_runs,
         get_devrail_run, interrupt_devrail_run, list_devrail_run_events, get_devrail_run_changeset, get_devrail_run_quality_gates, execute_devrail_run_quality_gates, get_devrail_run_quality_gate_log
         ,stream_devrail_run_events, retry_devrail_run, list_devrail_approvals,
         get_devrail_approval, approve_devrail_approval, reject_devrail_approval, withdraw_devrail_approval, list_devrail_notifications, mark_devrail_notification_read, mark_all_devrail_notifications_read, get_devrail_notification_preferences, update_devrail_notification_preferences, list_devrail_push_devices, register_devrail_push_device, revoke_devrail_push_device, get_devrail_push_config
@@ -939,7 +943,7 @@ fn withdraw_devrail_approval() {}
         DashboardStats,
         DevRailProjectResponse, DevRailProjectPolicyResponse, DevRailProjectPage, DevRailProjectMemberPage, DevRailProjectMemberResponse, AddDevRailProjectMemberRequest, DevRailRepositoryResponse,
         DevRailRepositoryPage, DevRailRepositoryBranchResponse, DevRailRepositoryCommitResponse, DevRailRepositorySyncResponse, DevRailWorktreeFileResponse, DevRailWorktreeResponse, DevRailEnvironmentResponse, DevRailEnvironmentPage,
-        DevRailTaskResponse, DevRailTaskPage, DevRailTaskCommentPage, DevRailTaskCommentResponse, CreateDevRailTaskCommentRequest, CreateDevRailProjectRequest,
+        DevRailTaskResponse, DevRailTaskPage, DevRailTaskCommentPage, DevRailTaskCommentResponse, CreateDevRailTaskCommentRequest, UpdateDevRailTaskCommentRequest, CreateDevRailProjectRequest,
         UpdateDevRailProjectRequest, UpdateDevRailProjectPolicyRequest, CreateDevRailRepositoryRequest,
         UpdateDevRailRepositoryRequest, CreateDevRailEnvironmentRequest,
         UpdateDevRailEnvironmentRequest, DevRailEnvironmentHealthResponse, CreateDevRailTaskRequest,

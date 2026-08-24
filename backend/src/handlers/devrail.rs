@@ -366,6 +366,25 @@ pub async fn create_task_comment(
         .await
         .map(|v| (StatusCode::CREATED, Json(v)))
 }
+pub async fn update_task_comment(
+    State(s): State<AppState>,
+    auth: RequirePermission<CommentWrite>,
+    Path(id): Path<i64>,
+    Json(request): Json<UpdateDevRailTaskCommentRequest>,
+) -> Result<Json<DevRailTaskCommentResponse>, ApiError> {
+    services::devrail_comments::update(&s.pool, &auth, id, &request)
+        .await
+        .map(Json)
+}
+pub async fn delete_task_comment(
+    State(s): State<AppState>,
+    auth: RequirePermission<CommentWrite>,
+    Path(id): Path<i64>,
+) -> Result<StatusCode, ApiError> {
+    services::devrail_comments::delete(&s.pool, &auth, id)
+        .await
+        .map(|_| StatusCode::NO_CONTENT)
+}
 pub async fn get_task(
     State(s): State<AppState>,
     auth: RequirePermission<TaskRead>,

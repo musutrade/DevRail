@@ -97,6 +97,7 @@ export type { UpdateDevRailNotificationPreferencesRequest } from './models/updat
 export type { UpdateDevRailProjectPolicyRequest } from './models/update-dev-rail-project-policy-request';
 export type { UpdateDevRailProjectRequest } from './models/update-dev-rail-project-request';
 export type { UpdateDevRailRepositoryRequest } from './models/update-dev-rail-repository-request';
+export type { UpdateDevRailTaskCommentRequest } from './models/update-dev-rail-task-comment-request';
 export type { UpdateDevRailTaskRequest } from './models/update-dev-rail-task-request';
 export type { UpdateRolePermissionsRequest } from './models/update-role-permissions-request';
 export type { UpdateRoleRequest } from './models/update-role-request';

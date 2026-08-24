@@ -231,6 +231,8 @@ pub struct DevRailTaskCommentRow {
     pub body: String,
     pub mentions: Value,
     pub created_at: DateTime<Utc>,
+    pub edited_at: Option<DateTime<Utc>>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]
@@ -1352,6 +1354,8 @@ pub struct DevRailTaskCommentResponse {
     pub body: String,
     pub mentions: Vec<String>,
     pub created_at: DateTime<Utc>,
+    pub edited_at: Option<DateTime<Utc>>,
+    pub deleted: bool,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -1366,6 +1370,12 @@ pub struct DevRailTaskCommentPage {
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateDevRailTaskCommentRequest {
+    pub body: String,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateDevRailTaskCommentRequest {
     pub body: String,
 }
 

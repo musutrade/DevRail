@@ -7,6 +7,8 @@ export interface DevRailTaskCommentResponse {
   authorUsername: string;
   body: string;
   createdAt: string;
+  deleted: boolean;
+  editedAt?: (string | null);
   id: number;
   mentions: Array<string>;
   taskId: number;
