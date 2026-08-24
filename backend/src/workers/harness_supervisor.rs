@@ -230,6 +230,41 @@ impl HarnessSupervisor {
         Ok(recovered)
     }
 
+    pub async fn recover_run(&self, run_id: i64) -> Result<(), SupervisorError> {
+        let run = devrail_runs::find_for_recovery(&self.pool, run_id)
+            .await
+            .map_err(|error| SupervisorError::Spawn(error.to_string()))?
+            .ok_or(SupervisorError::ControlUnavailable)?;
+        if run.status != "awaiting_approval" || run.thread_id.is_none() {
+            return Err(SupervisorError::ControlUnavailable);
+        }
+        let snapshot = sqlx::query_scalar::<_, Value>(
+            "SELECT snapshot FROM devrail_task_snapshots WHERE id=$1",
+        )
+        .bind(run.snapshot_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|error| SupervisorError::Spawn(error.to_string()))?;
+        let input = snapshot
+            .as_ref()
+            .and_then(|value| value.get("goal"))
+            .and_then(Value::as_str)
+            .unwrap_or("继续执行原任务")
+            .to_string();
+        self.launch(RunLaunch {
+            run_id: run.id,
+            task_id: run.task_id,
+            organization_id: run.organization_id,
+            department_id: run.department_id,
+            owner_user_id: run.owner_user_id,
+            cwd: PathBuf::from(run.cwd),
+            input,
+            resume_thread_id: run.thread_id,
+            resume_turn_id: run.turn_id,
+        })
+        .await
+    }
+
     async fn recover_transport(&self, launch: &RunLaunch, reason: &str) {
         let Ok(true) =
             devrail_runs::prepare_transport_recovery(&self.pool, launch.run_id, reason).await

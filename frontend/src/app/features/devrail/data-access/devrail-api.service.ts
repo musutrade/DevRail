@@ -33,6 +33,7 @@ import { removeDevRailProjectMember } from '../../../generated/api/fn/devrail/re
 import { listDevRailApprovals } from '../../../generated/api/fn/devrail/list-dev-rail-approvals';
 import { getDevRailApproval } from '../../../generated/api/fn/devrail/get-dev-rail-approval';
 import { approveDevRailApproval } from '../../../generated/api/fn/devrail/approve-dev-rail-approval';
+import { recoverDevRailApproval } from '../../../generated/api/fn/devrail/recover-dev-rail-approval';
 import { rejectDevRailApproval } from '../../../generated/api/fn/devrail/reject-dev-rail-approval';
 import { withdrawDevRailApproval } from '../../../generated/api/fn/devrail/withdraw-dev-rail-approval';
 import { listDevRailNotifications } from '../../../generated/api/fn/devrail/list-dev-rail-notifications';
@@ -142,6 +143,9 @@ export class DevRailApiService {
     body: DevRailApprovalDecisionRequest,
   ): Promise<DevRailApprovalResponse> {
     return this.api.invoke(approveDevRailApproval, { id, body });
+  }
+  recoverApproval(id: number): Promise<DevRailApprovalResponse> {
+    return this.api.invoke(recoverDevRailApproval, { id });
   }
   rejectApproval(
     id: number,

@@ -274,6 +274,38 @@ pub async fn approve(
 ) -> Result<DevRailApprovalResponse, ApiError> {
     decide(pool, actor, supervisor, id, "approved", reason).await
 }
+
+pub async fn recover(
+    pool: &PgPool,
+    actor: &ActorContext,
+    supervisor: &HarnessSupervisor,
+    id: i64,
+) -> Result<DevRailApprovalResponse, ApiError> {
+    let approval = devrail_approvals::find(pool, actor, id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("审批不存在或超出数据范围"))?;
+    if approval.status != "pending" {
+        return Err(ApiError::conflict("审批已处理，不能恢复"));
+    }
+    supervisor
+        .recover_run(approval.run_id)
+        .await
+        .map_err(|error| ApiError::conflict(format!("运行无法恢复：{error}")))?;
+    let mut tx = pool.begin().await.map_err(db_error)?;
+    repositories::audit_logs::record(
+        &mut tx,
+        Some(actor.user_id),
+        "devrail.approval.recover",
+        "devrail_approval",
+        Some(id),
+        json!({"runId": approval.run_id}),
+    )
+    .await
+    .map_err(db_error)?;
+    tx.commit().await.map_err(db_error)?;
+    Ok(response(approval))
+}
 pub async fn reject(
     pool: &PgPool,
     actor: &ActorContext,

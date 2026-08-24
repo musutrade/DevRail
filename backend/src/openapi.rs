@@ -823,6 +823,8 @@ fn get_devrail_push_config() {}
 fn get_devrail_approval() {}
 #[utoipa::path(post, path = "/approvals/{id}/approve", operation_id = "approveDevRailApproval", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), request_body = DevRailApprovalDecisionRequest, responses((status = 200, body = DevRailApprovalResponse)))]
 fn approve_devrail_approval() {}
+#[utoipa::path(post, path = "/approvals/{id}/recover", operation_id = "recoverDevRailApproval", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 200, body = DevRailApprovalResponse)))]
+fn recover_devrail_approval() {}
 #[utoipa::path(post, path = "/approvals/{id}/reject", operation_id = "rejectDevRailApproval", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), request_body = DevRailApprovalDecisionRequest, responses((status = 200, body = DevRailApprovalResponse)))]
 fn reject_devrail_approval() {}
 #[utoipa::path(post, path = "/approvals/{id}/withdraw", operation_id = "withdrawDevRailApproval", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), request_body = DevRailApprovalDecisionRequest, responses((status = 200, body = DevRailApprovalResponse)))]
@@ -888,7 +890,7 @@ fn withdraw_devrail_approval() {}
         get_devrail_task, update_devrail_task, list_devrail_task_comments, create_devrail_task_comment, update_devrail_task_comment, delete_devrail_task_comment, create_devrail_run, list_devrail_runs,
         get_devrail_run, interrupt_devrail_run, list_devrail_run_events, get_devrail_run_changeset, get_devrail_run_quality_gates, execute_devrail_run_quality_gates, get_devrail_run_quality_gate_log
         ,stream_devrail_run_events, retry_devrail_run, list_devrail_approvals,
-        get_devrail_approval, approve_devrail_approval, reject_devrail_approval, withdraw_devrail_approval, list_devrail_notifications, mark_devrail_notification_read, mark_all_devrail_notifications_read, get_devrail_notification_preferences, update_devrail_notification_preferences, list_devrail_push_devices, register_devrail_push_device, revoke_devrail_push_device, get_devrail_push_config
+        get_devrail_approval, approve_devrail_approval, recover_devrail_approval, reject_devrail_approval, withdraw_devrail_approval, list_devrail_notifications, mark_devrail_notification_read, mark_all_devrail_notifications_read, get_devrail_notification_preferences, update_devrail_notification_preferences, list_devrail_push_devices, register_devrail_push_device, revoke_devrail_push_device, get_devrail_push_config
     ),
     components(schemas(
         ErrorEnvelope,

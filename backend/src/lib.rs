@@ -95,6 +95,7 @@ const DEVRAIL_PUSH_DEVICE_PATH: &str = "/api/v1/push/devices/{id}";
 const DEVRAIL_APPROVALS_PATH: &str = "/api/v1/approvals";
 const DEVRAIL_APPROVAL_PATH: &str = "/api/v1/approvals/{id}";
 const DEVRAIL_APPROVAL_APPROVE_PATH: &str = "/api/v1/approvals/{id}/approve";
+const DEVRAIL_APPROVAL_RECOVER_PATH: &str = "/api/v1/approvals/{id}/recover";
 const DEVRAIL_APPROVAL_REJECT_PATH: &str = "/api/v1/approvals/{id}/reject";
 const DEVRAIL_APPROVAL_WITHDRAW_PATH: &str = "/api/v1/approvals/{id}/withdraw";
 const DEVRAIL_NOTIFICATIONS_PATH: &str = "/api/v1/notifications";
@@ -167,6 +168,7 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_APPROVALS_PATH, &["get"]),
     (DEVRAIL_APPROVAL_PATH, &["get"]),
     (DEVRAIL_APPROVAL_APPROVE_PATH, &["post"]),
+    (DEVRAIL_APPROVAL_RECOVER_PATH, &["post"]),
     (DEVRAIL_APPROVAL_REJECT_PATH, &["post"]),
     (DEVRAIL_APPROVAL_WITHDRAW_PATH, &["post"]),
     (DEVRAIL_NOTIFICATIONS_PATH, &["get"]),
@@ -444,6 +446,10 @@ fn base_router(state: AppState) -> Router {
         .route(
             DEVRAIL_APPROVAL_APPROVE_PATH,
             post(handlers::devrail::approve_approval),
+        )
+        .route(
+            DEVRAIL_APPROVAL_RECOVER_PATH,
+            post(handlers::devrail::recover_approval),
         )
         .route(
             DEVRAIL_APPROVAL_REJECT_PATH,
