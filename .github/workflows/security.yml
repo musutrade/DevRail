@@ -16,10 +16,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect security scope
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      images: ${{ steps.filter.outputs.images }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+            images:
+              - 'backend/**'
+              - 'frontend/**'
+              - 'backend/Dockerfile'
+              - 'frontend/Dockerfile'
+              - 'docker/**'
+
   rust-dependencies:
     name: Rust dependency policy
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     permissions:
       contents: read
       checks: write
@@ -52,6 +76,8 @@ jobs:
     name: Container scan and SBOM
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    needs: changes
+    if: needs.changes.outputs.images == 'true'
     strategy:
       fail-fast: false
       matrix:
