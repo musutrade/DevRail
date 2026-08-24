@@ -116,12 +116,13 @@ impl HarnessSupervisor {
         if let Ok(home) = std::env::var("HOME") {
             command.env("HOME", home);
         }
-        let mut child = command.spawn().map_err(|e| {
-            if let Ok(mut map) = self.controls.try_lock() {
-                map.remove(&launch.run_id);
+        let mut child = match command.spawn() {
+            Ok(child) => child,
+            Err(error) => {
+                self.controls.lock().await.remove(&launch.run_id);
+                return Err(SupervisorError::Spawn(error.to_string()));
             }
-            SupervisorError::Spawn(e.to_string())
-        })?;
+        };
         let stdin = child
             .stdin
             .take()
@@ -315,7 +316,9 @@ async fn run_process(context: ProcessContext) {
         tokio::select! {
             command = controls.recv() => {
                 if matches!(command, Some(ControlMessage::Interrupt)) {
-                    let _ = write_json(&mut stdin, json!({"method":"turn/interrupt","params":{}})).await;
+                    if let Err(error) = write_json(&mut stdin, json!({"method":"turn/interrupt","params":{}})).await {
+                        append_summary(&mut stderr_summary, &format!("transport write error: {error}"));
+                    }
                     let status = tokio::time::timeout(supervisor.graceful_interrupt, child.wait()).await;
                     let exit_code = match status { Ok(Ok(s)) => s.code(), _ => { let _ = child.start_kill(); child.wait().await.ok().and_then(|s| s.code()) } };
                     let _ = finish_run(&pool, &launch, "cancelled", "interrupted", exit_code, Some(&stderr_summary), Some("运行已由用户中断")).await;
@@ -333,14 +336,20 @@ async fn run_process(context: ProcessContext) {
                         if !line.is_empty() && !handle_stdout(&pool, &launch, line).await { protocol_failed = true; let _ = child.start_kill(); }
                         out_line.clear();
                     }
-                    Err(_) => { protocol_failed = true; let _ = child.start_kill(); }
+                    Err(error) => {
+                        protocol_failed = true;
+                        append_summary(&mut stderr_summary, &format!("transport read error: {error}"));
+                        let _ = child.start_kill();
+                    }
                 }
             }
             result = err_reader.read_line(&mut err_line) => {
                 match result {
                     Ok(0) => {},
                     Ok(_) => { append_summary(&mut stderr_summary, err_line.trim()); err_line.clear(); }
-                    Err(_) => {}
+                    Err(error) => {
+                        append_summary(&mut stderr_summary, &format!("transport stderr read error: {error}"));
+                    }
                 }
             }
             _ = &mut timeout_sleep => {
@@ -351,8 +360,9 @@ async fn run_process(context: ProcessContext) {
             }
             result = child.wait() => {
                 let code = result.ok().and_then(|s| s.code());
+                let reason = classify_failure(protocol_failed, &stderr_summary);
                 let (status, reason, recovery) = if protocol_failed || code != Some(0) {
-                    ("failed", classify_failure(protocol_failed, &stderr_summary), Some(recovery_for_failure(protocol_failed, &stderr_summary)))
+                    ("failed", reason, Some(recovery_for_failure(protocol_failed, &stderr_summary)))
                 } else { ("completed", "completed", None) };
                 let _ = finish_run(&pool, &launch, status, reason, code, Some(&stderr_summary), recovery).await;
                 break;

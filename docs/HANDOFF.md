@@ -1,6 +1,6 @@
 # DevRail 项目状态与交接
 
-更新日期：2026-08-23。长期约定以根目录 `AGENTS.md`、[开发指南](development.md)、[架构说明](architecture.md)、[UI 与 CSS 规范](ui-design-system.md) 和生成的 [OpenAPI 契约](openapi.json) 为准。
+更新日期：2026-08-24。长期约定以根目录 `AGENTS.md`、[开发指南](development.md)、[架构说明](architecture.md)、[UI 与 CSS 规范](ui-design-system.md) 和生成的 [OpenAPI 契约](openapi.json) 为准。
 
 DevRail 的产品范围见 [需求文档](requirements.md)，当前实现口径见 [DevRail 实现状态](devrail-implementation-status.md)，业务边界见 [项目公约](devrail-governance.md)，门禁和审计证据见 [审计与门禁](devrail-audit-and-gates.md)。项目通过 `scripts/init-project.sh` 以 `devrail` slug、数据库名和权限前缀完成初始化，并以 `.arc-project.json` 记录 arc-admin 框架版本。
 
@@ -23,7 +23,7 @@ DevRail 的产品范围见 [需求文档](requirements.md)，当前实现口径�
 | UI       | 用户、权限、部门、角色、权限分配、审计、安全和错误页使用统一页面、筛选、表格、状态、卡片与反馈规范     |
 | 响应式   | Desktop Chrome 与 Pixel 7 双端覆盖；审计日志在手机切换卡片，权限分配保留可操作的固定末列               |
 | 无障碍   | 跳转链接、唯一 main landmark、表格 caption、焦点可见、菜单焦点返回、状态播报和减少动效                 |
-| 测试     | ESLint、Prettier、84 项 Angular 单测、Playwright 桌面/移动端 E2E、Rust/PostgreSQL 集成测试和全栈 smoke |
+| 测试     | ESLint、Prettier、85 项 Angular 单测、Playwright 桌面/移动端 E2E、Rust/PostgreSQL 集成测试和全栈 smoke |
 | 运维     | 生产 Compose、独立 migration、JSON 日志、Prometheus/Loki/Grafana、Blackbox、可选 Tempo、备份与审计归档 |
 | 供应链   | Dependabot、RustSec、`cargo deny`、CodeQL、Trivy 镜像扫描和 SPDX SBOM                                  |
 | DevRail 产品 MVP | 仍未完成；Phase 0 CRUD、任务与仓库/环境关联、仓库/环境创建入口、仓库远端 HEAD/默认分支/分支数量/分支列表/提交摘要同步、受控环境工作树状态检查和环境健康检查，以及 Phase 1 Harness Supervisor、审批、撤回、过期 worker、活动 run 数据库重启恢复、策略版本校验、受限命令质量门禁执行、质量门禁失败联动、终态重试、审批 UI、运行详情、changeset/质量门禁查询、稳定 log_ref 脱敏分页日志读取、SSE 心跳/断线补拉和断流错误分类已加入；Phase 2 已加入站内通知、transactional outbox、run 终态通知、审批状态通知、用户通知偏好、通知中心/设置页面、VAPID 配置/公开接口、Service Worker 订阅初始化、Web Push 设备注册/列表/撤销、投递 worker、重试、审计和告警；完整 MVP 验收与 Phase 3 仍待开发 |
@@ -57,7 +57,7 @@ VISUAL_REVIEW=1 npm run e2e -- --project=chromium --project=mobile-chromium
 4. 保护 `main`，将 Quality gate、Backend verification、Frontend verification 设为 required checks，并启用 secret scanning 与 push protection；
 5. 将审计归档、SBOM、备份和发布证据写入权限独立的不可变存储，并执行恢复演练；
 6. 根据业务 RPO/RTO、数据分类、司法辖区与合同要求补齐高合规控制；
-7. 按 [DevRail 实现状态](devrail-implementation-status.md) 和 [需求文档](requirements.md) 继续完成 Harness 断流恢复与 MVP 验收；当前已落地仓库远端 HEAD/默认分支/分支数量检查、环境健康检查、受限命令质量门禁执行、结构化门禁元数据、稳定 log_ref 脱敏分页日志、站内通知、transactional outbox、run/审批状态通知、通知中心、VAPID 配置/订阅初始化、设备管理、dispatcher、投递重试、投递审计、投递告警以及 SSE 心跳/断线补拉；完整自动化验收仍未完成。
+7. 按 [DevRail 实现状态](devrail-implementation-status.md) 和 [需求文档](requirements.md) 继续完成 Harness 断流恢复与 MVP 验收；当前已落地仓库远端 HEAD/默认分支/分支数量检查、环境健康检查、受限命令质量门禁执行、结构化门禁元数据、稳定 log_ref 脱敏分页日志、站内通知、transactional outbox、run/审批状态通知、通知中心、VAPID 配置/订阅初始化、设备管理、dispatcher、投递重试、投递审计、投递告警、SSE 心跳/断线补拉和断流错误分类；剩余为自动 thread/resume、审批人工恢复、重启恢复验收、MVP 验收和 Phase 3 协作发布能力。
 
 ## 已知边界
 
