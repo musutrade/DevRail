@@ -129,6 +129,12 @@ async fn run(config: AppConfig, metadata: TelemetryMetadata) -> anyhow::Result<(
         state.pool.clone(),
         state.supervisor.clone(),
     );
+    arc_admin_backend::workers::notification_dispatcher::spawn(
+        state.pool.clone(),
+        state.mfa.clone(),
+        config.web_push_private_key.clone(),
+        config.web_push_subject.clone(),
+    );
     let app = build_router_with_metadata_and_cors(state, metadata, config.cors_layer());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
