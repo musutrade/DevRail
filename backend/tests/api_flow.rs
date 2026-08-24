@@ -1027,6 +1027,8 @@ async fn login_and_user_crud_flow() {
             "devrail:environment:write",
             "devrail:task:read",
             "devrail:task:write",
+            "devrail:comment:read",
+            "devrail:comment:write",
             "devrail:run:read",
             "devrail:run:execute",
             "devrail:run:interrupt",
