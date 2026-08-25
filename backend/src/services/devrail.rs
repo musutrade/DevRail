@@ -47,6 +47,21 @@ fn validate_webhook_payload(payload: &DevRailPullRequestWebhookRequest) -> Resul
     Ok(())
 }
 
+fn verify_webhook_signature(secret: &str, signature: &str, body: &[u8]) -> bool {
+    use hmac::{Hmac, Mac};
+    use sha2_legacy::Sha256;
+    let Ok(mut mac) = Hmac::<Sha256>::new_from_slice(secret.as_bytes()) else {
+        return false;
+    };
+    mac.update(body);
+    let expected = format!("sha256={}", hex::encode(mac.finalize().into_bytes()));
+    signature.len() == expected.len()
+        && bool::from(subtle::ConstantTimeEq::ct_eq(
+            signature.as_bytes(),
+            expected.as_bytes(),
+        ))
+}
+
 fn normalize_webhook_payload(
     headers: &HeaderMap,
     body: &Bytes,
@@ -137,23 +152,13 @@ pub async fn handle_pull_request_webhook(
     headers: &HeaderMap,
     body: &Bytes,
 ) -> Result<(), ApiError> {
-    use hmac::{Hmac, Mac};
-    use sha2_legacy::Sha256;
     let secret = std::env::var("DEVRAIL_GIT_WEBHOOK_SECRET")
         .map_err(|_| ApiError::forbidden("Webhook 未配置"))?;
     let signature = headers
         .get("x-devrail-signature")
         .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
-    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).map_err(ApiError::internal)?;
-    mac.update(body);
-    let expected = format!("sha256={}", hex::encode(mac.finalize().into_bytes()));
-    if signature.len() != expected.len()
-        || !bool::from(subtle::ConstantTimeEq::ct_eq(
-            signature.as_bytes(),
-            expected.as_bytes(),
-        ))
-    {
+    if !verify_webhook_signature(&secret, signature, body) {
         return Err(ApiError::forbidden("Webhook 签名无效"));
     }
     let mut payload = normalize_webhook_payload(headers, body)?;
@@ -229,7 +234,10 @@ pub async fn handle_pull_request_webhook(
 
 #[cfg(test)]
 mod webhook_tests {
-    use super::{normalize_webhook_payload, validate_temporary_branch, validate_webhook_payload};
+    use super::{
+        normalize_webhook_payload, validate_temporary_branch, validate_webhook_payload,
+        verify_webhook_signature,
+    };
     use crate::models::DevRailPullRequestWebhookRequest;
     use axum::body::Bytes;
 
@@ -297,6 +305,24 @@ mod webhook_tests {
         assert!(validate_temporary_branch("main", &"a".repeat(40)).is_err());
         assert!(validate_temporary_branch("bad..name", &"a".repeat(40)).is_err());
         assert!(validate_temporary_branch("codex/run-42", "not-a-sha").is_err());
+    }
+
+    #[test]
+    fn verifies_webhook_signature_and_rejects_tampering() {
+        let body = br#"{"action":"opened"}"#;
+        let secret = "test-secret";
+        use hmac::{Hmac, Mac};
+        use sha2_legacy::Sha256;
+        let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).expect("hmac");
+        mac.update(body);
+        let signature = format!("sha256={}", hex::encode(mac.finalize().into_bytes()));
+        assert!(verify_webhook_signature(secret, &signature, body));
+        assert!(!verify_webhook_signature(
+            secret,
+            &signature,
+            br#"{"action":"closed"}"#
+        ));
+        assert!(!verify_webhook_signature(secret, "sha256=bad", body));
     }
 }
 
