@@ -154,7 +154,7 @@ pub(crate) async fn update_task_status(
     task_id: i64,
     status: &str,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE devrail_tasks SET status=$2, updated_at=now() WHERE id=$1")
+    sqlx::query("UPDATE devrail_tasks SET status=$2, scheduler_claim_token=NULL, scheduler_claimed_at=NULL, updated_at=now() WHERE id=$1")
         .bind(task_id)
         .bind(status)
         .execute(c)

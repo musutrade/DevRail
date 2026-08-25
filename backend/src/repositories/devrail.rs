@@ -498,6 +498,63 @@ pub async fn find_task_by_id(
         .await
 }
 
+/// Returns queued tasks whose environment is enabled and atomically claims
+/// them for one scheduler tick. The row lock and `SKIP LOCKED` keep multiple
+/// backend instances from selecting the same task while the claim lease lets
+/// a restarted scheduler recover abandoned work.
+pub(crate) async fn claim_scheduler_tasks(
+    pool: &PgPool,
+    claim_token: uuid::Uuid,
+    limit: i64,
+) -> Result<Vec<DevRailTaskRow>, sqlx::Error> {
+    let sql = format!(
+        "WITH candidates AS (\
+            SELECT t.id\
+            FROM devrail_tasks t\
+            JOIN devrail_environments e ON e.id = t.environment_id AND e.organization_id = t.organization_id\
+            WHERE t.status = 'queued'\
+              AND t.archived_at IS NULL\
+              AND e.enabled\
+              AND e.archived_at IS NULL\
+              AND (t.scheduler_claimed_at IS NULL OR t.scheduler_claimed_at < now() - INTERVAL '60 seconds')\
+              AND NOT EXISTS (\
+                  SELECT 1 FROM devrail_runs r\
+                  WHERE r.task_id = t.id\
+                    AND r.status IN ('starting','active','awaiting_approval')\
+              )\
+            ORDER BY CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,\
+                     t.due_at ASC NULLS LAST, t.created_at ASC, t.id ASC\
+            LIMIT $1\
+            FOR UPDATE SKIP LOCKED\
+        )\
+        UPDATE devrail_tasks t\
+        SET scheduler_claim_token = $2, scheduler_claimed_at = now(), updated_at = now()\
+        FROM candidates\
+        WHERE t.id = candidates.id\
+        RETURNING {TASK_COLUMNS}"
+    );
+    sqlx::query_as::<_, DevRailTaskRow>(AssertSqlSafe(sql))
+        .bind(limit)
+        .bind(claim_token)
+        .fetch_all(pool)
+        .await
+}
+
+pub(crate) async fn release_scheduler_claim(
+    pool: &PgPool,
+    task_id: i64,
+    claim_token: uuid::Uuid,
+) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query(
+        "UPDATE devrail_tasks SET scheduler_claim_token = NULL, scheduler_claimed_at = NULL, updated_at = now() WHERE id = $1 AND status = 'queued' AND scheduler_claim_token = $2",
+    )
+    .bind(task_id)
+    .bind(claim_token)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() == 1)
+}
+
 pub(crate) async fn create_task(
     c: &mut PgConnection,
     actor: &ActorContext,
