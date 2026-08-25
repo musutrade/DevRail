@@ -101,6 +101,10 @@ export type { CreateDevRailReviewComment$Params as CreateDevRailReviewComment$Pa
 export { createDevRailReviewComment as createDevRailReviewComment } from './fn/devrail/create-dev-rail-review-comment';
 export type { DecideDevRailReview$Params as DecideDevRailReview$Params } from './fn/devrail/decide-dev-rail-review';
 export { decideDevRailReview as decideDevRailReview } from './fn/devrail/decide-dev-rail-review';
+export type { ListDevRailExternalReviewComments$Params as ListDevRailExternalReviewComments$Params } from './fn/devrail/list-dev-rail-external-review-comments';
+export { listDevRailExternalReviewComments as listDevRailExternalReviewComments } from './fn/devrail/list-dev-rail-external-review-comments';
+export type { SyncDevRailExternalReviewComments$Params as SyncDevRailExternalReviewComments$Params } from './fn/devrail/sync-dev-rail-external-review-comments';
+export { syncDevRailExternalReviewComments as syncDevRailExternalReviewComments } from './fn/devrail/sync-dev-rail-external-review-comments';
 export type { GetDevRailRun$Params as GetDevRailRun$Params } from './fn/devrail/get-dev-rail-run';
 export { getDevRailRun as getDevRailRun } from './fn/devrail/get-dev-rail-run';
 export type { GetDevRailRunChangeset$Params as GetDevRailRunChangeset$Params } from './fn/devrail/get-dev-rail-run-changeset';

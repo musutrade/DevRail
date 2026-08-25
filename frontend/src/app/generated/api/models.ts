@@ -32,6 +32,7 @@ export type { DevRailChangesetResponse } from './models/dev-rail-changeset-respo
 export type { DevRailEnvironmentHealthResponse } from './models/dev-rail-environment-health-response';
 export type { DevRailEnvironmentPage } from './models/dev-rail-environment-page';
 export type { DevRailEnvironmentResponse } from './models/dev-rail-environment-response';
+export type { DevRailExternalReviewCommentResponse } from './models/dev-rail-external-review-comment-response';
 export type { DevRailGitProviderResponse } from './models/dev-rail-git-provider-response';
 export type { DevRailNotificationPage } from './models/dev-rail-notification-page';
 export type { DevRailNotificationPreferencesResponse } from './models/dev-rail-notification-preferences-response';
@@ -101,6 +102,7 @@ export type { RoleResponse } from './models/role-response';
 export type { SortDirection } from './models/sort-direction';
 export type { StepUpRequest } from './models/step-up-request';
 export type { StepUpResponse } from './models/step-up-response';
+export type { SyncDevRailExternalReviewRequest } from './models/sync-dev-rail-external-review-request';
 export type { SyncDevRailPullRequestRequest } from './models/sync-dev-rail-pull-request-request';
 export type { UpdateDepartmentRequest } from './models/update-department-request';
 export type { UpdateDevRailEnvironmentRequest } from './models/update-dev-rail-environment-request';
