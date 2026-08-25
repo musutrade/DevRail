@@ -6406,6 +6406,12 @@
           "idempotencyKey"
         ],
         "properties": {
+          "branchName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "environmentId": {
             "type": "integer",
             "format": "int64"
@@ -8288,6 +8294,12 @@
           "updatedAt"
         ],
         "properties": {
+          "branchName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "completedAt": {
             "type": [
               "string",

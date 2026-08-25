@@ -5,7 +5,7 @@ use crate::models::{DevRailRunEventRow, DevRailRunRow};
 use serde_json::Value;
 use sqlx::{AssertSqlSafe, PgConnection, PgPool};
 
-const RUN_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, status, thread_id, turn_id, harness_version, model_id, cwd, policy, startup_args_summary, exit_reason, exit_code, stderr_summary, trace_id, recovery_suggestion, recovery_attempts, started_at, completed_at, created_at, updated_at";
+const RUN_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, branch_name, status, thread_id, turn_id, harness_version, model_id, cwd, policy, startup_args_summary, exit_reason, exit_code, stderr_summary, trace_id, recovery_suggestion, recovery_attempts, started_at, completed_at, created_at, updated_at";
 const EVENT_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, run_id, cursor, event_type, source_event_id, idempotency_key, payload, summary, occurred_at";
 const MAX_TRANSPORT_RECOVERY_ATTEMPTS: i32 = 2;
 
@@ -20,6 +20,7 @@ pub(crate) struct NewRun<'a> {
     pub task_id: i64,
     pub snapshot_id: i64,
     pub idempotency_key: &'a str,
+    pub branch_name: Option<&'a str>,
     pub cwd: &'a str,
     pub policy: &'a Value,
     pub startup_args: &'a Value,
@@ -65,7 +66,7 @@ pub(crate) async fn create_run(
     c: &mut PgConnection,
     input: &NewRun<'_>,
 ) -> Result<DevRailRunRow, sqlx::Error> {
-    let sql = format!("INSERT INTO devrail_runs (organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, status, cwd, policy, startup_args_summary, model_id) VALUES ($1,$2,$3,$4,$5,$6,'starting',$7,$8,$9,$10) ON CONFLICT (organization_id, task_id, idempotency_key) DO UPDATE SET updated_at=devrail_runs.updated_at RETURNING {RUN_COLUMNS}");
+    let sql = format!("INSERT INTO devrail_runs (organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, branch_name, status, cwd, policy, startup_args_summary, model_id) VALUES ($1,$2,$3,$4,$5,$6,$7,'starting',$8,$9,$10,$11) ON CONFLICT (organization_id, task_id, idempotency_key) DO UPDATE SET updated_at=devrail_runs.updated_at RETURNING {RUN_COLUMNS}");
     sqlx::query_as::<_, DevRailRunRow>(AssertSqlSafe(sql))
         .bind(input.actor.organization_id)
         .bind(input.department_id)
@@ -73,6 +74,7 @@ pub(crate) async fn create_run(
         .bind(input.task_id)
         .bind(input.snapshot_id)
         .bind(input.idempotency_key)
+        .bind(input.branch_name)
         .bind(input.cwd)
         .bind(input.policy)
         .bind(input.startup_args)

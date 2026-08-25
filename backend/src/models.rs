@@ -259,6 +259,7 @@ pub struct DevRailRunRow {
     pub task_id: i64,
     pub snapshot_id: i64,
     pub idempotency_key: String,
+    pub branch_name: Option<String>,
     pub status: String,
     pub thread_id: Option<String>,
     pub turn_id: Option<String>,
@@ -1096,6 +1097,7 @@ pub struct DevRailRunResponse {
     pub task_id: i64,
     pub snapshot_id: i64,
     pub idempotency_key: String,
+    pub branch_name: Option<String>,
     pub status: String,
     pub thread_id: Option<String>,
     pub turn_id: Option<String>,
@@ -1697,6 +1699,7 @@ pub struct CreateDevRailRunRequest {
     pub idempotency_key: String,
     pub model_id: Option<String>,
     pub input: Option<String>,
+    pub branch_name: Option<String>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
