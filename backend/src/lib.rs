@@ -74,6 +74,7 @@ const DEVRAIL_REPOSITORY_PULL_REQUEST_PATH: &str =
     "/api/v1/projects/{project_id}/repositories/{id}/pull-requests";
 const DEVRAIL_REPOSITORY_PULL_REQUEST_SYNC_PATH: &str =
     "/api/v1/projects/{project_id}/repositories/{id}/pull-requests/sync";
+const DEVRAIL_PULL_REQUEST_WEBHOOK_PATH: &str = "/api/v1/webhooks/git/pull-requests";
 const DEVRAIL_REPOSITORY_SYNC_PATH: &str = "/api/v1/projects/{project_id}/repositories/{id}/sync";
 const DEVRAIL_REPOSITORY_WORKTREE_PATH: &str =
     "/api/v1/projects/{project_id}/repositories/{id}/worktree";
@@ -162,6 +163,7 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_REPOSITORY_PROVIDER_PATH, &["get"]),
     (DEVRAIL_REPOSITORY_PULL_REQUEST_PATH, &["post"]),
     (DEVRAIL_REPOSITORY_PULL_REQUEST_SYNC_PATH, &["post"]),
+    (DEVRAIL_PULL_REQUEST_WEBHOOK_PATH, &["post"]),
     (DEVRAIL_REPOSITORY_SYNC_PATH, &["get", "post"]),
     (DEVRAIL_REPOSITORY_WORKTREE_PATH, &["get"]),
     (DEVRAIL_ENVIRONMENTS_PATH, &["get", "post"]),
@@ -372,6 +374,10 @@ fn base_router(state: AppState) -> Router {
         .route(
             DEVRAIL_REPOSITORY_PULL_REQUEST_SYNC_PATH,
             post(handlers::devrail::sync_pull_request),
+        )
+        .route(
+            DEVRAIL_PULL_REQUEST_WEBHOOK_PATH,
+            post(handlers::devrail::pull_request_webhook),
         )
         .route(
             DEVRAIL_REPOSITORY_SYNC_PATH,

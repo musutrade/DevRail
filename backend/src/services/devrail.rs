@@ -4,6 +4,7 @@ use crate::access::ActorContext;
 use crate::error::{db_error, ApiError};
 use crate::models::*;
 use crate::repositories::{self, devrail, devrail_members};
+use axum::{body::Bytes, http::HeaderMap};
 use reqwest::Client;
 use serde_json::{json, Value};
 use sqlx::PgPool;
@@ -15,6 +16,59 @@ use url::Url;
 
 const DEFAULT_PAGE: i64 = 1;
 const DEFAULT_PAGE_SIZE: i64 = 20;
+
+pub async fn handle_pull_request_webhook(
+    pool: &PgPool,
+    headers: &HeaderMap,
+    body: &Bytes,
+) -> Result<(), ApiError> {
+    use hmac::{Hmac, Mac};
+    use sha2_legacy::Sha256;
+    let secret = std::env::var("DEVRAIL_GIT_WEBHOOK_SECRET")
+        .map_err(|_| ApiError::forbidden("Webhook 未配置"))?;
+    let signature = headers
+        .get("x-devrail-signature")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default();
+    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).map_err(ApiError::internal)?;
+    mac.update(body);
+    let expected = format!("sha256={}", hex::encode(mac.finalize().into_bytes()));
+    if signature.len() != expected.len()
+        || !bool::from(subtle::ConstantTimeEq::ct_eq(
+            signature.as_bytes(),
+            expected.as_bytes(),
+        ))
+    {
+        return Err(ApiError::forbidden("Webhook 签名无效"));
+    }
+    let payload: DevRailPullRequestWebhookRequest =
+        serde_json::from_slice(body).map_err(|_| ApiError::validation("Webhook payload 无效"))?;
+    if payload.number < 1
+        || payload.repository_id < 1
+        || !["github", "gitlab"].contains(&payload.provider.as_str())
+        || payload.status.len() > 32
+        || payload.url.len() > 2048
+    {
+        return Err(ApiError::validation("Webhook 字段无效"));
+    }
+    let mut tx = pool.begin().await.map_err(db_error)?;
+    let updated = repositories::devrail_pull_requests::update_webhook(
+        &mut tx,
+        &payload.provider,
+        payload.repository_id,
+        payload.number,
+        &payload.url,
+        &payload.status,
+    )
+    .await
+    .map_err(db_error)?;
+    tx.commit().await.map_err(db_error)?;
+    if updated {
+        Ok(())
+    } else {
+        Err(ApiError::not_found("合并请求记录不存在"))
+    }
+}
 
 fn paging(q: &DevRailListQuery) -> Result<(i64, i64), ApiError> {
     let page = q.page.unwrap_or(DEFAULT_PAGE);

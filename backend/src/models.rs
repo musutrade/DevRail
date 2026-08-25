@@ -914,6 +914,15 @@ pub struct DevRailPullRequestResponse {
 }
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct DevRailPullRequestWebhookRequest {
+    pub provider: String,
+    pub repository_id: i64,
+    pub number: i64,
+    pub url: String,
+    pub status: String,
+}
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncDevRailPullRequestRequest {
     pub number: i64,
 }

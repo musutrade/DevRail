@@ -5857,6 +5857,39 @@
           }
         ]
       }
+    },
+    "/webhooks/git/pull-requests": {
+      "post": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "receiveDevRailPullRequestWebhook",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevRailPullRequestWebhookRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -7380,6 +7413,35 @@
               "integer",
               "null"
             ],
+            "format": "int64"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "repositoryId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "DevRailPullRequestWebhookRequest": {
+        "type": "object",
+        "required": [
+          "provider",
+          "repositoryId",
+          "number",
+          "url",
+          "status"
+        ],
+        "properties": {
+          "number": {
+            "type": "integer",
             "format": "int64"
           },
           "provider": {

@@ -6,6 +6,7 @@ use crate::models::*;
 use crate::permissions::devrail::*;
 use crate::services;
 use crate::AppState;
+use axum::body::Bytes;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::sse::{Event, KeepAlive, Sse};
@@ -243,6 +244,15 @@ pub async fn sync_pull_request(
     services::devrail::sync_pull_request(&s.pool, &auth, project_id, id, req.number)
         .await
         .map(Json)
+}
+pub async fn pull_request_webhook(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<StatusCode, ApiError> {
+    services::devrail::handle_pull_request_webhook(&s.pool, &headers, &body)
+        .await
+        .map(|_| StatusCode::NO_CONTENT)
 }
 pub async fn create_repository(
     State(s): State<AppState>,
