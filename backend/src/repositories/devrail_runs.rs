@@ -5,7 +5,7 @@ use crate::models::{DevRailRunEventRow, DevRailRunRow};
 use serde_json::Value;
 use sqlx::{AssertSqlSafe, PgConnection, PgPool};
 
-const RUN_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, branch_name, status, thread_id, turn_id, harness_version, model_id, cwd, policy, startup_args_summary, exit_reason, exit_code, stderr_summary, trace_id, recovery_suggestion, recovery_attempts, started_at, completed_at, created_at, updated_at";
+const RUN_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, branch_name, branch_expires_at, status, thread_id, turn_id, harness_version, model_id, cwd, policy, startup_args_summary, exit_reason, exit_code, stderr_summary, trace_id, recovery_suggestion, recovery_attempts, started_at, completed_at, created_at, updated_at";
 const EVENT_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, run_id, cursor, event_type, source_event_id, idempotency_key, payload, summary, occurred_at";
 const MAX_TRANSPORT_RECOVERY_ATTEMPTS: i32 = 2;
 
@@ -21,6 +21,7 @@ pub(crate) struct NewRun<'a> {
     pub snapshot_id: i64,
     pub idempotency_key: &'a str,
     pub branch_name: Option<&'a str>,
+    pub branch_expires_at: Option<chrono::DateTime<chrono::Utc>>,
     pub cwd: &'a str,
     pub policy: &'a Value,
     pub startup_args: &'a Value,
@@ -66,7 +67,7 @@ pub(crate) async fn create_run(
     c: &mut PgConnection,
     input: &NewRun<'_>,
 ) -> Result<DevRailRunRow, sqlx::Error> {
-    let sql = format!("INSERT INTO devrail_runs (organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, branch_name, status, cwd, policy, startup_args_summary, model_id) VALUES ($1,$2,$3,$4,$5,$6,$7,'starting',$8,$9,$10,$11) ON CONFLICT (organization_id, task_id, idempotency_key) DO UPDATE SET updated_at=devrail_runs.updated_at RETURNING {RUN_COLUMNS}");
+    let sql = format!("INSERT INTO devrail_runs (organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, branch_name, branch_expires_at, status, cwd, policy, startup_args_summary, model_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'starting',$9,$10,$11,$12) ON CONFLICT (organization_id, task_id, idempotency_key) DO UPDATE SET updated_at=devrail_runs.updated_at RETURNING {RUN_COLUMNS}");
     sqlx::query_as::<_, DevRailRunRow>(AssertSqlSafe(sql))
         .bind(input.actor.organization_id)
         .bind(input.department_id)
@@ -75,12 +76,27 @@ pub(crate) async fn create_run(
         .bind(input.snapshot_id)
         .bind(input.idempotency_key)
         .bind(input.branch_name)
+        .bind(input.branch_expires_at)
         .bind(input.cwd)
         .bind(input.policy)
         .bind(input.startup_args)
         .bind(input.model_id)
         .fetch_one(c)
         .await
+}
+
+pub(crate) async fn clear_expired_branch(
+    c: &mut PgConnection,
+    run_id: i64,
+) -> Result<Option<(i64, String)>, sqlx::Error> {
+    sqlx::query_as("UPDATE devrail_runs SET branch_name=NULL,branch_expires_at=NULL,updated_at=now() WHERE id=$1 AND branch_expires_at<=now() AND branch_name IS NOT NULL RETURNING task_id,branch_name")
+        .bind(run_id).fetch_optional(c).await
+}
+
+pub(crate) async fn expired_branches(
+    pool: &PgPool,
+) -> Result<Vec<(i64, i64, String)>, sqlx::Error> {
+    sqlx::query_as("SELECT r.id,r.task_id,r.branch_name FROM devrail_runs r WHERE r.branch_expires_at<=now() AND r.branch_name IS NOT NULL ORDER BY r.id LIMIT 50").fetch_all(pool).await
 }
 
 pub(crate) async fn update_run_started(

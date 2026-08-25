@@ -129,6 +129,7 @@ async fn run(config: AppConfig, metadata: TelemetryMetadata) -> anyhow::Result<(
         state.pool.clone(),
         state.supervisor.clone(),
     );
+    arc_admin_backend::workers::branch_cleanup::spawn(state.pool.clone());
     arc_admin_backend::workers::notification_dispatcher::spawn(
         state.pool.clone(),
         state.mfa.clone(),
