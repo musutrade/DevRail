@@ -29,6 +29,90 @@ fn validate_webhook_payload(payload: &DevRailPullRequestWebhookRequest) -> Resul
     Ok(())
 }
 
+fn normalize_webhook_payload(
+    headers: &HeaderMap,
+    body: &Bytes,
+) -> Result<DevRailPullRequestWebhookRequest, ApiError> {
+    if let Ok(payload) = serde_json::from_slice::<DevRailPullRequestWebhookRequest>(body) {
+        validate_webhook_payload(&payload)?;
+        return Ok(payload);
+    }
+    let value: Value =
+        serde_json::from_slice(body).map_err(|_| ApiError::validation("Webhook payload 无效"))?;
+    let repository_id = headers
+        .get("x-devrail-repository-id")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<i64>().ok())
+        .ok_or_else(|| ApiError::validation("原生 Webhook 缺少仓库 ID"))?;
+    let provider = if headers.get("x-github-event").is_some() {
+        "github"
+    } else if headers.get("x-gitlab-event").is_some() {
+        "gitlab"
+    } else {
+        return Err(ApiError::validation("缺少 GitHub/GitLab Webhook 事件头"));
+    };
+    let (number, url, status) = if provider == "github" {
+        let action = value
+            .get("action")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let pr = value
+            .get("pull_request")
+            .ok_or_else(|| ApiError::validation("GitHub payload 缺少 pull_request"))?;
+        let status = if action == "closed" {
+            if pr.get("merged").and_then(Value::as_bool).unwrap_or(false) {
+                "merged"
+            } else {
+                "closed"
+            }
+        } else {
+            "open"
+        };
+        (
+            pr.get("number").and_then(Value::as_i64).unwrap_or_default(),
+            pr.get("html_url")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            status.to_string(),
+        )
+    } else {
+        let attrs = value
+            .get("object_attributes")
+            .ok_or_else(|| ApiError::validation("GitLab payload 缺少 object_attributes"))?;
+        let action = attrs
+            .get("action")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let state = attrs.get("state").and_then(Value::as_str).unwrap_or("open");
+        let status = if action == "merge" || state == "merged" {
+            "merged"
+        } else if state == "closed" {
+            "closed"
+        } else {
+            "open"
+        };
+        (
+            attrs.get("iid").and_then(Value::as_i64).unwrap_or_default(),
+            attrs
+                .get("url")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            status.to_string(),
+        )
+    };
+    let payload = DevRailPullRequestWebhookRequest {
+        provider: provider.to_string(),
+        repository_id,
+        number,
+        url,
+        status,
+    };
+    validate_webhook_payload(&payload)?;
+    Ok(payload)
+}
+
 pub async fn handle_pull_request_webhook(
     pool: &PgPool,
     headers: &HeaderMap,
@@ -53,9 +137,7 @@ pub async fn handle_pull_request_webhook(
     {
         return Err(ApiError::forbidden("Webhook 签名无效"));
     }
-    let payload: DevRailPullRequestWebhookRequest =
-        serde_json::from_slice(body).map_err(|_| ApiError::validation("Webhook payload 无效"))?;
-    validate_webhook_payload(&payload)?;
+    let payload = normalize_webhook_payload(headers, body)?;
     let mut tx = pool.begin().await.map_err(db_error)?;
     let updated = repositories::devrail_pull_requests::update_webhook(
         &mut tx,
@@ -77,8 +159,9 @@ pub async fn handle_pull_request_webhook(
 
 #[cfg(test)]
 mod webhook_tests {
-    use super::validate_webhook_payload;
+    use super::{normalize_webhook_payload, validate_webhook_payload};
     use crate::models::DevRailPullRequestWebhookRequest;
+    use axum::body::Bytes;
 
     #[test]
     fn rejects_unknown_provider() {
@@ -102,6 +185,20 @@ mod webhook_tests {
             status: "closed".into(),
         };
         assert!(validate_webhook_payload(&payload).is_ok());
+    }
+
+    #[test]
+    fn normalizes_github_native_payload() {
+        use axum::http::{HeaderMap, HeaderValue};
+        let mut headers = HeaderMap::new();
+        headers.insert("x-github-event", HeaderValue::from_static("pull_request"));
+        headers.insert("x-devrail-repository-id", HeaderValue::from_static("9"));
+        let body = Bytes::from(
+            r#"{"action":"closed","pull_request":{"number":4,"merged":true,"html_url":"https://github.com/o/r/pull/4"}}"#,
+        );
+        let payload = normalize_webhook_payload(&headers, &body).expect("native payload");
+        assert_eq!(payload.status, "merged");
+        assert_eq!(payload.number, 4);
     }
 }
 
