@@ -8,7 +8,82 @@ use reqwest::Client;
 use serde_json::json;
 use serde_json::Value;
 use sqlx::PgPool;
+use std::collections::HashMap;
 use urlencoding::encode;
+
+fn github_thread_states(payload: &Value) -> HashMap<i64, bool> {
+    let mut states = HashMap::new();
+    let nodes = payload
+        .pointer("/data/repository/pullRequest/reviewThreads/nodes")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten();
+    for thread in nodes {
+        let Some(resolved) = thread.get("isResolved").and_then(Value::as_bool) else {
+            continue;
+        };
+        let comments = thread
+            .pointer("/comments/nodes")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten();
+        for comment in comments {
+            if let Some(id) = comment.get("databaseId").and_then(Value::as_i64) {
+                states.insert(id, resolved);
+            }
+        }
+    }
+    states
+}
+
+async fn fetch_github_thread_states(
+    client: &Client,
+    token: &str,
+    owner: &str,
+    repository: &str,
+    number: i64,
+) -> Result<HashMap<i64, bool>, ApiError> {
+    let query = r#"query($owner:String!, $name:String!, $number:Int!) {
+      repository(owner:$owner, name:$name) {
+        pullRequest(number:$number) {
+          reviewThreads(first:100) {
+            nodes {
+              isResolved
+              comments(first:100) { nodes { databaseId } }
+            }
+          }
+        }
+      }
+    }"#;
+    let response = client
+        .post("https://api.github.com/graphql")
+        .bearer_auth(token)
+        .json(&json!({
+            "query": query,
+            "variables": {"owner": owner, "name": repository, "number": number}
+        }))
+        .send()
+        .await
+        .map_err(|_| ApiError::conflict("同步 GitHub 审查线程状态失败"))?;
+    if !response.status().is_success() {
+        return Err(ApiError::conflict("GitHub 拒绝读取审查线程状态"));
+    }
+    let payload = response
+        .json::<Value>()
+        .await
+        .map_err(|_| ApiError::conflict("GitHub 返回无效审查线程响应"))?;
+    if payload.get("errors").is_some() {
+        return Err(ApiError::conflict("GitHub 返回审查线程状态错误"));
+    }
+    if payload
+        .pointer("/data/repository/pullRequest/reviewThreads/nodes")
+        .and_then(Value::as_array)
+        .is_none()
+    {
+        return Err(ApiError::conflict("GitHub 未返回审查线程状态"));
+    }
+    Ok(github_thread_states(&payload))
+}
 fn response(r: DevRailReviewRow) -> DevRailReviewResponse {
     DevRailReviewResponse {
         id: r.id,
@@ -88,7 +163,15 @@ pub async fn sync_external_comments(
         .user_agent("DevRail/1.0")
         .build()
         .map_err(ApiError::internal)?;
-    let (provider_name, values) = if provider.provider == "github" {
+    let (provider_name, values, github_states) = if provider.provider == "github" {
+        let github_states = fetch_github_thread_states(
+            &client,
+            &token,
+            &provider.owner,
+            &provider.repository,
+            req.number,
+        )
+        .await?;
         let endpoint = format!(
             "https://api.github.com/repos/{}/{}/pulls/{}/comments",
             provider.owner, provider.repository, req.number
@@ -108,6 +191,7 @@ pub async fn sync_external_comments(
                 .json::<Vec<Value>>()
                 .await
                 .map_err(|_| ApiError::conflict("GitHub 返回无效响应"))?,
+            github_states,
         )
     } else {
         let project_path = format!("{}/{}", provider.owner, provider.repository);
@@ -131,6 +215,7 @@ pub async fn sync_external_comments(
                 .json::<Vec<Value>>()
                 .await
                 .map_err(|_| ApiError::conflict("GitLab 返回无效响应"))?,
+            HashMap::new(),
         )
     };
     let mut tx = pool.begin().await.map_err(db_error)?;
@@ -161,7 +246,10 @@ pub async fn sync_external_comments(
                         .to_string(),
                     value.get("line").and_then(Value::as_i64).map(|v| v as i32),
                     value.get("line").and_then(Value::as_i64).map(|v| v as i32),
-                    false,
+                    github_states
+                        .get(&value.get("id").and_then(Value::as_i64).unwrap_or_default())
+                        .copied()
+                        .unwrap_or(false),
                     value.get("body").is_none() || value.get("body").is_some_and(Value::is_null),
                 )
             } else {
@@ -369,4 +457,26 @@ pub async fn decide(
     .map_err(db_error)?;
     tx.commit().await.map_err(db_error)?;
     Ok(response(row))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::github_thread_states;
+    use serde_json::json;
+
+    #[test]
+    fn maps_github_review_thread_resolution_to_comment_ids() {
+        let payload = json!({
+            "data": {"repository": {"pullRequest": {"reviewThreads": {"nodes": [
+                {"isResolved": true, "comments": {"nodes": [{"databaseId": 41}, {"databaseId": 42}]}},
+                {"isResolved": false, "comments": {"nodes": [{"databaseId": 43}]}}
+            ]}}}}
+        });
+
+        let states = github_thread_states(&payload);
+
+        assert_eq!(states.get(&41), Some(&true));
+        assert_eq!(states.get(&42), Some(&true));
+        assert_eq!(states.get(&43), Some(&false));
+    }
 }
