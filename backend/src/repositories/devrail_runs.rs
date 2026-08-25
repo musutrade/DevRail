@@ -9,6 +9,10 @@ const RUN_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, ta
 const EVENT_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, run_id, cursor, event_type, source_event_id, idempotency_key, payload, summary, occurred_at";
 const MAX_TRANSPORT_RECOVERY_ATTEMPTS: i32 = 2;
 
+pub(crate) fn can_transport_recover(recovery_attempts: i32) -> bool {
+    recovery_attempts < MAX_TRANSPORT_RECOVERY_ATTEMPTS
+}
+
 fn scope(alias: &str) -> String {
     format!(
         "{alias}.organization_id = $2 AND ($1 = 'all' OR ($1 = 'organization') OR ($1 = 'self' AND {alias}.owner_user_id = $3) OR ($1 = 'department' AND {alias}.department_id = $4) OR ($1 = 'department_and_children' AND {alias}.department_id IN (SELECT id FROM visible_departments)))"
@@ -123,10 +127,15 @@ pub(crate) async fn prepare_transport_recovery(
     run_id: i64,
     reason: &str,
 ) -> Result<bool, sqlx::Error> {
+    let recovery_limit = if can_transport_recover(0) {
+        MAX_TRANSPORT_RECOVERY_ATTEMPTS
+    } else {
+        0
+    };
     Ok(sqlx::query("UPDATE devrail_runs SET status='starting', recovery_attempts=recovery_attempts+1, exit_reason=$2, exit_code=NULL, stderr_summary=NULL, completed_at=NULL, recovery_suggestion='Harness 连接中断；系统正在自动恢复', updated_at=now() WHERE id=$1 AND status IN ('starting','active') AND recovery_attempts < $3")
         .bind(run_id)
         .bind(reason)
-        .bind(MAX_TRANSPORT_RECOVERY_ATTEMPTS)
+        .bind(recovery_limit)
         .execute(pool)
         .await?
         .rows_affected() == 1)
