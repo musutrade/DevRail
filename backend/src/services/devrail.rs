@@ -866,6 +866,122 @@ pub async fn create_pull_request(
     })
 }
 
+pub async fn create_branch(
+    pool: &PgPool,
+    actor: &ActorContext,
+    project_id: i64,
+    id: i64,
+    req: &CreateDevRailBranchRequest,
+) -> Result<DevRailBranchResponse, ApiError> {
+    let name = text(&req.name, "临时分支名称", 256)?;
+    if name == "main"
+        || name == "master"
+        || name == "develop"
+        || name.contains("..")
+        || name.starts_with('/')
+        || name.ends_with('/')
+    {
+        return Err(ApiError::validation("临时分支名称不安全"));
+    }
+    let source_sha = text(&req.source_sha, "来源提交 SHA", 128)?;
+    if !source_sha.bytes().all(|b| b.is_ascii_hexdigit()) || !(7..=64).contains(&source_sha.len()) {
+        return Err(ApiError::validation("来源提交 SHA 无效"));
+    }
+    let provider = get_git_provider(pool, actor, project_id, id).await?;
+    if !provider.credential_configured || provider.provider == "unknown" {
+        return Err(ApiError::conflict("Git 平台凭据未配置或平台不受支持"));
+    }
+    let row = devrail::find_repository(pool, actor, project_id, id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("仓库不存在或超出数据范围"))?;
+    let env_name = row
+        .credential_ref
+        .as_deref()
+        .unwrap_or(if provider.provider == "github" {
+            "DEVRAIL_GITHUB_TOKEN"
+        } else {
+            "DEVRAIL_GITLAB_TOKEN"
+        });
+    let token =
+        std::env::var(env_name).map_err(|_| ApiError::conflict("Git 平台凭据未在服务端配置"))?;
+    let client = Client::builder()
+        .user_agent("DevRail/1.0")
+        .build()
+        .map_err(ApiError::internal)?;
+    let url = if provider.provider == "github" {
+        let endpoint = format!(
+            "https://api.github.com/repos/{}/{}/git/refs",
+            provider.owner, provider.repository
+        );
+        let response = client
+            .post(endpoint)
+            .bearer_auth(&token)
+            .json(&json!({"ref": format!("refs/heads/{name}"), "sha": source_sha}))
+            .send()
+            .await
+            .map_err(|_| ApiError::conflict("创建 GitHub 临时分支失败"))?;
+        if !response.status().is_success() {
+            return Err(ApiError::conflict("GitHub 拒绝创建临时分支"));
+        }
+        response
+            .json::<Value>()
+            .await
+            .ok()
+            .and_then(|v| v.get("url").and_then(Value::as_str).map(str::to_owned))
+            .unwrap_or_else(|| {
+                format!(
+                    "https://github.com/{}/{}/tree/{name}",
+                    provider.owner, provider.repository
+                )
+            })
+    } else {
+        let project_path = format!("{}/{}", provider.owner, provider.repository);
+        let project = urlencoding::encode(&project_path);
+        let endpoint = format!("https://gitlab.com/api/v4/projects/{project}/repository/branches");
+        let response = client
+            .post(endpoint)
+            .header("PRIVATE-TOKEN", &token)
+            .query(&[("branch", name.as_str()), ("ref", source_sha.as_str())])
+            .send()
+            .await
+            .map_err(|_| ApiError::conflict("创建 GitLab 临时分支失败"))?;
+        if !response.status().is_success() {
+            return Err(ApiError::conflict("GitLab 拒绝创建临时分支"));
+        }
+        response
+            .json::<Value>()
+            .await
+            .ok()
+            .and_then(|v| v.get("web_url").and_then(Value::as_str).map(str::to_owned))
+            .unwrap_or_else(|| {
+                format!(
+                    "https://gitlab.com/{}/{}/-/tree/{name}",
+                    provider.owner, provider.repository
+                )
+            })
+    };
+    let mut tx = pool.begin().await.map_err(db_error)?;
+    repositories::audit_logs::record(
+        &mut tx,
+        Some(actor.user_id),
+        "devrail.repository.branch.create",
+        "devrail_repository",
+        Some(id),
+        json!({"provider": provider.provider, "branch": name, "sourceSha": source_sha}),
+    )
+    .await
+    .map_err(db_error)?;
+    tx.commit().await.map_err(db_error)?;
+    Ok(DevRailBranchResponse {
+        repository_id: id,
+        provider: provider.provider,
+        name,
+        source_sha,
+        url,
+    })
+}
+
 pub async fn sync_pull_request(
     pool: &PgPool,
     actor: &ActorContext,

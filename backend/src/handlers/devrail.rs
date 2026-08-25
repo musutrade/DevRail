@@ -235,6 +235,16 @@ pub async fn create_pull_request(
         .await
         .map(|v| (StatusCode::CREATED, Json(v)))
 }
+pub async fn create_branch(
+    State(s): State<AppState>,
+    auth: RequirePermission<RepositoryWrite>,
+    Path((project_id, id)): Path<(i64, i64)>,
+    Json(req): Json<CreateDevRailBranchRequest>,
+) -> Result<(StatusCode, Json<DevRailBranchResponse>), ApiError> {
+    services::devrail::create_branch(&s.pool, &auth, project_id, id, &req)
+        .await
+        .map(|v| (StatusCode::CREATED, Json(v)))
+}
 pub async fn sync_pull_request(
     State(s): State<AppState>,
     auth: RequirePermission<RepositoryRead>,

@@ -61,6 +61,8 @@ export type { GetDevRailRepository$Params as GetDevRailRepository$Params } from 
 export { getDevRailRepository as getDevRailRepository } from './fn/devrail/get-dev-rail-repository';
 export type { UpdateDevRailRepository$Params as UpdateDevRailRepository$Params } from './fn/devrail/update-dev-rail-repository';
 export { updateDevRailRepository as updateDevRailRepository } from './fn/devrail/update-dev-rail-repository';
+export type { CreateDevRailBranch$Params as CreateDevRailBranch$Params } from './fn/devrail/create-dev-rail-branch';
+export { createDevRailBranch as createDevRailBranch } from './fn/devrail/create-dev-rail-branch';
 export type { GetDevRailGitProvider$Params as GetDevRailGitProvider$Params } from './fn/devrail/get-dev-rail-git-provider';
 export { getDevRailGitProvider as getDevRailGitProvider } from './fn/devrail/get-dev-rail-git-provider';
 export type { CreateDevRailPullRequest$Params as CreateDevRailPullRequest$Params } from './fn/devrail/create-dev-rail-pull-request';
