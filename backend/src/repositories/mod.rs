@@ -7,6 +7,7 @@ pub mod devrail_comments;
 pub mod devrail_external_review_comments;
 pub mod devrail_members;
 pub mod devrail_notifications;
+pub mod devrail_pull_requests;
 pub mod devrail_push;
 pub mod devrail_review_comments;
 pub mod devrail_reviews;
