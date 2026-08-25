@@ -852,4 +852,14 @@ mod tests {
         );
         assert!(recovery_for_failure(true, "connection reset").contains("恢复"));
     }
+
+    #[test]
+    fn transport_recovery_is_bounded() {
+        assert!(crate::repositories::devrail_runs::can_transport_recover(0));
+        assert!(crate::repositories::devrail_runs::can_transport_recover(1));
+        assert!(!crate::repositories::devrail_runs::can_transport_recover(2));
+        assert!(!crate::repositories::devrail_runs::can_transport_recover(
+            99
+        ));
+    }
 }

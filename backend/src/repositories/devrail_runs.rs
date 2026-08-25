@@ -5,9 +5,13 @@ use crate::models::{DevRailRunEventRow, DevRailRunRow};
 use serde_json::Value;
 use sqlx::{AssertSqlSafe, PgConnection, PgPool};
 
-const RUN_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, status, thread_id, turn_id, harness_version, model_id, cwd, policy, startup_args_summary, exit_reason, exit_code, stderr_summary, trace_id, recovery_suggestion, recovery_attempts, started_at, completed_at, created_at, updated_at";
+const RUN_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, branch_name, branch_expires_at, status, thread_id, turn_id, harness_version, model_id, cwd, policy, startup_args_summary, exit_reason, exit_code, stderr_summary, trace_id, recovery_suggestion, recovery_attempts, started_at, completed_at, created_at, updated_at";
 const EVENT_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, run_id, cursor, event_type, source_event_id, idempotency_key, payload, summary, occurred_at";
 const MAX_TRANSPORT_RECOVERY_ATTEMPTS: i32 = 2;
+
+pub(crate) fn can_transport_recover(recovery_attempts: i32) -> bool {
+    recovery_attempts < MAX_TRANSPORT_RECOVERY_ATTEMPTS
+}
 
 fn scope(alias: &str) -> String {
     format!(
@@ -20,6 +24,8 @@ pub(crate) struct NewRun<'a> {
     pub task_id: i64,
     pub snapshot_id: i64,
     pub idempotency_key: &'a str,
+    pub branch_name: Option<&'a str>,
+    pub branch_expires_at: Option<chrono::DateTime<chrono::Utc>>,
     pub cwd: &'a str,
     pub policy: &'a Value,
     pub startup_args: &'a Value,
@@ -65,7 +71,7 @@ pub(crate) async fn create_run(
     c: &mut PgConnection,
     input: &NewRun<'_>,
 ) -> Result<DevRailRunRow, sqlx::Error> {
-    let sql = format!("INSERT INTO devrail_runs (organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, status, cwd, policy, startup_args_summary, model_id) VALUES ($1,$2,$3,$4,$5,$6,'starting',$7,$8,$9,$10) ON CONFLICT (organization_id, task_id, idempotency_key) DO UPDATE SET updated_at=devrail_runs.updated_at RETURNING {RUN_COLUMNS}");
+    let sql = format!("INSERT INTO devrail_runs (organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, branch_name, branch_expires_at, status, cwd, policy, startup_args_summary, model_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'starting',$9,$10,$11,$12) ON CONFLICT (organization_id, task_id, idempotency_key) DO UPDATE SET updated_at=devrail_runs.updated_at RETURNING {RUN_COLUMNS}");
     sqlx::query_as::<_, DevRailRunRow>(AssertSqlSafe(sql))
         .bind(input.actor.organization_id)
         .bind(input.department_id)
@@ -73,11 +79,35 @@ pub(crate) async fn create_run(
         .bind(input.task_id)
         .bind(input.snapshot_id)
         .bind(input.idempotency_key)
+        .bind(input.branch_name)
+        .bind(input.branch_expires_at)
         .bind(input.cwd)
         .bind(input.policy)
         .bind(input.startup_args)
         .bind(input.model_id)
         .fetch_one(c)
+        .await
+}
+
+pub(crate) async fn clear_expired_branch(
+    c: &mut PgConnection,
+    run_id: i64,
+) -> Result<Option<(i64, String)>, sqlx::Error> {
+    sqlx::query_as("UPDATE devrail_runs SET branch_name=NULL,branch_expires_at=NULL,updated_at=now() WHERE id=$1 AND branch_expires_at<=now() AND branch_name IS NOT NULL RETURNING task_id,branch_name")
+        .bind(run_id).fetch_optional(c).await
+}
+
+#[derive(Debug, sqlx::FromRow)]
+pub(crate) struct ExpiredBranch {
+    pub run_id: i64,
+    pub branch_name: String,
+    pub remote_url: Option<String>,
+    pub credential_ref: Option<String>,
+}
+
+pub(crate) async fn expired_branches(pool: &PgPool) -> Result<Vec<ExpiredBranch>, sqlx::Error> {
+    sqlx::query_as("SELECT r.id AS run_id,r.branch_name,repo.remote_url,repo.credential_ref FROM devrail_runs r JOIN devrail_tasks t ON t.id=r.task_id LEFT JOIN devrail_repositories repo ON repo.id=t.repository_id WHERE r.branch_expires_at<=now() AND r.branch_name IS NOT NULL ORDER BY r.id LIMIT 50")
+        .fetch_all(pool)
         .await
 }
 
@@ -105,10 +135,15 @@ pub(crate) async fn prepare_transport_recovery(
     run_id: i64,
     reason: &str,
 ) -> Result<bool, sqlx::Error> {
+    let recovery_limit = if can_transport_recover(0) {
+        MAX_TRANSPORT_RECOVERY_ATTEMPTS
+    } else {
+        0
+    };
     Ok(sqlx::query("UPDATE devrail_runs SET status='starting', recovery_attempts=recovery_attempts+1, exit_reason=$2, exit_code=NULL, stderr_summary=NULL, completed_at=NULL, recovery_suggestion='Harness 连接中断；系统正在自动恢复', updated_at=now() WHERE id=$1 AND status IN ('starting','active') AND recovery_attempts < $3")
         .bind(run_id)
         .bind(reason)
-        .bind(MAX_TRANSPORT_RECOVERY_ATTEMPTS)
+        .bind(recovery_limit)
         .execute(pool)
         .await?
         .rows_affected() == 1)

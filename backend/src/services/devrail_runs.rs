@@ -24,6 +24,8 @@ fn run_response(row: DevRailRunRow) -> DevRailRunResponse {
         task_id: row.task_id,
         snapshot_id: row.snapshot_id,
         idempotency_key: row.idempotency_key,
+        branch_name: row.branch_name,
+        branch_expires_at: row.branch_expires_at,
         status: row.status,
         thread_id: row.thread_id,
         turn_id: row.turn_id,
@@ -337,6 +339,22 @@ async fn create_run_with_resume(
     resume: Option<ResumeContext>,
 ) -> Result<DevRailRunResponse, ApiError> {
     let idempotency_key = key(&req.idempotency_key)?;
+    let branch_name = req
+        .branch_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    if let Some(branch) = branch_name {
+        if branch.len() > 256
+            || branch.contains("..")
+            || branch.starts_with('/')
+            || branch.ends_with('/')
+            || branch.bytes().any(|b| b.is_ascii_whitespace())
+        {
+            return Err(ApiError::validation("运行分支名称无效"));
+        }
+    }
+    let branch_expires_at = branch_name.map(|_| chrono::Utc::now() + chrono::Duration::hours(24));
     if let Some(existing) =
         devrail_runs::find_run_by_idempotency(pool, actor, task_id, &idempotency_key)
             .await
@@ -372,6 +390,8 @@ async fn create_run_with_resume(
             task_id: task.id,
             snapshot_id,
             idempotency_key: &idempotency_key,
+            branch_name,
+            branch_expires_at,
             cwd: &environment.workspace_root,
             policy: &policy,
             startup_args: &startup_args,
@@ -539,6 +559,7 @@ pub async fn retry_run(
             idempotency_key: req.idempotency_key.clone(),
             model_id: previous.model_id,
             input: req.input.clone(),
+            branch_name: previous.branch_name,
         },
         resume,
     )

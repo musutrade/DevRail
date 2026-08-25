@@ -164,7 +164,7 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_REPOSITORY_PATH, &["get", "patch"]),
     (DEVRAIL_REPOSITORY_PROVIDER_PATH, &["get"]),
     (DEVRAIL_REPOSITORY_PULL_REQUEST_PATH, &["post"]),
-    (DEVRAIL_REPOSITORY_BRANCH_PATH, &["post"]),
+    (DEVRAIL_REPOSITORY_BRANCH_PATH, &["post", "delete"]),
     (DEVRAIL_REPOSITORY_PULL_REQUEST_SYNC_PATH, &["post"]),
     (DEVRAIL_PULL_REQUEST_WEBHOOK_PATH, &["post"]),
     (DEVRAIL_REPOSITORY_SYNC_PATH, &["get", "post"]),
@@ -376,7 +376,7 @@ fn base_router(state: AppState) -> Router {
         )
         .route(
             DEVRAIL_REPOSITORY_BRANCH_PATH,
-            post(handlers::devrail::create_branch),
+            post(handlers::devrail::create_branch).delete(handlers::devrail::delete_branch),
         )
         .route(
             DEVRAIL_REPOSITORY_PULL_REQUEST_SYNC_PATH,

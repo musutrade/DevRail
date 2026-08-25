@@ -4,6 +4,7 @@
 export interface DevRailExternalReviewCommentResponse {
   authorName: string;
   body: string;
+  changesetMatched: boolean;
   createdAt: string;
   deletedAt?: (string | null);
   externalCreatedAt?: (string | null);

@@ -2991,6 +2991,62 @@
             "cookieAuth": []
           }
         ]
+      },
+      "delete": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "deleteDevRailBranch",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteDevRailBranchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
       }
     },
     "/projects/{project_id}/repositories/{id}/git-provider": {
@@ -6350,6 +6406,12 @@
           "idempotencyKey"
         ],
         "properties": {
+          "branchName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "environmentId": {
             "type": "integer",
             "format": "int64"
@@ -6636,6 +6698,17 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "DeleteDevRailBranchRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
           }
         }
       },
@@ -7078,7 +7151,8 @@
           "body",
           "authorName",
           "createdAt",
-          "resolved"
+          "resolved",
+          "changesetMatched"
         ],
         "properties": {
           "authorName": {
@@ -7086,6 +7160,9 @@
           },
           "body": {
             "type": "string"
+          },
+          "changesetMatched": {
+            "type": "boolean"
           },
           "createdAt": {
             "type": "string",
@@ -8221,6 +8298,19 @@
           "updatedAt"
         ],
         "properties": {
+          "branchExpiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "branchName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "completedAt": {
             "type": [
               "string",

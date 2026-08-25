@@ -17,6 +17,24 @@ use url::Url;
 const DEFAULT_PAGE: i64 = 1;
 const DEFAULT_PAGE_SIZE: i64 = 20;
 
+fn validate_temporary_branch(name: &str, source_sha: &str) -> Result<(), ApiError> {
+    if name.trim().is_empty()
+        || name.len() > 256
+        || ["main", "master", "develop"].contains(&name)
+        || name.contains("..")
+        || name.starts_with('/')
+        || name.ends_with('/')
+        || name.contains(['~', '^', ':', '\\'])
+        || name.bytes().any(|b| b.is_ascii_whitespace())
+    {
+        return Err(ApiError::validation("临时分支名称不安全"));
+    }
+    if !(7..=64).contains(&source_sha.len()) || !source_sha.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(ApiError::validation("来源提交 SHA 无效"));
+    }
+    Ok(())
+}
+
 fn validate_webhook_payload(payload: &DevRailPullRequestWebhookRequest) -> Result<(), ApiError> {
     if payload.number < 1
         || payload.repository_id < 1
@@ -27,6 +45,35 @@ fn validate_webhook_payload(payload: &DevRailPullRequestWebhookRequest) -> Resul
         return Err(ApiError::validation("Webhook 字段无效"));
     }
     Ok(())
+}
+
+fn validate_event_id(event_id: Option<&str>) -> Result<(), ApiError> {
+    if let Some(value) = event_id {
+        if value.is_empty()
+            || value.len() > 256
+            || value
+                .bytes()
+                .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
+        {
+            return Err(ApiError::validation("Webhook 事件 ID 无效"));
+        }
+    }
+    Ok(())
+}
+
+fn verify_webhook_signature(secret: &str, signature: &str, body: &[u8]) -> bool {
+    use hmac::{Hmac, Mac};
+    use sha2_legacy::Sha256;
+    let Ok(mut mac) = Hmac::<Sha256>::new_from_slice(secret.as_bytes()) else {
+        return false;
+    };
+    mac.update(body);
+    let expected = format!("sha256={}", hex::encode(mac.finalize().into_bytes()));
+    signature.len() == expected.len()
+        && bool::from(subtle::ConstantTimeEq::ct_eq(
+            signature.as_bytes(),
+            expected.as_bytes(),
+        ))
 }
 
 fn normalize_webhook_payload(
@@ -119,23 +166,13 @@ pub async fn handle_pull_request_webhook(
     headers: &HeaderMap,
     body: &Bytes,
 ) -> Result<(), ApiError> {
-    use hmac::{Hmac, Mac};
-    use sha2_legacy::Sha256;
     let secret = std::env::var("DEVRAIL_GIT_WEBHOOK_SECRET")
         .map_err(|_| ApiError::forbidden("Webhook 未配置"))?;
     let signature = headers
         .get("x-devrail-signature")
         .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
-    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).map_err(ApiError::internal)?;
-    mac.update(body);
-    let expected = format!("sha256={}", hex::encode(mac.finalize().into_bytes()));
-    if signature.len() != expected.len()
-        || !bool::from(subtle::ConstantTimeEq::ct_eq(
-            signature.as_bytes(),
-            expected.as_bytes(),
-        ))
-    {
+    if !verify_webhook_signature(&secret, signature, body) {
         return Err(ApiError::forbidden("Webhook 签名无效"));
     }
     let mut payload = normalize_webhook_payload(headers, body)?;
@@ -145,6 +182,7 @@ pub async fn handle_pull_request_webhook(
         .and_then(|v| v.to_str().ok())
         .map(str::to_owned)
         .or(payload.event_id);
+    validate_event_id(payload.event_id.as_deref())?;
     let mut tx = pool.begin().await.map_err(db_error)?;
     if let Some(event_id) = payload.event_id.as_deref() {
         if !repositories::devrail_pull_requests::claim_event(&mut tx, &payload.provider, event_id)
@@ -211,7 +249,10 @@ pub async fn handle_pull_request_webhook(
 
 #[cfg(test)]
 mod webhook_tests {
-    use super::{normalize_webhook_payload, validate_webhook_payload};
+    use super::{
+        normalize_webhook_payload, validate_event_id, validate_temporary_branch,
+        validate_webhook_payload, verify_webhook_signature,
+    };
     use crate::models::DevRailPullRequestWebhookRequest;
     use axum::body::Bytes;
 
@@ -271,6 +312,41 @@ mod webhook_tests {
         assert_eq!(payload.provider, "gitlab");
         assert_eq!(payload.status, "open");
         assert_eq!(payload.number, 8);
+    }
+
+    #[test]
+    fn validates_temporary_branch_names_and_sha() {
+        assert!(validate_temporary_branch("codex/run-42", &"a".repeat(40)).is_ok());
+        assert!(validate_temporary_branch("main", &"a".repeat(40)).is_err());
+        assert!(validate_temporary_branch("bad..name", &"a".repeat(40)).is_err());
+        assert!(validate_temporary_branch("codex/run-42", "not-a-sha").is_err());
+    }
+
+    #[test]
+    fn verifies_webhook_signature_and_rejects_tampering() {
+        let body = br#"{"action":"opened"}"#;
+        let secret = "test-secret";
+        use hmac::{Hmac, Mac};
+        use sha2_legacy::Sha256;
+        let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).expect("hmac");
+        mac.update(body);
+        let signature = format!("sha256={}", hex::encode(mac.finalize().into_bytes()));
+        assert!(verify_webhook_signature(secret, &signature, body));
+        assert!(!verify_webhook_signature(
+            secret,
+            &signature,
+            br#"{"action":"closed"}"#
+        ));
+        assert!(!verify_webhook_signature(secret, "sha256=bad", body));
+    }
+
+    #[test]
+    fn validates_webhook_event_id_boundaries() {
+        assert!(validate_event_id(Some("github-delivery-1")).is_ok());
+        assert!(validate_event_id(None).is_ok());
+        assert!(validate_event_id(Some(" ")).is_err());
+        assert!(validate_event_id(Some(&"x".repeat(257))).is_err());
+        assert!(validate_event_id(Some("id\nwith-control")).is_err());
     }
 }
 
@@ -874,19 +950,8 @@ pub async fn create_branch(
     req: &CreateDevRailBranchRequest,
 ) -> Result<DevRailBranchResponse, ApiError> {
     let name = text(&req.name, "临时分支名称", 256)?;
-    if name == "main"
-        || name == "master"
-        || name == "develop"
-        || name.contains("..")
-        || name.starts_with('/')
-        || name.ends_with('/')
-    {
-        return Err(ApiError::validation("临时分支名称不安全"));
-    }
     let source_sha = text(&req.source_sha, "来源提交 SHA", 128)?;
-    if !source_sha.bytes().all(|b| b.is_ascii_hexdigit()) || !(7..=64).contains(&source_sha.len()) {
-        return Err(ApiError::validation("来源提交 SHA 无效"));
-    }
+    validate_temporary_branch(&name, &source_sha)?;
     let provider = get_git_provider(pool, actor, project_id, id).await?;
     if !provider.credential_configured || provider.provider == "unknown" {
         return Err(ApiError::conflict("Git 平台凭据未配置或平台不受支持"));
@@ -980,6 +1045,76 @@ pub async fn create_branch(
         source_sha,
         url,
     })
+}
+
+pub async fn delete_branch(
+    pool: &PgPool,
+    actor: &ActorContext,
+    project_id: i64,
+    id: i64,
+    req: &DeleteDevRailBranchRequest,
+) -> Result<(), ApiError> {
+    let name = text(&req.name, "临时分支名称", 256)?;
+    if name == "main" || name == "master" || name == "develop" || name.contains("..") {
+        return Err(ApiError::validation("禁止删除受保护分支"));
+    }
+    let provider = get_git_provider(pool, actor, project_id, id).await?;
+    let row = devrail::find_repository(pool, actor, project_id, id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("仓库不存在或超出数据范围"))?;
+    let env_name = row
+        .credential_ref
+        .as_deref()
+        .unwrap_or(if provider.provider == "github" {
+            "DEVRAIL_GITHUB_TOKEN"
+        } else {
+            "DEVRAIL_GITLAB_TOKEN"
+        });
+    let token =
+        std::env::var(env_name).map_err(|_| ApiError::conflict("Git 平台凭据未在服务端配置"))?;
+    let client = Client::builder()
+        .user_agent("DevRail/1.0")
+        .build()
+        .map_err(ApiError::internal)?;
+    let response = if provider.provider == "github" {
+        let endpoint = format!(
+            "https://api.github.com/repos/{}/{}/git/refs/heads/{name}",
+            provider.owner, provider.repository
+        );
+        client
+            .delete(endpoint)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .map_err(|_| ApiError::conflict("删除 GitHub 临时分支失败"))?
+    } else {
+        let project_path = format!("{}/{}", provider.owner, provider.repository);
+        let project = urlencoding::encode(&project_path);
+        let endpoint =
+            format!("https://gitlab.com/api/v4/projects/{project}/repository/branches/{name}");
+        client
+            .delete(endpoint)
+            .header("PRIVATE-TOKEN", &token)
+            .send()
+            .await
+            .map_err(|_| ApiError::conflict("删除 GitLab 临时分支失败"))?
+    };
+    if !response.status().is_success() {
+        return Err(ApiError::conflict("Git 平台拒绝删除临时分支"));
+    }
+    let mut tx = pool.begin().await.map_err(db_error)?;
+    repositories::audit_logs::record(
+        &mut tx,
+        Some(actor.user_id),
+        "devrail.repository.branch.delete",
+        "devrail_repository",
+        Some(id),
+        json!({"provider": provider.provider, "branch": name}),
+    )
+    .await
+    .map_err(db_error)?;
+    tx.commit().await.map_err(db_error)
 }
 
 pub async fn sync_pull_request(

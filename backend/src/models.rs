@@ -259,6 +259,8 @@ pub struct DevRailRunRow {
     pub task_id: i64,
     pub snapshot_id: i64,
     pub idempotency_key: String,
+    pub branch_name: Option<String>,
+    pub branch_expires_at: Option<DateTime<Utc>>,
     pub status: String,
     pub thread_id: Option<String>,
     pub turn_id: Option<String>,
@@ -918,6 +920,11 @@ pub struct DevRailBranchResponse {
     pub source_sha: String,
     pub url: String,
 }
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteDevRailBranchRequest {
+    pub name: String,
+}
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DevRailPullRequestResponse {
@@ -1091,6 +1098,8 @@ pub struct DevRailRunResponse {
     pub task_id: i64,
     pub snapshot_id: i64,
     pub idempotency_key: String,
+    pub branch_name: Option<String>,
+    pub branch_expires_at: Option<DateTime<Utc>>,
     pub status: String,
     pub thread_id: Option<String>,
     pub turn_id: Option<String>,
@@ -1524,6 +1533,7 @@ pub struct DevRailExternalReviewCommentResponse {
     pub created_at: DateTime<Utc>,
     pub resolved: bool,
     pub deleted_at: Option<DateTime<Utc>>,
+    pub changeset_matched: bool,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -1692,6 +1702,7 @@ pub struct CreateDevRailRunRequest {
     pub idempotency_key: String,
     pub model_id: Option<String>,
     pub input: Option<String>,
+    pub branch_name: Option<String>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
