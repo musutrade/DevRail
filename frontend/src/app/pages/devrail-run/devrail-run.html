@@ -196,6 +196,37 @@
           <h3>审查 #{{ selectedId }} 的逐文件意见</h3>
           <div class="review-form">
             <label
+              >项目 ID<input
+                type="number"
+                min="1"
+                [value]="externalProjectId()"
+                (input)="externalProjectId.set($any($event.target).value)"
+            /></label>
+            <label
+              >仓库 ID<input
+                type="number"
+                min="1"
+                [value]="externalRepositoryId()"
+                (input)="externalRepositoryId.set($any($event.target).value)"
+            /></label>
+            <label
+              >PR/MR 编号<input
+                type="number"
+                min="1"
+                [value]="externalNumber()"
+                (input)="externalNumber.set($any($event.target).value)"
+            /></label>
+            <button
+              class="btn-secondary"
+              type="button"
+              (click)="syncExternalReviewComments()"
+              [disabled]="busy()"
+            >
+              同步外部审查意见
+            </button>
+          </div>
+          <div class="review-form">
+            <label
               >文件路径<input
                 type="text"
                 [value]="commentFilePath()"
@@ -224,6 +255,20 @@
               </li>
             } @empty {
               <li class="table-empty">暂无逐文件意见</li>
+            }
+          </ul>
+          <h3>外部审查意见</h3>
+          <ul class="event-list">
+            @for (comment of externalReviewComments(); track comment.id) {
+              <li>
+                <div class="event-meta">
+                  <strong>{{ comment.provider }} · {{ comment.filePath }}</strong
+                  ><span>{{ comment.authorName }}</span>
+                </div>
+                <p>{{ comment.body }}</p>
+              </li>
+            } @empty {
+              <li class="table-empty">暂无外部审查意见</li>
             }
           </ul>
         </div>
