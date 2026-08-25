@@ -97,10 +97,18 @@ pub(crate) async fn clear_expired_branch(
         .bind(run_id).fetch_optional(c).await
 }
 
-pub(crate) async fn expired_branches(
-    pool: &PgPool,
-) -> Result<Vec<(i64, i64, String)>, sqlx::Error> {
-    sqlx::query_as("SELECT r.id,r.task_id,r.branch_name FROM devrail_runs r WHERE r.branch_expires_at<=now() AND r.branch_name IS NOT NULL ORDER BY r.id LIMIT 50").fetch_all(pool).await
+#[derive(Debug, sqlx::FromRow)]
+pub(crate) struct ExpiredBranch {
+    pub run_id: i64,
+    pub branch_name: String,
+    pub remote_url: Option<String>,
+    pub credential_ref: Option<String>,
+}
+
+pub(crate) async fn expired_branches(pool: &PgPool) -> Result<Vec<ExpiredBranch>, sqlx::Error> {
+    sqlx::query_as("SELECT r.id AS run_id,r.branch_name,repo.remote_url,repo.credential_ref FROM devrail_runs r JOIN devrail_tasks t ON t.id=r.task_id LEFT JOIN devrail_repositories repo ON repo.id=t.repository_id WHERE r.branch_expires_at<=now() AND r.branch_name IS NOT NULL ORDER BY r.id LIMIT 50")
+        .fetch_all(pool)
+        .await
 }
 
 pub(crate) async fn update_run_started(
