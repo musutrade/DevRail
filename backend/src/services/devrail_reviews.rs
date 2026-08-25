@@ -221,8 +221,20 @@ pub async fn sync_external_comments(
     let mut tx = pool.begin().await.map_err(db_error)?;
     let mut external_ids = Vec::new();
     for value in values {
-        let (id, body, author, path, line_start, line_end, resolved, deleted) =
-            if provider_name == "github" {
+        let notes: Vec<&Value> = if provider_name == "github" {
+            vec![&value]
+        } else {
+            value
+                .get("notes")
+                .and_then(Value::as_array)
+                .map(|items| items.iter().collect())
+                .filter(|items: &Vec<&Value>| !items.is_empty())
+                .unwrap_or_else(|| vec![&value])
+        };
+        for note in notes {
+            let (id, body, author, path, line_start, line_end, resolved, deleted) = if provider_name
+                == "github"
+            {
                 (
                     value
                         .get("id")
@@ -253,7 +265,6 @@ pub async fn sync_external_comments(
                     value.get("body").is_none() || value.get("body").is_some_and(Value::is_null),
                 )
             } else {
-                let note = value.pointer("/notes/0").unwrap_or(&value);
                 let position = value
                     .get("position")
                     .or_else(|| note.get("position"))
@@ -293,25 +304,26 @@ pub async fn sync_external_comments(
                     note.get("body").is_none() || note.get("body").is_some_and(Value::is_null),
                 )
             };
-        external_ids.push(id.clone());
-        repositories::devrail_external_review_comments::upsert(
-            &mut tx,
-            &repositories::devrail_external_review_comments::ExternalReviewCommentInput {
-                review_id,
-                provider: provider_name,
-                external_id: &id,
-                file_path: &path,
-                line_start,
-                line_end,
-                body: &body,
-                author_name: &author,
-                external_created_at: None,
-                resolved,
-                deleted,
-            },
-        )
-        .await
-        .map_err(db_error)?;
+            external_ids.push(id.clone());
+            repositories::devrail_external_review_comments::upsert(
+                &mut tx,
+                &repositories::devrail_external_review_comments::ExternalReviewCommentInput {
+                    review_id,
+                    provider: provider_name,
+                    external_id: &id,
+                    file_path: &path,
+                    line_start,
+                    line_end,
+                    body: &body,
+                    author_name: &author,
+                    external_created_at: None,
+                    resolved,
+                    deleted,
+                },
+            )
+            .await
+            .map_err(db_error)?;
+        }
     }
     repositories::devrail_external_review_comments::mark_missing_deleted(
         &mut tx,
