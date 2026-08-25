@@ -21,13 +21,14 @@ pub struct ExternalReviewCommentInput<'a> {
     pub author_name: &'a str,
     pub external_created_at: Option<chrono::DateTime<chrono::Utc>>,
     pub resolved: bool,
+    pub deleted: bool,
 }
 pub async fn upsert(
     c: &mut PgConnection,
     input: &ExternalReviewCommentInput<'_>,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query(AssertSqlSafe("INSERT INTO devrail_external_review_comments (organization_id,review_id,provider,external_id,file_path,line_start,line_end,body,author_name,external_created_at,resolved,deleted_at) SELECT r.organization_id,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NULL FROM devrail_reviews r WHERE r.id=$1 ON CONFLICT (provider,external_id) DO UPDATE SET body=EXCLUDED.body,line_start=EXCLUDED.line_start,line_end=EXCLUDED.line_end,resolved=EXCLUDED.resolved,deleted_at=NULL"))
-        .bind(input.review_id).bind(input.provider).bind(input.external_id).bind(input.file_path).bind(input.line_start).bind(input.line_end).bind(input.body).bind(input.author_name).bind(input.external_created_at).bind(input.resolved).execute(&mut *c).await.map(|_| ())
+    sqlx::query(AssertSqlSafe("INSERT INTO devrail_external_review_comments (organization_id,review_id,provider,external_id,file_path,line_start,line_end,body,author_name,external_created_at,resolved,deleted_at) SELECT r.organization_id,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,CASE WHEN $11 THEN now() ELSE NULL END FROM devrail_reviews r WHERE r.id=$1 ON CONFLICT (provider,external_id) DO UPDATE SET body=EXCLUDED.body,line_start=EXCLUDED.line_start,line_end=EXCLUDED.line_end,resolved=EXCLUDED.resolved,deleted_at=EXCLUDED.deleted_at"))
+        .bind(input.review_id).bind(input.provider).bind(input.external_id).bind(input.file_path).bind(input.line_start).bind(input.line_end).bind(input.body).bind(input.author_name).bind(input.external_created_at).bind(input.resolved).bind(input.deleted).execute(&mut *c).await.map(|_| ())
 }
 
 pub async fn mark_missing_deleted(

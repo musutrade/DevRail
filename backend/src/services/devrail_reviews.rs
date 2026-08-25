@@ -136,73 +136,75 @@ pub async fn sync_external_comments(
     let mut tx = pool.begin().await.map_err(db_error)?;
     let mut external_ids = Vec::new();
     for value in values {
-        let (id, body, author, path, line_start, line_end, resolved) = if provider_name == "github"
-        {
-            (
-                value
-                    .get("id")
-                    .and_then(Value::as_i64)
-                    .unwrap_or_default()
-                    .to_string(),
-                value
-                    .get("body")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_string(),
-                value
-                    .pointer("/user/login")
-                    .and_then(Value::as_str)
-                    .unwrap_or("unknown")
-                    .to_string(),
-                value
-                    .get("path")
+        let (id, body, author, path, line_start, line_end, resolved, deleted) =
+            if provider_name == "github" {
+                (
+                    value
+                        .get("id")
+                        .and_then(Value::as_i64)
+                        .unwrap_or_default()
+                        .to_string(),
+                    value
+                        .get("body")
+                        .and_then(Value::as_str)
+                        .unwrap_or("[评论已删除]")
+                        .to_string(),
+                    value
+                        .pointer("/user/login")
+                        .and_then(Value::as_str)
+                        .unwrap_or("unknown")
+                        .to_string(),
+                    value
+                        .get("path")
+                        .and_then(Value::as_str)
+                        .unwrap_or("(general)")
+                        .to_string(),
+                    value.get("line").and_then(Value::as_i64).map(|v| v as i32),
+                    value.get("line").and_then(Value::as_i64).map(|v| v as i32),
+                    false,
+                    value.get("body").is_none() || value.get("body").is_some_and(Value::is_null),
+                )
+            } else {
+                let note = value.pointer("/notes/0").unwrap_or(&value);
+                let position = value
+                    .get("position")
+                    .or_else(|| note.get("position"))
+                    .unwrap_or(&Value::Null);
+                let path = position
+                    .get("new_path")
+                    .or_else(|| position.get("old_path"))
                     .and_then(Value::as_str)
                     .unwrap_or("(general)")
-                    .to_string(),
-                value.get("line").and_then(Value::as_i64).map(|v| v as i32),
-                value.get("line").and_then(Value::as_i64).map(|v| v as i32),
-                false,
-            )
-        } else {
-            let note = value.pointer("/notes/0").unwrap_or(&value);
-            let position = value
-                .get("position")
-                .or_else(|| note.get("position"))
-                .unwrap_or(&Value::Null);
-            let path = position
-                .get("new_path")
-                .or_else(|| position.get("old_path"))
-                .and_then(Value::as_str)
-                .unwrap_or("(general)")
-                .to_string();
-            let line_start = position
-                .get("new_line")
-                .or_else(|| position.get("old_line"))
-                .and_then(Value::as_i64)
-                .map(|v| v as i32);
-            let line_end = line_start;
-            (
-                note.get("id")
+                    .to_string();
+                let line_start = position
+                    .get("new_line")
+                    .or_else(|| position.get("old_line"))
                     .and_then(Value::as_i64)
-                    .unwrap_or_default()
-                    .to_string(),
-                note.get("body")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_string(),
-                note.pointer("/author/username")
-                    .and_then(Value::as_str)
-                    .unwrap_or("unknown")
-                    .to_string(),
-                path,
-                line_start,
-                line_end,
-                value
-                    .get("resolved")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(false),
-            )
-        };
+                    .map(|v| v as i32);
+                let line_end = line_start;
+                (
+                    note.get("id")
+                        .and_then(Value::as_i64)
+                        .unwrap_or_default()
+                        .to_string(),
+                    note.get("body")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                    note.pointer("/author/username")
+                        .and_then(Value::as_str)
+                        .unwrap_or("unknown")
+                        .to_string(),
+                    path,
+                    line_start,
+                    line_end,
+                    value
+                        .get("resolved")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false),
+                    note.get("body").is_none() || note.get("body").is_some_and(Value::is_null),
+                )
+            };
         external_ids.push(id.clone());
         repositories::devrail_external_review_comments::upsert(
             &mut tx,
@@ -217,6 +219,7 @@ pub async fn sync_external_comments(
                 author_name: &author,
                 external_created_at: None,
                 resolved,
+                deleted,
             },
         )
         .await
