@@ -982,6 +982,76 @@ pub async fn create_branch(
     })
 }
 
+pub async fn delete_branch(
+    pool: &PgPool,
+    actor: &ActorContext,
+    project_id: i64,
+    id: i64,
+    req: &DeleteDevRailBranchRequest,
+) -> Result<(), ApiError> {
+    let name = text(&req.name, "临时分支名称", 256)?;
+    if name == "main" || name == "master" || name == "develop" || name.contains("..") {
+        return Err(ApiError::validation("禁止删除受保护分支"));
+    }
+    let provider = get_git_provider(pool, actor, project_id, id).await?;
+    let row = devrail::find_repository(pool, actor, project_id, id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("仓库不存在或超出数据范围"))?;
+    let env_name = row
+        .credential_ref
+        .as_deref()
+        .unwrap_or(if provider.provider == "github" {
+            "DEVRAIL_GITHUB_TOKEN"
+        } else {
+            "DEVRAIL_GITLAB_TOKEN"
+        });
+    let token =
+        std::env::var(env_name).map_err(|_| ApiError::conflict("Git 平台凭据未在服务端配置"))?;
+    let client = Client::builder()
+        .user_agent("DevRail/1.0")
+        .build()
+        .map_err(ApiError::internal)?;
+    let response = if provider.provider == "github" {
+        let endpoint = format!(
+            "https://api.github.com/repos/{}/{}/git/refs/heads/{name}",
+            provider.owner, provider.repository
+        );
+        client
+            .delete(endpoint)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .map_err(|_| ApiError::conflict("删除 GitHub 临时分支失败"))?
+    } else {
+        let project_path = format!("{}/{}", provider.owner, provider.repository);
+        let project = urlencoding::encode(&project_path);
+        let endpoint =
+            format!("https://gitlab.com/api/v4/projects/{project}/repository/branches/{name}");
+        client
+            .delete(endpoint)
+            .header("PRIVATE-TOKEN", &token)
+            .send()
+            .await
+            .map_err(|_| ApiError::conflict("删除 GitLab 临时分支失败"))?
+    };
+    if !response.status().is_success() {
+        return Err(ApiError::conflict("Git 平台拒绝删除临时分支"));
+    }
+    let mut tx = pool.begin().await.map_err(db_error)?;
+    repositories::audit_logs::record(
+        &mut tx,
+        Some(actor.user_id),
+        "devrail.repository.branch.delete",
+        "devrail_repository",
+        Some(id),
+        json!({"provider": provider.provider, "branch": name}),
+    )
+    .await
+    .map_err(db_error)?;
+    tx.commit().await.map_err(db_error)
+}
+
 pub async fn sync_pull_request(
     pool: &PgPool,
     actor: &ActorContext,

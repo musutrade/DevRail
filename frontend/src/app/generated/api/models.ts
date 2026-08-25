@@ -23,6 +23,7 @@ export type { CreateUserRequest } from './models/create-user-request';
 export type { DashboardStats } from './models/dashboard-stats';
 export type { DataScope } from './models/data-scope';
 export type { DecideDevRailReviewRequest } from './models/decide-dev-rail-review-request';
+export type { DeleteDevRailBranchRequest } from './models/delete-dev-rail-branch-request';
 export type { DepartmentResponse } from './models/department-response';
 export type { DepartmentStatus } from './models/department-status';
 export type { DevRailApprovalDecisionRequest } from './models/dev-rail-approval-decision-request';

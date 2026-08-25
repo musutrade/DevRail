@@ -918,6 +918,11 @@ pub struct DevRailBranchResponse {
     pub source_sha: String,
     pub url: String,
 }
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteDevRailBranchRequest {
+    pub name: String,
+}
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DevRailPullRequestResponse {
