@@ -17,6 +17,18 @@ use url::Url;
 const DEFAULT_PAGE: i64 = 1;
 const DEFAULT_PAGE_SIZE: i64 = 20;
 
+fn validate_webhook_payload(payload: &DevRailPullRequestWebhookRequest) -> Result<(), ApiError> {
+    if payload.number < 1
+        || payload.repository_id < 1
+        || !["github", "gitlab"].contains(&payload.provider.as_str())
+        || payload.status.len() > 32
+        || payload.url.len() > 2048
+    {
+        return Err(ApiError::validation("Webhook 字段无效"));
+    }
+    Ok(())
+}
+
 pub async fn handle_pull_request_webhook(
     pool: &PgPool,
     headers: &HeaderMap,
@@ -43,14 +55,7 @@ pub async fn handle_pull_request_webhook(
     }
     let payload: DevRailPullRequestWebhookRequest =
         serde_json::from_slice(body).map_err(|_| ApiError::validation("Webhook payload 无效"))?;
-    if payload.number < 1
-        || payload.repository_id < 1
-        || !["github", "gitlab"].contains(&payload.provider.as_str())
-        || payload.status.len() > 32
-        || payload.url.len() > 2048
-    {
-        return Err(ApiError::validation("Webhook 字段无效"));
-    }
+    validate_webhook_payload(&payload)?;
     let mut tx = pool.begin().await.map_err(db_error)?;
     let updated = repositories::devrail_pull_requests::update_webhook(
         &mut tx,
@@ -67,6 +72,36 @@ pub async fn handle_pull_request_webhook(
         Ok(())
     } else {
         Err(ApiError::not_found("合并请求记录不存在"))
+    }
+}
+
+#[cfg(test)]
+mod webhook_tests {
+    use super::validate_webhook_payload;
+    use crate::models::DevRailPullRequestWebhookRequest;
+
+    #[test]
+    fn rejects_unknown_provider() {
+        let payload = DevRailPullRequestWebhookRequest {
+            provider: "bitbucket".into(),
+            repository_id: 1,
+            number: 1,
+            url: "https://example.test/pr/1".into(),
+            status: "open".into(),
+        };
+        assert!(validate_webhook_payload(&payload).is_err());
+    }
+
+    #[test]
+    fn accepts_supported_provider_payload() {
+        let payload = DevRailPullRequestWebhookRequest {
+            provider: "github".into(),
+            repository_id: 7,
+            number: 12,
+            url: "https://github.com/o/r/pull/12".into(),
+            status: "closed".into(),
+        };
+        assert!(validate_webhook_payload(&payload).is_ok());
     }
 }
 
