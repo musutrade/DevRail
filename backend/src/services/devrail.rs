@@ -584,6 +584,21 @@ pub async fn create_pull_request(
     .await
     .map_err(db_error)?;
     tx.commit().await.map_err(db_error)?;
+    if let Some(number) = number {
+        let mut tx = pool.begin().await.map_err(db_error)?;
+        repositories::devrail_pull_requests::upsert(
+            &mut tx,
+            actor.organization_id,
+            id,
+            &provider.provider,
+            number,
+            &url,
+            &status,
+        )
+        .await
+        .map_err(db_error)?;
+        tx.commit().await.map_err(db_error)?;
+    }
     Ok(DevRailPullRequestResponse {
         repository_id: id,
         provider: provider.provider,
@@ -688,6 +703,19 @@ pub async fn sync_pull_request(
     if url.is_empty() {
         return Err(ApiError::conflict("Git 平台未返回合并请求地址"));
     }
+    let mut tx = pool.begin().await.map_err(db_error)?;
+    repositories::devrail_pull_requests::upsert(
+        &mut tx,
+        actor.organization_id,
+        id,
+        &provider.provider,
+        number,
+        &url,
+        &status,
+    )
+    .await
+    .map_err(db_error)?;
+    tx.commit().await.map_err(db_error)?;
     Ok(DevRailPullRequestResponse {
         repository_id: id,
         provider: provider.provider,
