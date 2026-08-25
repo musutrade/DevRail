@@ -43,8 +43,26 @@
             @if (pullRequest(); as created) {
               <div class="sync-summary">
                 <a [href]="created.url" target="_blank" rel="noreferrer"
-                  >已创建合并请求 #{{ created.number || '' }}</a
+                  >合并请求 #{{ created.number || '' }}（{{ created.status }}）</a
                 >
+              </div>
+            }
+            @if (provider.provider !== 'unknown') {
+              <div class="sync-summary">
+                <label
+                  >同步编号<input
+                    #prNumber
+                    type="number"
+                    min="1"
+                    (input)="pullRequestNumber.set(prNumber.value)" /></label
+                ><button
+                  class="btn-secondary"
+                  type="button"
+                  (click)="syncPullRequest()"
+                  [disabled]="busy()"
+                >
+                  同步合并请求状态
+                </button>
               </div>
             }
           </div>

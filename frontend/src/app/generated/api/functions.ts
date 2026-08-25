@@ -65,6 +65,8 @@ export type { GetDevRailGitProvider$Params as GetDevRailGitProvider$Params } fro
 export { getDevRailGitProvider as getDevRailGitProvider } from './fn/devrail/get-dev-rail-git-provider';
 export type { CreateDevRailPullRequest$Params as CreateDevRailPullRequest$Params } from './fn/devrail/create-dev-rail-pull-request';
 export { createDevRailPullRequest as createDevRailPullRequest } from './fn/devrail/create-dev-rail-pull-request';
+export type { SyncDevRailPullRequest$Params as SyncDevRailPullRequest$Params } from './fn/devrail/sync-dev-rail-pull-request';
+export { syncDevRailPullRequest as syncDevRailPullRequest } from './fn/devrail/sync-dev-rail-pull-request';
 export type { GetDevRailRepositorySync$Params as GetDevRailRepositorySync$Params } from './fn/devrail/get-dev-rail-repository-sync';
 export { getDevRailRepositorySync as getDevRailRepositorySync } from './fn/devrail/get-dev-rail-repository-sync';
 export type { SyncDevRailRepository$Params as SyncDevRailRepository$Params } from './fn/devrail/sync-dev-rail-repository';

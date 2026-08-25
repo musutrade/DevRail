@@ -101,6 +101,7 @@ export type { RoleResponse } from './models/role-response';
 export type { SortDirection } from './models/sort-direction';
 export type { StepUpRequest } from './models/step-up-request';
 export type { StepUpResponse } from './models/step-up-response';
+export type { SyncDevRailPullRequestRequest } from './models/sync-dev-rail-pull-request-request';
 export type { UpdateDepartmentRequest } from './models/update-department-request';
 export type { UpdateDevRailEnvironmentRequest } from './models/update-dev-rail-environment-request';
 export type { UpdateDevRailNotificationPreferencesRequest } from './models/update-dev-rail-notification-preferences-request';

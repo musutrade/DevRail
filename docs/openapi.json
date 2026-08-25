@@ -3038,6 +3038,61 @@
         ]
       }
     },
+    "/projects/{project_id}/repositories/{id}/pull-requests/sync": {
+      "post": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "syncDevRailPullRequest",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncDevRailPullRequestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailPullRequestResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/projects/{project_id}/repositories/{id}/sync": {
       "get": {
         "tags": [
@@ -8961,6 +9016,18 @@
           },
           "token": {
             "type": "string"
+          }
+        }
+      },
+      "SyncDevRailPullRequestRequest": {
+        "type": "object",
+        "required": [
+          "number"
+        ],
+        "properties": {
+          "number": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },

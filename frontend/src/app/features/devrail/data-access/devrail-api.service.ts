@@ -62,6 +62,7 @@ import { updateDevRailReviewComment } from '../../../generated/api/fn/devrail/up
 import { exportDevRailRunPatch } from '../../../generated/api/fn/devrail/export-dev-rail-run-patch';
 import { getDevRailGitProvider } from '../../../generated/api/fn/devrail/get-dev-rail-git-provider';
 import { createDevRailPullRequest } from '../../../generated/api/fn/devrail/create-dev-rail-pull-request';
+import { syncDevRailPullRequest } from '../../../generated/api/fn/devrail/sync-dev-rail-pull-request';
 import type {
   CreateDevRailEnvironmentRequest,
   CreateDevRailProjectRequest,
@@ -112,6 +113,7 @@ import type {
   DevRailGitProviderResponse,
   CreateDevRailPullRequestRequest,
   DevRailPullRequestResponse,
+  SyncDevRailPullRequestRequest,
 } from '../../../generated/api/models';
 
 @Injectable({ providedIn: 'root' })
@@ -191,6 +193,13 @@ export class DevRailApiService {
     body: CreateDevRailPullRequestRequest,
   ): Promise<DevRailPullRequestResponse> {
     return this.api.invoke(createDevRailPullRequest, { project_id: projectId, id, body });
+  }
+  syncPullRequest(
+    projectId: number,
+    id: number,
+    body: SyncDevRailPullRequestRequest,
+  ): Promise<DevRailPullRequestResponse> {
+    return this.api.invoke(syncDevRailPullRequest, { project_id: projectId, id, body });
   }
   getApproval(id: number): Promise<DevRailApprovalResponse> {
     return this.api.invoke(getDevRailApproval, { id });
