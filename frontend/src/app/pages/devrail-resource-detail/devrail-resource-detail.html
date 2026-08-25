@@ -18,6 +18,35 @@
                 >打开创建合并请求页面</a
               >
             }
+            @if (provider.credentialConfigured && provider.provider !== 'unknown') {
+              <form
+                class="sync-summary"
+                #pullRequestForm
+                (submit)="$event.preventDefault(); createPullRequest(pullRequestForm)"
+              >
+                <strong
+                  >创建{{
+                    provider.provider === 'github' ? 'Pull Request' : 'Merge Request'
+                  }}</strong
+                >
+                <label>标题<input name="prTitle" required maxlength="256" /></label>
+                <label>描述<textarea name="prBody" rows="3"></textarea></label>
+                <label>源分支<input name="prSourceBranch" required /></label>
+                <label
+                  >目标分支<input name="prTargetBranch" [value]="provider.defaultBranch" required
+                /></label>
+                <button class="btn-secondary" type="submit" [disabled]="busy()">
+                  创建合并请求
+                </button>
+              </form>
+            }
+            @if (pullRequest(); as created) {
+              <div class="sync-summary">
+                <a [href]="created.url" target="_blank" rel="noreferrer"
+                  >已创建合并请求 #{{ created.number || '' }}</a
+                >
+              </div>
+            }
           </div>
         }
         <label>远端 URL<input name="remoteUrl" [value]="$any(item).remoteUrl" required /></label

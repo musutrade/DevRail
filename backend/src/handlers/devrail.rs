@@ -224,6 +224,16 @@ pub async fn get_git_provider(
         .await
         .map(Json)
 }
+pub async fn create_pull_request(
+    State(s): State<AppState>,
+    auth: RequirePermission<RepositoryWrite>,
+    Path((project_id, id)): Path<(i64, i64)>,
+    Json(req): Json<CreateDevRailPullRequestRequest>,
+) -> Result<(StatusCode, Json<DevRailPullRequestResponse>), ApiError> {
+    services::devrail::create_pull_request(&s.pool, &auth, project_id, id, &req)
+        .await
+        .map(|v| (StatusCode::CREATED, Json(v)))
+}
 pub async fn create_repository(
     State(s): State<AppState>,
     auth: RequirePermission<RepositoryWrite>,

@@ -4,6 +4,7 @@ use crate::access::ActorContext;
 use crate::error::{db_error, ApiError};
 use crate::models::*;
 use crate::repositories::{self, devrail, devrail_members};
+use reqwest::Client;
 use serde_json::{json, Value};
 use sqlx::PgPool;
 use std::path::Path;
@@ -470,6 +471,125 @@ pub async fn get_git_provider(
             "{base}/compare/{}...HEAD?create=1",
             repo.default_branch
         )),
+    })
+}
+
+pub async fn create_pull_request(
+    pool: &PgPool,
+    actor: &ActorContext,
+    project_id: i64,
+    id: i64,
+    req: &CreateDevRailPullRequestRequest,
+) -> Result<DevRailPullRequestResponse, ApiError> {
+    let title = text(&req.title, "标题", 256)?;
+    let source = text(&req.source_branch, "源分支", 256)?;
+    let provider = get_git_provider(pool, actor, project_id, id).await?;
+    let target = text(
+        req.target_branch
+            .as_deref()
+            .unwrap_or(&provider.default_branch),
+        "目标分支",
+        256,
+    )?;
+    if source == target {
+        return Err(ApiError::validation("源分支和目标分支不能相同"));
+    }
+    if provider.provider == "unknown" {
+        return Err(ApiError::validation("暂不支持该 Git 平台"));
+    }
+    if !provider.credential_configured {
+        return Err(ApiError::conflict("未配置 Git 平台凭据"));
+    }
+    let row = devrail::find_repository(pool, actor, project_id, id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("仓库不存在或超出数据范围"))?;
+    let env_name = row
+        .credential_ref
+        .as_deref()
+        .unwrap_or(match provider.provider.as_str() {
+            "github" => "DEVRAIL_GITHUB_TOKEN",
+            _ => "DEVRAIL_GITLAB_TOKEN",
+        });
+    let token =
+        std::env::var(env_name).map_err(|_| ApiError::conflict("Git 平台凭据未在服务端配置"))?;
+    if token.trim().is_empty() {
+        return Err(ApiError::conflict("Git 平台凭据未在服务端配置"));
+    }
+    let client = Client::builder()
+        .user_agent("DevRail/1.0")
+        .build()
+        .map_err(ApiError::internal)?;
+    let body = req.body.as_deref().unwrap_or("");
+    let (url, number, status) = if provider.provider == "github" {
+        let endpoint = format!(
+            "https://api.github.com/repos/{}/{}/pulls",
+            provider.owner, provider.repository
+        );
+        let response = client
+            .post(endpoint)
+            .bearer_auth(&token)
+            .json(&json!({"title": title, "body": body, "head": source, "base": target}))
+            .send()
+            .await
+            .map_err(|_| ApiError::conflict("创建 GitHub Pull Request 失败"))?;
+        if !response.status().is_success() {
+            return Err(ApiError::conflict("GitHub 拒绝创建 Pull Request"));
+        }
+        let data: Value = response
+            .json()
+            .await
+            .map_err(|_| ApiError::conflict("GitHub 返回无效响应"))?;
+        (
+            data.get("html_url")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            data.get("number").and_then(Value::as_i64),
+            "open".to_string(),
+        )
+    } else {
+        let project_path = format!("{}/{}", provider.owner, provider.repository);
+        let project = urlencoding::encode(&project_path);
+        let endpoint = format!("https://gitlab.com/api/v4/projects/{project}/merge_requests");
+        let response = client.post(endpoint).header("PRIVATE-TOKEN", &token).json(&json!({"title": title, "description": body, "source_branch": source, "target_branch": target})).send().await.map_err(|_| ApiError::conflict("创建 GitLab Merge Request 失败"))?;
+        if !response.status().is_success() {
+            return Err(ApiError::conflict("GitLab 拒绝创建 Merge Request"));
+        }
+        let data: Value = response
+            .json()
+            .await
+            .map_err(|_| ApiError::conflict("GitLab 返回无效响应"))?;
+        (
+            data.get("web_url")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            data.get("iid").and_then(Value::as_i64),
+            "open".to_string(),
+        )
+    };
+    if url.is_empty() {
+        return Err(ApiError::conflict("Git 平台未返回合并请求地址"));
+    }
+    let mut tx = pool.begin().await.map_err(db_error)?;
+    repositories::audit_logs::record(
+        &mut tx,
+        Some(actor.user_id),
+        "devrail.repository.pull_request.create",
+        "devrail_repository",
+        Some(id),
+        json!({"provider": provider.provider, "number": number, "status": status}),
+    )
+    .await
+    .map_err(db_error)?;
+    tx.commit().await.map_err(db_error)?;
+    Ok(DevRailPullRequestResponse {
+        repository_id: id,
+        provider: provider.provider,
+        number,
+        url,
+        status,
     })
 }
 pub async fn create_repository(

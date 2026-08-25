@@ -43,6 +43,8 @@ tracing-opentelemetry = "0.33.0"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 utoipa = { version = "5.5.0", features = ["chrono"] }
 url = "2"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+urlencoding = "2"
 uuid = { version = "1", features = ["serde", "v4"] }
 webauthn-rs = { version = "0.5.5", features = ["danger-allow-state-serialisation"] }
 web-push = "0.11"

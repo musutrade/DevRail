@@ -895,6 +895,23 @@ pub struct DevRailGitProviderResponse {
     pub compare_url: Option<String>,
     pub pull_request_url: Option<String>,
 }
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateDevRailPullRequestRequest {
+    pub title: String,
+    pub body: Option<String>,
+    pub source_branch: String,
+    pub target_branch: Option<String>,
+}
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailPullRequestResponse {
+    pub repository_id: i64,
+    pub provider: String,
+    pub number: Option<i64>,
+    pub url: String,
+    pub status: String,
+}
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 #[serde(rename_all = "camelCase")]
