@@ -37,6 +37,7 @@ export class DevRailResourceDetailPage implements OnInit {
   readonly pullRequest = signal<Awaited<ReturnType<DevRailApiService['createPullRequest']>> | null>(
     null,
   );
+  readonly pullRequestNumber = signal('');
   projectId = 0;
   resourceId = 0;
   private readonly route = inject(ActivatedRoute);
@@ -108,6 +109,24 @@ export class DevRailResourceDetailPage implements OnInit {
       this.snack.open('合并请求已创建', '关闭', { duration: 2500 });
     } catch (e) {
       this.snack.open(apiErrorMessage(e, '创建合并请求失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
+  async syncPullRequest(): Promise<void> {
+    const number = Number(this.pullRequestNumber());
+    if (!Number.isSafeInteger(number) || number < 1) {
+      this.snack.open('请输入有效的合并请求编号', '关闭', { duration: 3000 });
+      return;
+    }
+    this.busy.set(true);
+    try {
+      this.pullRequest.set(
+        await this.api.syncPullRequest(this.projectId, this.resourceId, { number }),
+      );
+      this.snack.open('合并请求状态已同步', '关闭', { duration: 2500 });
+    } catch (e) {
+      this.snack.open(apiErrorMessage(e, '同步合并请求状态失败'), '关闭', { duration: 5000 });
     } finally {
       this.busy.set(false);
     }

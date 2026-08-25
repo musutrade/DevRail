@@ -234,6 +234,16 @@ pub async fn create_pull_request(
         .await
         .map(|v| (StatusCode::CREATED, Json(v)))
 }
+pub async fn sync_pull_request(
+    State(s): State<AppState>,
+    auth: RequirePermission<RepositoryRead>,
+    Path((project_id, id)): Path<(i64, i64)>,
+    Json(req): Json<SyncDevRailPullRequestRequest>,
+) -> Result<Json<DevRailPullRequestResponse>, ApiError> {
+    services::devrail::sync_pull_request(&s.pool, &auth, project_id, id, req.number)
+        .await
+        .map(Json)
+}
 pub async fn create_repository(
     State(s): State<AppState>,
     auth: RequirePermission<RepositoryWrite>,
