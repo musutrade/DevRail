@@ -11,6 +11,7 @@ export type { CreateDepartmentRequest } from './models/create-department-request
 export type { CreateDevRailEnvironmentRequest } from './models/create-dev-rail-environment-request';
 export type { CreateDevRailProjectRequest } from './models/create-dev-rail-project-request';
 export type { CreateDevRailRepositoryRequest } from './models/create-dev-rail-repository-request';
+export type { CreateDevRailReviewCommentRequest } from './models/create-dev-rail-review-comment-request';
 export type { CreateDevRailReviewRequest } from './models/create-dev-rail-review-request';
 export type { CreateDevRailRunRequest } from './models/create-dev-rail-run-request';
 export type { CreateDevRailTaskCommentRequest } from './models/create-dev-rail-task-comment-request';
@@ -48,6 +49,7 @@ export type { DevRailRepositoryCommitResponse } from './models/dev-rail-reposito
 export type { DevRailRepositoryPage } from './models/dev-rail-repository-page';
 export type { DevRailRepositoryResponse } from './models/dev-rail-repository-response';
 export type { DevRailRepositorySyncResponse } from './models/dev-rail-repository-sync-response';
+export type { DevRailReviewCommentResponse } from './models/dev-rail-review-comment-response';
 export type { DevRailReviewPage } from './models/dev-rail-review-page';
 export type { DevRailReviewResponse } from './models/dev-rail-review-response';
 export type { DevRailRunEventPage } from './models/dev-rail-run-event-page';
@@ -101,6 +103,7 @@ export type { UpdateDevRailNotificationPreferencesRequest } from './models/updat
 export type { UpdateDevRailProjectPolicyRequest } from './models/update-dev-rail-project-policy-request';
 export type { UpdateDevRailProjectRequest } from './models/update-dev-rail-project-request';
 export type { UpdateDevRailRepositoryRequest } from './models/update-dev-rail-repository-request';
+export type { UpdateDevRailReviewCommentRequest } from './models/update-dev-rail-review-comment-request';
 export type { UpdateDevRailTaskCommentRequest } from './models/update-dev-rail-task-comment-request';
 export type { UpdateDevRailTaskRequest } from './models/update-dev-rail-task-request';
 export type { UpdateRolePermissionsRequest } from './models/update-role-permissions-request';

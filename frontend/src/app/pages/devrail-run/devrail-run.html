@@ -153,6 +153,14 @@
               ><span>审查人 {{ review.reviewerUserId }}</span>
             </div>
             <p>{{ review.summary || '暂无摘要' }}</p>
+            <button
+              class="btn-outline"
+              type="button"
+              (click)="selectReview(review)"
+              [disabled]="busy()"
+            >
+              <mat-icon>comment</mat-icon>查看逐文件意见
+            </button>
             @if (review.status === 'pending') {
               <div class="run-actions">
                 <button
@@ -178,6 +186,43 @@
           <li class="table-empty">暂无审查请求</li>
         }
       </ul>
+      @if (selectedReviewId(); as selectedId) {
+        <div class="review-comments">
+          <h3>审查 #{{ selectedId }} 的逐文件意见</h3>
+          <div class="review-form">
+            <label
+              >文件路径<input
+                type="text"
+                [value]="commentFilePath()"
+                (input)="onCommentFilePathInput($event)"
+            /></label>
+            <label
+              >意见<input type="text" [value]="commentBody()" (input)="onCommentBodyInput($event)"
+            /></label>
+            <button
+              class="btn-primary"
+              type="button"
+              (click)="createReviewComment()"
+              [disabled]="busy()"
+            >
+              <mat-icon>add_comment</mat-icon>添加意见
+            </button>
+          </div>
+          <ul class="event-list">
+            @for (comment of reviewComments(); track comment.id) {
+              <li>
+                <div class="event-meta">
+                  <strong>{{ comment.filePath }}</strong
+                  ><span>用户 {{ comment.authorUserId }}</span>
+                </div>
+                <p>{{ comment.body }}</p>
+              </li>
+            } @empty {
+              <li class="table-empty">暂无逐文件意见</li>
+            }
+          </ul>
+        </div>
+      }
     </section>
     <section class="event-card" aria-labelledby="event-title">
       <div class="section-heading">

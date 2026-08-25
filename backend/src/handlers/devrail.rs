@@ -526,6 +526,35 @@ pub async fn decide_review(
         .await
         .map(Json)
 }
+pub async fn list_review_comments(
+    State(s): State<AppState>,
+    auth: RequirePermission<ReviewRead>,
+    Path(id): Path<i64>,
+) -> Result<Json<Vec<DevRailReviewCommentResponse>>, ApiError> {
+    services::devrail_reviews::list_comments(&s.pool, &auth, id)
+        .await
+        .map(Json)
+}
+pub async fn create_review_comment(
+    State(s): State<AppState>,
+    auth: RequirePermission<ReviewWrite>,
+    Path(id): Path<i64>,
+    Json(req): Json<CreateDevRailReviewCommentRequest>,
+) -> Result<(StatusCode, Json<DevRailReviewCommentResponse>), ApiError> {
+    services::devrail_reviews::create_comment(&s.pool, &auth, id, &req)
+        .await
+        .map(|v| (StatusCode::CREATED, Json(v)))
+}
+pub async fn update_review_comment(
+    State(s): State<AppState>,
+    auth: RequirePermission<ReviewWrite>,
+    Path(id): Path<i64>,
+    Json(req): Json<UpdateDevRailReviewCommentRequest>,
+) -> Result<Json<DevRailReviewCommentResponse>, ApiError> {
+    services::devrail_reviews::update_comment(&s.pool, &auth, id, &req)
+        .await
+        .map(Json)
+}
 pub async fn approve_approval(
     State(s): State<AppState>,
     auth: RequirePermission<ApprovalApprove>,

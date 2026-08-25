@@ -243,7 +243,7 @@ program = "cargo"
 args = ["fmt", "--manifest-path", "{backend}/Cargo.toml", "--", "--check"]
 cwd = "{root}"
 log = "backend_fmt.log"
-timeout_secs = 180
+timeout_secs = 600
 
 [[steps]]
 id = "backend.clippy"

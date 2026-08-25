@@ -1396,6 +1396,45 @@ pub struct DecideDevRailReviewRequest {
     pub decision: String,
     pub reason: Option<String>,
 }
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct DevRailReviewCommentRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub review_id: i64,
+    pub author_user_id: i64,
+    pub file_path: String,
+    pub line_start: Option<i32>,
+    pub line_end: Option<i32>,
+    pub body: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailReviewCommentResponse {
+    pub id: i64,
+    pub review_id: i64,
+    pub author_user_id: i64,
+    pub file_path: String,
+    pub line_start: Option<i32>,
+    pub line_end: Option<i32>,
+    pub body: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateDevRailReviewCommentRequest {
+    pub file_path: String,
+    pub line_start: Option<i32>,
+    pub line_end: Option<i32>,
+    pub body: String,
+}
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateDevRailReviewCommentRequest {
+    pub body: String,
+}
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
