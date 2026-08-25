@@ -7151,7 +7151,8 @@
           "body",
           "authorName",
           "createdAt",
-          "resolved"
+          "resolved",
+          "changesetMatched"
         ],
         "properties": {
           "authorName": {
@@ -7159,6 +7160,9 @@
           },
           "body": {
             "type": "string"
+          },
+          "changesetMatched": {
+            "type": "boolean"
           },
           "createdAt": {
             "type": "string",

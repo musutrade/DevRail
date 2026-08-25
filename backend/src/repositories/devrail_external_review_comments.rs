@@ -7,7 +7,7 @@ pub async fn list(
     actor: &ActorContext,
     review_id: i64,
 ) -> Result<Vec<DevRailExternalReviewCommentResponse>, sqlx::Error> {
-    sqlx::query_as::<_, DevRailExternalReviewCommentResponse>(AssertSqlSafe("SELECT c.id,c.review_id,c.provider,c.external_id,c.file_path,c.line_start,c.line_end,c.body,c.author_name,c.external_created_at,c.created_at,c.resolved,c.deleted_at FROM devrail_external_review_comments c JOIN devrail_reviews r ON r.id=c.review_id WHERE c.review_id=$1 AND r.organization_id=$2 AND (r.requested_by=$3 OR r.reviewer_user_id=$3) ORDER BY c.created_at ASC,c.id ASC"))
+    sqlx::query_as::<_, DevRailExternalReviewCommentResponse>(AssertSqlSafe("SELECT c.id,c.review_id,c.provider,c.external_id,c.file_path,c.line_start,c.line_end,c.body,c.author_name,c.external_created_at,c.created_at,c.resolved,c.deleted_at,EXISTS (SELECT 1 FROM devrail_reviews cr JOIN devrail_run_events ce ON ce.run_id=cr.run_id WHERE cr.id=c.review_id AND ce.event_type='file_change' AND ce.payload->>'path'=c.file_path) AS changeset_matched FROM devrail_external_review_comments c JOIN devrail_reviews r ON r.id=c.review_id WHERE c.review_id=$1 AND r.organization_id=$2 AND (r.requested_by=$3 OR r.reviewer_user_id=$3) ORDER BY c.created_at ASC,c.id ASC"))
         .bind(review_id).bind(actor.organization_id).bind(actor.user_id).fetch_all(pool).await
 }
 pub struct ExternalReviewCommentInput<'a> {

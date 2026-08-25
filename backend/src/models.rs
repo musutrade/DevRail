@@ -1533,6 +1533,7 @@ pub struct DevRailExternalReviewCommentResponse {
     pub created_at: DateTime<Utc>,
     pub resolved: bool,
     pub deleted_at: Option<DateTime<Utc>>,
+    pub changeset_matched: bool,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
