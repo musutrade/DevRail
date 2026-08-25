@@ -920,6 +920,7 @@ pub struct DevRailPullRequestWebhookRequest {
     pub number: i64,
     pub url: String,
     pub status: String,
+    pub event_id: Option<String>,
 }
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]

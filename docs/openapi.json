@@ -7440,6 +7440,12 @@
           "status"
         ],
         "properties": {
+          "eventId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "number": {
             "type": "integer",
             "format": "int64"
