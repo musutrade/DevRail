@@ -254,6 +254,24 @@ mod webhook_tests {
         assert_eq!(payload.status, "merged");
         assert_eq!(payload.number, 4);
     }
+
+    #[test]
+    fn normalizes_gitlab_native_payload() {
+        use axum::http::{HeaderMap, HeaderValue};
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-gitlab-event",
+            HeaderValue::from_static("Merge Request Hook"),
+        );
+        headers.insert("x-devrail-repository-id", HeaderValue::from_static("11"));
+        let body = Bytes::from(
+            r#"{"object_attributes":{"action":"update","iid":8,"state":"opened","url":"https://gitlab.com/o/r/-/merge_requests/8"}}"#,
+        );
+        let payload = normalize_webhook_payload(&headers, &body).expect("native payload");
+        assert_eq!(payload.provider, "gitlab");
+        assert_eq!(payload.status, "open");
+        assert_eq!(payload.number, 8);
+    }
 }
 
 fn paging(q: &DevRailListQuery) -> Result<(i64, i64), ApiError> {
