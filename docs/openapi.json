@@ -3922,6 +3922,94 @@
         ]
       }
     },
+    "/reviews/{id}/external-comments": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "listDevRailExternalReviewComments",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DevRailExternalReviewCommentResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/reviews/{id}/external-comments/sync": {
+      "post": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "syncDevRailExternalReviewComments",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncDevRailExternalReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DevRailExternalReviewCommentResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/roles": {
       "get": {
         "tags": [
@@ -6838,6 +6926,69 @@
           }
         }
       },
+      "DevRailExternalReviewCommentResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "reviewId",
+          "provider",
+          "externalId",
+          "filePath",
+          "body",
+          "authorName",
+          "createdAt"
+        ],
+        "properties": {
+          "authorName": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "externalCreatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "filePath": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lineEnd": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "lineStart": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "reviewId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "DevRailGitProviderResponse": {
         "type": "object",
         "required": [
@@ -9016,6 +9167,28 @@
           },
           "token": {
             "type": "string"
+          }
+        }
+      },
+      "SyncDevRailExternalReviewRequest": {
+        "type": "object",
+        "required": [
+          "projectId",
+          "repositoryId",
+          "number"
+        ],
+        "properties": {
+          "number": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "projectId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "repositoryId": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },

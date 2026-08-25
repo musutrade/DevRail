@@ -103,6 +103,8 @@ const DEVRAIL_APPROVALS_PATH: &str = "/api/v1/approvals";
 const DEVRAIL_REVIEWS_PATH: &str = "/api/v1/reviews";
 const DEVRAIL_REVIEW_DECIDE_PATH: &str = "/api/v1/reviews/{id}/decide";
 const DEVRAIL_REVIEW_COMMENTS_PATH: &str = "/api/v1/reviews/{id}/comments";
+const DEVRAIL_EXTERNAL_REVIEW_COMMENTS_PATH: &str = "/api/v1/reviews/{id}/external-comments";
+const DEVRAIL_EXTERNAL_REVIEW_SYNC_PATH: &str = "/api/v1/reviews/{id}/external-comments/sync";
 const DEVRAIL_REVIEW_COMMENT_PATH: &str = "/api/v1/review-comments/{id}";
 const DEVRAIL_APPROVAL_PATH: &str = "/api/v1/approvals/{id}";
 const DEVRAIL_APPROVAL_APPROVE_PATH: &str = "/api/v1/approvals/{id}/approve";
@@ -184,6 +186,8 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_REVIEWS_PATH, &["get", "post"]),
     (DEVRAIL_REVIEW_DECIDE_PATH, &["post"]),
     (DEVRAIL_REVIEW_COMMENTS_PATH, &["get", "post"]),
+    (DEVRAIL_EXTERNAL_REVIEW_COMMENTS_PATH, &["get"]),
+    (DEVRAIL_EXTERNAL_REVIEW_SYNC_PATH, &["post"]),
     (DEVRAIL_REVIEW_COMMENT_PATH, &["patch"]),
     (DEVRAIL_APPROVAL_PATH, &["get"]),
     (DEVRAIL_APPROVAL_APPROVE_PATH, &["post"]),
@@ -490,6 +494,14 @@ fn base_router(state: AppState) -> Router {
             DEVRAIL_REVIEW_COMMENTS_PATH,
             get(handlers::devrail::list_review_comments)
                 .post(handlers::devrail::create_review_comment),
+        )
+        .route(
+            DEVRAIL_EXTERNAL_REVIEW_COMMENTS_PATH,
+            get(handlers::devrail::list_external_review_comments),
+        )
+        .route(
+            DEVRAIL_EXTERNAL_REVIEW_SYNC_PATH,
+            post(handlers::devrail::sync_external_review_comments),
         )
         .route(
             DEVRAIL_REVIEW_COMMENT_PATH,

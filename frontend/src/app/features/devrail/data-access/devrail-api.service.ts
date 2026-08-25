@@ -63,6 +63,8 @@ import { exportDevRailRunPatch } from '../../../generated/api/fn/devrail/export-
 import { getDevRailGitProvider } from '../../../generated/api/fn/devrail/get-dev-rail-git-provider';
 import { createDevRailPullRequest } from '../../../generated/api/fn/devrail/create-dev-rail-pull-request';
 import { syncDevRailPullRequest } from '../../../generated/api/fn/devrail/sync-dev-rail-pull-request';
+import { listDevRailExternalReviewComments } from '../../../generated/api/fn/devrail/list-dev-rail-external-review-comments';
+import { syncDevRailExternalReviewComments } from '../../../generated/api/fn/devrail/sync-dev-rail-external-review-comments';
 import type {
   CreateDevRailEnvironmentRequest,
   CreateDevRailProjectRequest,
@@ -114,6 +116,8 @@ import type {
   CreateDevRailPullRequestRequest,
   DevRailPullRequestResponse,
   SyncDevRailPullRequestRequest,
+  SyncDevRailExternalReviewRequest,
+  DevRailExternalReviewCommentResponse,
 } from '../../../generated/api/models';
 
 @Injectable({ providedIn: 'root' })
@@ -200,6 +204,15 @@ export class DevRailApiService {
     body: SyncDevRailPullRequestRequest,
   ): Promise<DevRailPullRequestResponse> {
     return this.api.invoke(syncDevRailPullRequest, { project_id: projectId, id, body });
+  }
+  listExternalReviewComments(reviewId: number): Promise<DevRailExternalReviewCommentResponse[]> {
+    return this.api.invoke(listDevRailExternalReviewComments, { id: reviewId });
+  }
+  syncExternalReviewComments(
+    reviewId: number,
+    body: SyncDevRailExternalReviewRequest,
+  ): Promise<DevRailExternalReviewCommentResponse[]> {
+    return this.api.invoke(syncDevRailExternalReviewComments, { id: reviewId, body });
   }
   getApproval(id: number): Promise<DevRailApprovalResponse> {
     return this.api.invoke(getDevRailApproval, { id });

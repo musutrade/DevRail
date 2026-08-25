@@ -1476,6 +1476,28 @@ pub struct CreateDevRailReviewCommentRequest {
 pub struct UpdateDevRailReviewCommentRequest {
     pub body: String,
 }
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncDevRailExternalReviewRequest {
+    pub project_id: i64,
+    pub repository_id: i64,
+    pub number: i64,
+}
+#[derive(Debug, Serialize, sqlx::FromRow, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailExternalReviewCommentResponse {
+    pub id: i64,
+    pub review_id: i64,
+    pub provider: String,
+    pub external_id: String,
+    pub file_path: String,
+    pub line_start: Option<i32>,
+    pub line_end: Option<i32>,
+    pub body: String,
+    pub author_name: String,
+    pub external_created_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+}
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]

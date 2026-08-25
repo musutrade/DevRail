@@ -564,6 +564,25 @@ pub async fn list_review_comments(
         .await
         .map(Json)
 }
+pub async fn list_external_review_comments(
+    State(s): State<AppState>,
+    auth: RequirePermission<ReviewRead>,
+    Path(id): Path<i64>,
+) -> Result<Json<Vec<DevRailExternalReviewCommentResponse>>, ApiError> {
+    services::devrail_reviews::list_external_comments(&s.pool, &auth, id)
+        .await
+        .map(Json)
+}
+pub async fn sync_external_review_comments(
+    State(s): State<AppState>,
+    auth: RequirePermission<ReviewWrite>,
+    Path(id): Path<i64>,
+    Json(req): Json<SyncDevRailExternalReviewRequest>,
+) -> Result<Json<Vec<DevRailExternalReviewCommentResponse>>, ApiError> {
+    services::devrail_reviews::sync_external_comments(&s.pool, &auth, id, &req)
+        .await
+        .map(Json)
+}
 pub async fn create_review_comment(
     State(s): State<AppState>,
     auth: RequirePermission<ReviewWrite>,
