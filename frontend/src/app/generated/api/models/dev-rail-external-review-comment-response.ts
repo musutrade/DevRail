@@ -5,6 +5,7 @@ export interface DevRailExternalReviewCommentResponse {
   authorName: string;
   body: string;
   createdAt: string;
+  deletedAt?: (string | null);
   externalCreatedAt?: (string | null);
   externalId: string;
   filePath: string;
@@ -12,5 +13,6 @@ export interface DevRailExternalReviewCommentResponse {
   lineEnd?: (number | null);
   lineStart?: (number | null);
   provider: string;
+  resolved: boolean;
   reviewId: number;
 }

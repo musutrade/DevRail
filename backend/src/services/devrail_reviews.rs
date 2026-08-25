@@ -134,8 +134,10 @@ pub async fn sync_external_comments(
         )
     };
     let mut tx = pool.begin().await.map_err(db_error)?;
+    let mut external_ids = Vec::new();
     for value in values {
-        let (id, body, author, path, line_start, line_end) = if provider_name == "github" {
+        let (id, body, author, path, line_start, line_end, resolved) = if provider_name == "github"
+        {
             (
                 value
                     .get("id")
@@ -159,6 +161,7 @@ pub async fn sync_external_comments(
                     .to_string(),
                 value.get("line").and_then(Value::as_i64).map(|v| v as i32),
                 value.get("line").and_then(Value::as_i64).map(|v| v as i32),
+                false,
             )
         } else {
             let note = value.pointer("/notes/0").unwrap_or(&value);
@@ -194,8 +197,13 @@ pub async fn sync_external_comments(
                 path,
                 line_start,
                 line_end,
+                value
+                    .get("resolved")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
             )
         };
+        external_ids.push(id.clone());
         repositories::devrail_external_review_comments::upsert(
             &mut tx,
             &repositories::devrail_external_review_comments::ExternalReviewCommentInput {
@@ -208,11 +216,20 @@ pub async fn sync_external_comments(
                 body: &body,
                 author_name: &author,
                 external_created_at: None,
+                resolved,
             },
         )
         .await
         .map_err(db_error)?;
     }
+    repositories::devrail_external_review_comments::mark_missing_deleted(
+        &mut tx,
+        review_id,
+        provider_name,
+        &external_ids,
+    )
+    .await
+    .map_err(db_error)?;
     tx.commit().await.map_err(db_error)?;
     list_external_comments(pool, actor, review_id).await
 }

@@ -1507,6 +1507,8 @@ pub struct DevRailExternalReviewCommentResponse {
     pub author_name: String,
     pub external_created_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
+    pub resolved: bool,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
