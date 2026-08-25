@@ -903,6 +903,21 @@ pub struct CreateDevRailPullRequestRequest {
     pub source_branch: String,
     pub target_branch: Option<String>,
 }
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateDevRailBranchRequest {
+    pub name: String,
+    pub source_sha: String,
+}
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailBranchResponse {
+    pub repository_id: i64,
+    pub provider: String,
+    pub name: String,
+    pub source_sha: String,
+    pub url: String,
+}
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DevRailPullRequestResponse {

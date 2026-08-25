@@ -2928,6 +2928,71 @@
         ]
       }
     },
+    "/projects/{project_id}/repositories/{id}/branches": {
+      "post": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "createDevRailBranch",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDevRailBranchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailBranchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/projects/{project_id}/repositories/{id}/git-provider": {
       "get": {
         "tags": [
@@ -6069,6 +6134,21 @@
           }
         }
       },
+      "CreateDevRailBranchRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "sourceSha"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "sourceSha": {
+            "type": "string"
+          }
+        }
+      },
       "CreateDevRailEnvironmentRequest": {
         "type": "object",
         "required": [
@@ -6756,6 +6836,34 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "DevRailBranchResponse": {
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "provider",
+          "name",
+          "sourceSha",
+          "url"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "repositoryId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sourceSha": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
           }
         }
       },

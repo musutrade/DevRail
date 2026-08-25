@@ -8,6 +8,7 @@ export type { BatchAssignRolesRequest } from './models/batch-assign-roles-reques
 export type { BatchUserIdsRequest } from './models/batch-user-ids-request';
 export type { ChangePasswordRequest } from './models/change-password-request';
 export type { CreateDepartmentRequest } from './models/create-department-request';
+export type { CreateDevRailBranchRequest } from './models/create-dev-rail-branch-request';
 export type { CreateDevRailEnvironmentRequest } from './models/create-dev-rail-environment-request';
 export type { CreateDevRailProjectRequest } from './models/create-dev-rail-project-request';
 export type { CreateDevRailPullRequestRequest } from './models/create-dev-rail-pull-request-request';
@@ -27,6 +28,7 @@ export type { DepartmentStatus } from './models/department-status';
 export type { DevRailApprovalDecisionRequest } from './models/dev-rail-approval-decision-request';
 export type { DevRailApprovalPage } from './models/dev-rail-approval-page';
 export type { DevRailApprovalResponse } from './models/dev-rail-approval-response';
+export type { DevRailBranchResponse } from './models/dev-rail-branch-response';
 export type { DevRailChangeFileResponse } from './models/dev-rail-change-file-response';
 export type { DevRailChangesetResponse } from './models/dev-rail-changeset-response';
 export type { DevRailEnvironmentHealthResponse } from './models/dev-rail-environment-health-response';
