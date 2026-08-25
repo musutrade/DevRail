@@ -60,6 +60,7 @@ import { listDevRailReviewComments } from '../../../generated/api/fn/devrail/lis
 import { createDevRailReviewComment } from '../../../generated/api/fn/devrail/create-dev-rail-review-comment';
 import { updateDevRailReviewComment } from '../../../generated/api/fn/devrail/update-dev-rail-review-comment';
 import { exportDevRailRunPatch } from '../../../generated/api/fn/devrail/export-dev-rail-run-patch';
+import { getDevRailGitProvider } from '../../../generated/api/fn/devrail/get-dev-rail-git-provider';
 import type {
   CreateDevRailEnvironmentRequest,
   CreateDevRailProjectRequest,
@@ -107,6 +108,7 @@ import type {
   CreateDevRailReviewCommentRequest,
   UpdateDevRailReviewCommentRequest,
   DevRailPatchExportResponse,
+  DevRailGitProviderResponse,
 } from '../../../generated/api/models';
 
 @Injectable({ providedIn: 'root' })
@@ -176,6 +178,9 @@ export class DevRailApiService {
   }
   exportRunPatch(id: number): Promise<DevRailPatchExportResponse> {
     return this.api.invoke(exportDevRailRunPatch, { id });
+  }
+  getGitProvider(projectId: number, id: number): Promise<DevRailGitProviderResponse> {
+    return this.api.invoke(getDevRailGitProvider, { project_id: projectId, id });
   }
   getApproval(id: number): Promise<DevRailApprovalResponse> {
     return this.api.invoke(getDevRailApproval, { id });

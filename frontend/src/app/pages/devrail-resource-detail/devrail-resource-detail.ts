@@ -31,6 +31,9 @@ export class DevRailResourceDetailPage implements OnInit {
   readonly repositorySync = signal<Awaited<
     ReturnType<DevRailApiService['getRepositorySync']>
   > | null>(null);
+  readonly gitProvider = signal<Awaited<ReturnType<DevRailApiService['getGitProvider']>> | null>(
+    null,
+  );
   projectId = 0;
   resourceId = 0;
   private readonly route = inject(ActivatedRoute);
@@ -134,6 +137,7 @@ export class DevRailResourceDetailPage implements OnInit {
           this.api.listEnvironments(this.projectId),
         ]);
         this.resource.set(repository);
+        this.gitProvider.set(await this.api.getGitProvider(this.projectId, this.resourceId));
         this.environments.set(environments.items.filter((environment) => environment.enabled));
       } else {
         this.resource.set(await this.api.getEnvironment(this.projectId, this.resourceId));

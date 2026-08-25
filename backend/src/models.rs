@@ -883,6 +883,18 @@ pub struct DevRailRepositoryResponse {
     pub updated_at: DateTime<Utc>,
     pub archived_at: Option<DateTime<Utc>>,
 }
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailGitProviderResponse {
+    pub repository_id: i64,
+    pub provider: String,
+    pub owner: String,
+    pub repository: String,
+    pub default_branch: String,
+    pub credential_configured: bool,
+    pub compare_url: Option<String>,
+    pub pull_request_url: Option<String>,
+}
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 #[serde(rename_all = "camelCase")]
