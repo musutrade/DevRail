@@ -17,6 +17,24 @@ use url::Url;
 const DEFAULT_PAGE: i64 = 1;
 const DEFAULT_PAGE_SIZE: i64 = 20;
 
+fn validate_temporary_branch(name: &str, source_sha: &str) -> Result<(), ApiError> {
+    if name.trim().is_empty()
+        || name.len() > 256
+        || ["main", "master", "develop"].contains(&name)
+        || name.contains("..")
+        || name.starts_with('/')
+        || name.ends_with('/')
+        || name.contains(['~', '^', ':', '\\'])
+        || name.bytes().any(|b| b.is_ascii_whitespace())
+    {
+        return Err(ApiError::validation("临时分支名称不安全"));
+    }
+    if !(7..=64).contains(&source_sha.len()) || !source_sha.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(ApiError::validation("来源提交 SHA 无效"));
+    }
+    Ok(())
+}
+
 fn validate_webhook_payload(payload: &DevRailPullRequestWebhookRequest) -> Result<(), ApiError> {
     if payload.number < 1
         || payload.repository_id < 1
@@ -211,7 +229,7 @@ pub async fn handle_pull_request_webhook(
 
 #[cfg(test)]
 mod webhook_tests {
-    use super::{normalize_webhook_payload, validate_webhook_payload};
+    use super::{normalize_webhook_payload, validate_temporary_branch, validate_webhook_payload};
     use crate::models::DevRailPullRequestWebhookRequest;
     use axum::body::Bytes;
 
@@ -271,6 +289,14 @@ mod webhook_tests {
         assert_eq!(payload.provider, "gitlab");
         assert_eq!(payload.status, "open");
         assert_eq!(payload.number, 8);
+    }
+
+    #[test]
+    fn validates_temporary_branch_names_and_sha() {
+        assert!(validate_temporary_branch("codex/run-42", &"a".repeat(40)).is_ok());
+        assert!(validate_temporary_branch("main", &"a".repeat(40)).is_err());
+        assert!(validate_temporary_branch("bad..name", &"a".repeat(40)).is_err());
+        assert!(validate_temporary_branch("codex/run-42", "not-a-sha").is_err());
     }
 }
 
@@ -874,19 +900,8 @@ pub async fn create_branch(
     req: &CreateDevRailBranchRequest,
 ) -> Result<DevRailBranchResponse, ApiError> {
     let name = text(&req.name, "临时分支名称", 256)?;
-    if name == "main"
-        || name == "master"
-        || name == "develop"
-        || name.contains("..")
-        || name.starts_with('/')
-        || name.ends_with('/')
-    {
-        return Err(ApiError::validation("临时分支名称不安全"));
-    }
     let source_sha = text(&req.source_sha, "来源提交 SHA", 128)?;
-    if !source_sha.bytes().all(|b| b.is_ascii_hexdigit()) || !(7..=64).contains(&source_sha.len()) {
-        return Err(ApiError::validation("来源提交 SHA 无效"));
-    }
+    validate_temporary_branch(&name, &source_sha)?;
     let provider = get_git_provider(pool, actor, project_id, id).await?;
     if !provider.credential_configured || provider.provider == "unknown" {
         return Err(ApiError::conflict("Git 平台凭据未配置或平台不受支持"));
