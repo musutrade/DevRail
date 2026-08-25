@@ -6969,7 +6969,8 @@
           "filePath",
           "body",
           "authorName",
-          "createdAt"
+          "createdAt",
+          "resolved"
         ],
         "properties": {
           "authorName": {
@@ -6980,6 +6981,13 @@
           },
           "createdAt": {
             "type": "string",
+            "format": "date-time"
+          },
+          "deletedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "externalCreatedAt": {
@@ -7015,6 +7023,9 @@
           },
           "provider": {
             "type": "string"
+          },
+          "resolved": {
+            "type": "boolean"
           },
           "reviewId": {
             "type": "integer",

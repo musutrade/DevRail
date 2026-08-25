@@ -134,8 +134,10 @@ pub async fn sync_external_comments(
         )
     };
     let mut tx = pool.begin().await.map_err(db_error)?;
+    let mut external_ids = Vec::new();
     for value in values {
-        let (id, body, author, path, line) = if provider_name == "github" {
+        let (id, body, author, path, line_start, line_end, resolved) = if provider_name == "github"
+        {
             (
                 value
                     .get("id")
@@ -158,9 +160,27 @@ pub async fn sync_external_comments(
                     .unwrap_or("(general)")
                     .to_string(),
                 value.get("line").and_then(Value::as_i64).map(|v| v as i32),
+                value.get("line").and_then(Value::as_i64).map(|v| v as i32),
+                false,
             )
         } else {
             let note = value.pointer("/notes/0").unwrap_or(&value);
+            let position = value
+                .get("position")
+                .or_else(|| note.get("position"))
+                .unwrap_or(&Value::Null);
+            let path = position
+                .get("new_path")
+                .or_else(|| position.get("old_path"))
+                .and_then(Value::as_str)
+                .unwrap_or("(general)")
+                .to_string();
+            let line_start = position
+                .get("new_line")
+                .or_else(|| position.get("old_line"))
+                .and_then(Value::as_i64)
+                .map(|v| v as i32);
+            let line_end = line_start;
             (
                 note.get("id")
                     .and_then(Value::as_i64)
@@ -174,10 +194,16 @@ pub async fn sync_external_comments(
                     .and_then(Value::as_str)
                     .unwrap_or("unknown")
                     .to_string(),
-                "(general)".to_string(),
-                None,
+                path,
+                line_start,
+                line_end,
+                value
+                    .get("resolved")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
             )
         };
+        external_ids.push(id.clone());
         repositories::devrail_external_review_comments::upsert(
             &mut tx,
             &repositories::devrail_external_review_comments::ExternalReviewCommentInput {
@@ -185,16 +211,25 @@ pub async fn sync_external_comments(
                 provider: provider_name,
                 external_id: &id,
                 file_path: &path,
-                line_start: line,
-                line_end: line,
+                line_start,
+                line_end,
                 body: &body,
                 author_name: &author,
                 external_created_at: None,
+                resolved,
             },
         )
         .await
         .map_err(db_error)?;
     }
+    repositories::devrail_external_review_comments::mark_missing_deleted(
+        &mut tx,
+        review_id,
+        provider_name,
+        &external_ids,
+    )
+    .await
+    .map_err(db_error)?;
     tx.commit().await.map_err(db_error)?;
     list_external_comments(pool, actor, review_id).await
 }
