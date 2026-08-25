@@ -137,6 +137,8 @@ export type { ListDevRailRuns$Params as ListDevRailRuns$Params } from './fn/devr
 export { listDevRailRuns as listDevRailRuns } from './fn/devrail/list-dev-rail-runs';
 export type { CreateDevRailRun$Params as CreateDevRailRun$Params } from './fn/devrail/create-dev-rail-run';
 export { createDevRailRun as createDevRailRun } from './fn/devrail/create-dev-rail-run';
+export type { ReceiveDevRailPullRequestWebhook$Params as ReceiveDevRailPullRequestWebhook$Params } from './fn/devrail/receive-dev-rail-pull-request-webhook';
+export { receiveDevRailPullRequestWebhook as receiveDevRailPullRequestWebhook } from './fn/devrail/receive-dev-rail-pull-request-webhook';
 export type { ListAuditLogs$Params as ListAuditLogs$Params } from './fn/audit/list-audit-logs';
 export { listAuditLogs as listAuditLogs } from './fn/audit/list-audit-logs';
 export type { Login$Params as Login$Params } from './fn/auth/login';
