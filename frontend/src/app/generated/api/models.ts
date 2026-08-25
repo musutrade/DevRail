@@ -31,6 +31,7 @@ export type { DevRailChangesetResponse } from './models/dev-rail-changeset-respo
 export type { DevRailEnvironmentHealthResponse } from './models/dev-rail-environment-health-response';
 export type { DevRailEnvironmentPage } from './models/dev-rail-environment-page';
 export type { DevRailEnvironmentResponse } from './models/dev-rail-environment-response';
+export type { DevRailGitProviderResponse } from './models/dev-rail-git-provider-response';
 export type { DevRailNotificationPage } from './models/dev-rail-notification-page';
 export type { DevRailNotificationPreferencesResponse } from './models/dev-rail-notification-preferences-response';
 export type { DevRailNotificationResponse } from './models/dev-rail-notification-response';

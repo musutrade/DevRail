@@ -2928,6 +2928,51 @@
         ]
       }
     },
+    "/projects/{project_id}/repositories/{id}/git-provider": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "getDevRailGitProvider",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailGitProviderResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/projects/{project_id}/repositories/{id}/sync": {
       "get": {
         "tags": [
@@ -6643,6 +6688,50 @@
           },
           "workspaceRoot": {
             "type": "string"
+          }
+        }
+      },
+      "DevRailGitProviderResponse": {
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "provider",
+          "owner",
+          "repository",
+          "defaultBranch",
+          "credentialConfigured"
+        ],
+        "properties": {
+          "compareUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "credentialConfigured": {
+            "type": "boolean"
+          },
+          "defaultBranch": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "pullRequestUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "repository": {
+            "type": "string"
+          },
+          "repositoryId": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },

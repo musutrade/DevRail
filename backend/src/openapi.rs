@@ -15,21 +15,21 @@ use crate::models::{
     DepartmentResponse, DepartmentStatusSchema, DevRailApprovalDecisionRequest,
     DevRailApprovalPage, DevRailApprovalResponse, DevRailChangesetResponse,
     DevRailEnvironmentHealthResponse, DevRailEnvironmentPage, DevRailEnvironmentResponse,
-    DevRailListQuery, DevRailNotificationPage, DevRailNotificationPreferencesResponse,
-    DevRailNotificationResponse, DevRailPatchExportResponse, DevRailProjectMemberPage,
-    DevRailProjectMemberResponse, DevRailProjectPage, DevRailProjectPolicyResponse,
-    DevRailProjectResponse, DevRailPushConfigResponse, DevRailPushDeviceResponse,
-    DevRailQualityGateLogPage, DevRailQualityGatePage, DevRailRepositoryBranchResponse,
-    DevRailRepositoryCommitResponse, DevRailRepositoryPage, DevRailRepositoryResponse,
-    DevRailRepositorySyncQuery, DevRailRepositorySyncResponse, DevRailReviewCommentResponse,
-    DevRailReviewPage, DevRailReviewResponse, DevRailRunEventPage, DevRailRunPage,
-    DevRailRunResponse, DevRailTaskCommentPage, DevRailTaskCommentResponse, DevRailTaskPage,
-    DevRailTaskResponse, DevRailWorktreeFileResponse, DevRailWorktreeQuery,
-    DevRailWorktreeResponse, HealthResponse, LoginRequest, LoginResponse, LoginStatusSchema,
-    MfaCodeRequest, MfaFactorRevokeRequest, MfaMethodSchema, MfaPasskeyAuthenticationFinishRequest,
-    MfaPasskeyAuthenticationStartRequest, MfaPasskeyRegistrationFinishRequest,
-    MfaPasskeyRegistrationStartRequest, MfaPasskeyResponse, MfaStatusResponse,
-    MfaWebauthnChallengeResponse, ModuleUnlockRequest, ModuleUnlockScopeSchema,
+    DevRailGitProviderResponse, DevRailListQuery, DevRailNotificationPage,
+    DevRailNotificationPreferencesResponse, DevRailNotificationResponse,
+    DevRailPatchExportResponse, DevRailProjectMemberPage, DevRailProjectMemberResponse,
+    DevRailProjectPage, DevRailProjectPolicyResponse, DevRailProjectResponse,
+    DevRailPushConfigResponse, DevRailPushDeviceResponse, DevRailQualityGateLogPage,
+    DevRailQualityGatePage, DevRailRepositoryBranchResponse, DevRailRepositoryCommitResponse,
+    DevRailRepositoryPage, DevRailRepositoryResponse, DevRailRepositorySyncQuery,
+    DevRailRepositorySyncResponse, DevRailReviewCommentResponse, DevRailReviewPage,
+    DevRailReviewResponse, DevRailRunEventPage, DevRailRunPage, DevRailRunResponse,
+    DevRailTaskCommentPage, DevRailTaskCommentResponse, DevRailTaskPage, DevRailTaskResponse,
+    DevRailWorktreeFileResponse, DevRailWorktreeQuery, DevRailWorktreeResponse, HealthResponse,
+    LoginRequest, LoginResponse, LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest,
+    MfaMethodSchema, MfaPasskeyAuthenticationFinishRequest, MfaPasskeyAuthenticationStartRequest,
+    MfaPasskeyRegistrationFinishRequest, MfaPasskeyRegistrationStartRequest, MfaPasskeyResponse,
+    MfaStatusResponse, MfaWebauthnChallengeResponse, ModuleUnlockRequest, ModuleUnlockScopeSchema,
     ModuleUnlockStatusResponse, PageAuditLog, PageQuery, PageUser, PermissionCodes,
     PermissionGroupResponse, PermissionResponse, PermissionTypeSchema, QualityGateLogQuery,
     ReadinessResponse, RecoveryCodesResponse, RegisterDevRailPushDeviceRequest,
@@ -742,6 +742,8 @@ fn list_devrail_repositories() {}
 fn create_devrail_repository() {}
 #[utoipa::path(get, path = "/projects/{project_id}/repositories/{id}", operation_id = "getDevRailRepository", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), ("id" = i64, Path)), responses((status = 200, body = DevRailRepositoryResponse)))]
 fn get_devrail_repository() {}
+#[utoipa::path(get, path = "/projects/{project_id}/repositories/{id}/git-provider", operation_id = "getDevRailGitProvider", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), ("id" = i64, Path)), responses((status = 200, body = DevRailGitProviderResponse)))]
+fn get_devrail_git_provider() {}
 #[utoipa::path(patch, path = "/projects/{project_id}/repositories/{id}", operation_id = "updateDevRailRepository", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), ("id" = i64, Path)), request_body = UpdateDevRailRepositoryRequest, responses((status = 200, body = DevRailRepositoryResponse)))]
 fn update_devrail_repository() {}
 #[utoipa::path(post, path = "/projects/{project_id}/repositories/{id}/sync", operation_id = "syncDevRailRepository", tag = "devrail", security(("cookieAuth" = [])), params(("project_id" = i64, Path), ("id" = i64, Path)), responses((status = 200, body = DevRailRepositoryResponse)))]
@@ -901,7 +903,7 @@ fn withdraw_devrail_approval() {}
         update_devrail_project, archive_devrail_project, get_devrail_project_policy,
         update_devrail_project_policy, list_devrail_project_members,
         add_devrail_project_member, remove_devrail_project_member, list_devrail_repositories,
-        create_devrail_repository, get_devrail_repository, update_devrail_repository, sync_devrail_repository, get_devrail_repository_sync, inspect_devrail_repository_worktree,
+        create_devrail_repository, get_devrail_repository, get_devrail_git_provider, update_devrail_repository, sync_devrail_repository, get_devrail_repository_sync, inspect_devrail_repository_worktree,
         list_devrail_environments, create_devrail_environment, get_devrail_environment,
         update_devrail_environment, health_check_devrail_environment, list_devrail_tasks, create_devrail_task,
         get_devrail_task, update_devrail_task, list_devrail_task_comments, create_devrail_task_comment, update_devrail_task_comment, delete_devrail_task_comment, create_devrail_run, list_devrail_runs,
@@ -961,7 +963,7 @@ fn withdraw_devrail_approval() {}
         PermissionCodes,
         DashboardStats,
         DevRailProjectResponse, DevRailProjectPolicyResponse, DevRailProjectPage, DevRailProjectMemberPage, DevRailProjectMemberResponse, AddDevRailProjectMemberRequest, DevRailRepositoryResponse,
-        DevRailRepositoryPage, DevRailRepositoryBranchResponse, DevRailRepositoryCommitResponse, DevRailRepositorySyncResponse, DevRailWorktreeFileResponse, DevRailWorktreeResponse, DevRailEnvironmentResponse, DevRailEnvironmentPage,
+        DevRailRepositoryPage, DevRailRepositoryBranchResponse, DevRailRepositoryCommitResponse, DevRailRepositorySyncResponse, DevRailGitProviderResponse, DevRailWorktreeFileResponse, DevRailWorktreeResponse, DevRailEnvironmentResponse, DevRailEnvironmentPage,
         DevRailTaskResponse, DevRailTaskPage, DevRailTaskCommentPage, DevRailTaskCommentResponse, CreateDevRailTaskCommentRequest, UpdateDevRailTaskCommentRequest, CreateDevRailProjectRequest,
         UpdateDevRailProjectRequest, UpdateDevRailProjectPolicyRequest, CreateDevRailRepositoryRequest,
         UpdateDevRailRepositoryRequest, CreateDevRailEnvironmentRequest,

@@ -421,6 +421,57 @@ pub async fn get_repository(
         .map(repository_response)
         .ok_or_else(|| ApiError::not_found("仓库不存在或超出数据范围"))
 }
+pub async fn get_git_provider(
+    pool: &PgPool,
+    actor: &ActorContext,
+    project_id: i64,
+    id: i64,
+) -> Result<DevRailGitProviderResponse, ApiError> {
+    let repo = get_repository(pool, actor, project_id, id).await?;
+    let (provider, host) = if repo.remote_url.contains("github.com") {
+        ("github", "github.com")
+    } else if repo.remote_url.contains("gitlab.com") {
+        ("gitlab", "gitlab.com")
+    } else {
+        return Ok(DevRailGitProviderResponse {
+            repository_id: repo.id,
+            provider: "unknown".to_string(),
+            owner: String::new(),
+            repository: String::new(),
+            default_branch: repo.default_branch,
+            credential_configured: repo.credential_configured,
+            compare_url: None,
+            pull_request_url: None,
+        });
+    };
+    let tail = repo
+        .remote_url
+        .split(host)
+        .nth(1)
+        .unwrap_or_default()
+        .trim_matches(&['/', ':'][..])
+        .trim_end_matches(".git");
+    let mut parts = tail.rsplitn(2, '/');
+    let name = parts.next().unwrap_or_default();
+    let owner = parts.next().unwrap_or_default();
+    if owner.is_empty() || name.is_empty() {
+        return Err(ApiError::validation("Git 仓库地址格式无效"));
+    }
+    let base = format!("https://{host}/{owner}/{name}");
+    Ok(DevRailGitProviderResponse {
+        repository_id: repo.id,
+        provider: provider.to_string(),
+        owner: owner.to_string(),
+        repository: name.to_string(),
+        default_branch: repo.default_branch.clone(),
+        credential_configured: repo.credential_configured,
+        compare_url: Some(format!("{base}/compare/{}...HEAD", repo.default_branch)),
+        pull_request_url: Some(format!(
+            "{base}/compare/{}...HEAD?create=1",
+            repo.default_branch
+        )),
+    })
+}
 pub async fn create_repository(
     pool: &PgPool,
     actor: &ActorContext,

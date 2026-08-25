@@ -57,7 +57,7 @@ VISUAL_REVIEW=1 npm run e2e -- --project=chromium --project=mobile-chromium
 4. 保护 `main`，将 Quality gate、Backend verification、Frontend verification 设为 required checks，并启用 secret scanning 与 push protection；
 5. 将审计归档、SBOM、备份和发布证据写入权限独立的不可变存储，并执行恢复演练；
 6. 根据业务 RPO/RTO、数据分类、司法辖区与合同要求补齐高合规控制；
-7. 按 [DevRail 实现状态](devrail-implementation-status.md) 和 [需求文档](requirements.md) 继续完成 Harness 可靠性与 MVP 验收；当前已落地仓库远端 HEAD/默认分支/分支数量检查、环境健康检查、受限命令质量门禁执行、结构化门禁元数据、稳定 log_ref 脱敏分页日志、站内通知、transactional outbox、run/审批状态通知、通知中心、VAPID 配置/订阅初始化、设备管理、dispatcher、投递重试、投递审计、投递告警、SSE 心跳/断线补拉、断流错误分类、传输断流自动恢复（最多 2 次）、审批等待人工恢复，以及任务评论、`@用户名` 提及通知、编辑、软删除、审查请求/决策、逐文件意见、受控补丁导出和审计；剩余为重启恢复验收、MVP 验收和 Git 平台集成。
+7. 按 [DevRail 实现状态](devrail-implementation-status.md) 和 [需求文档](requirements.md) 继续完成 Harness 可靠性与 MVP 验收；当前已落地仓库远端 HEAD/默认分支/分支数量检查、环境健康检查、受限命令质量门禁执行、结构化门禁元数据、稳定 log_ref 脱敏分页日志、站内通知、transactional outbox、run/审批状态通知、通知中心、VAPID 配置/订阅初始化、设备管理、dispatcher、投递重试、投递审计、投递告警、SSE 心跳/断线补拉、断流错误分类、传输断流自动恢复（最多 2 次）、审批等待人工恢复，以及任务评论、`@用户名` 提及通知、编辑、软删除、审查请求/���策、逐文件意见、受控补丁导出、Git 平台识别深链接和审计；剩余为重启恢复验收、MVP 验收和 Git 平台 API 自动创建/状态同步。
 
 ## 已知边界
 

@@ -9,6 +9,17 @@
     <form #resourceForm (submit)="$event.preventDefault(); save(resourceForm)">
       <label>名称<input name="name" [value]="item.name" required /></label>
       @if (kind() === 'repositories') {
+        @if (gitProvider(); as provider) {
+          <div class="sync-summary">
+            <span>Git 平台：{{ provider.provider }}</span
+            ><span>{{ provider.owner }}/{{ provider.repository }}</span>
+            @if (provider.pullRequestUrl) {
+              <a [href]="provider.pullRequestUrl" target="_blank" rel="noreferrer"
+                >打开创建合并请求页面</a
+              >
+            }
+          </div>
+        }
         <label>远端 URL<input name="remoteUrl" [value]="$any(item).remoteUrl" required /></label
         ><label>默认分支<input name="defaultBranch" [value]="$any(item).defaultBranch" /></label>
         <div class="sync-summary">
