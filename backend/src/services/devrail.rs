@@ -47,6 +47,20 @@ fn validate_webhook_payload(payload: &DevRailPullRequestWebhookRequest) -> Resul
     Ok(())
 }
 
+fn validate_event_id(event_id: Option<&str>) -> Result<(), ApiError> {
+    if let Some(value) = event_id {
+        if value.is_empty()
+            || value.len() > 256
+            || value
+                .bytes()
+                .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
+        {
+            return Err(ApiError::validation("Webhook 事件 ID 无效"));
+        }
+    }
+    Ok(())
+}
+
 fn verify_webhook_signature(secret: &str, signature: &str, body: &[u8]) -> bool {
     use hmac::{Hmac, Mac};
     use sha2_legacy::Sha256;
@@ -168,6 +182,7 @@ pub async fn handle_pull_request_webhook(
         .and_then(|v| v.to_str().ok())
         .map(str::to_owned)
         .or(payload.event_id);
+    validate_event_id(payload.event_id.as_deref())?;
     let mut tx = pool.begin().await.map_err(db_error)?;
     if let Some(event_id) = payload.event_id.as_deref() {
         if !repositories::devrail_pull_requests::claim_event(&mut tx, &payload.provider, event_id)
@@ -235,8 +250,8 @@ pub async fn handle_pull_request_webhook(
 #[cfg(test)]
 mod webhook_tests {
     use super::{
-        normalize_webhook_payload, validate_temporary_branch, validate_webhook_payload,
-        verify_webhook_signature,
+        normalize_webhook_payload, validate_event_id, validate_temporary_branch,
+        validate_webhook_payload, verify_webhook_signature,
     };
     use crate::models::DevRailPullRequestWebhookRequest;
     use axum::body::Bytes;
@@ -323,6 +338,15 @@ mod webhook_tests {
             br#"{"action":"closed"}"#
         ));
         assert!(!verify_webhook_signature(secret, "sha256=bad", body));
+    }
+
+    #[test]
+    fn validates_webhook_event_id_boundaries() {
+        assert!(validate_event_id(Some("github-delivery-1")).is_ok());
+        assert!(validate_event_id(None).is_ok());
+        assert!(validate_event_id(Some(" ")).is_err());
+        assert!(validate_event_id(Some(&"x".repeat(257))).is_err());
+        assert!(validate_event_id(Some("id\nwith-control")).is_err());
     }
 }
 
