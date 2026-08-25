@@ -10,6 +10,7 @@ export type { ChangePasswordRequest } from './models/change-password-request';
 export type { CreateDepartmentRequest } from './models/create-department-request';
 export type { CreateDevRailEnvironmentRequest } from './models/create-dev-rail-environment-request';
 export type { CreateDevRailProjectRequest } from './models/create-dev-rail-project-request';
+export type { CreateDevRailPullRequestRequest } from './models/create-dev-rail-pull-request-request';
 export type { CreateDevRailRepositoryRequest } from './models/create-dev-rail-repository-request';
 export type { CreateDevRailReviewCommentRequest } from './models/create-dev-rail-review-comment-request';
 export type { CreateDevRailReviewRequest } from './models/create-dev-rail-review-request';
@@ -41,6 +42,7 @@ export type { DevRailProjectMemberResponse } from './models/dev-rail-project-mem
 export type { DevRailProjectPage } from './models/dev-rail-project-page';
 export type { DevRailProjectPolicyResponse } from './models/dev-rail-project-policy-response';
 export type { DevRailProjectResponse } from './models/dev-rail-project-response';
+export type { DevRailPullRequestResponse } from './models/dev-rail-pull-request-response';
 export type { DevRailPushConfigResponse } from './models/dev-rail-push-config-response';
 export type { DevRailPushDeviceResponse } from './models/dev-rail-push-device-response';
 export type { DevRailQualityGateLogPage } from './models/dev-rail-quality-gate-log-page';

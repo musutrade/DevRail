@@ -34,6 +34,9 @@ export class DevRailResourceDetailPage implements OnInit {
   readonly gitProvider = signal<Awaited<ReturnType<DevRailApiService['getGitProvider']>> | null>(
     null,
   );
+  readonly pullRequest = signal<Awaited<ReturnType<DevRailApiService['createPullRequest']>> | null>(
+    null,
+  );
   projectId = 0;
   resourceId = 0;
   private readonly route = inject(ActivatedRoute);
@@ -86,6 +89,25 @@ export class DevRailResourceDetailPage implements OnInit {
       this.snack.open('仓库同步检查已完成', '关闭', { duration: 2500 });
     } catch (e) {
       this.snack.open(apiErrorMessage(e, '仓库同步失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
+  async createPullRequest(form: HTMLFormElement): Promise<void> {
+    const data = new FormData(form);
+    this.busy.set(true);
+    try {
+      this.pullRequest.set(
+        await this.api.createPullRequest(this.projectId, this.resourceId, {
+          title: String(data.get('prTitle') || ''),
+          body: String(data.get('prBody') || ''),
+          sourceBranch: String(data.get('prSourceBranch') || ''),
+          targetBranch: String(data.get('prTargetBranch') || ''),
+        }),
+      );
+      this.snack.open('合并请求已创建', '关闭', { duration: 2500 });
+    } catch (e) {
+      this.snack.open(apiErrorMessage(e, '创建合并请求失败'), '关闭', { duration: 5000 });
     } finally {
       this.busy.set(false);
     }
