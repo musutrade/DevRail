@@ -20,6 +20,7 @@ import type {
   DevRailRunResponse,
   DevRailReviewResponse,
   DevRailReviewCommentResponse,
+  DevRailExternalReviewCommentResponse,
 } from '../../generated/api/models';
 
 @Component({
@@ -39,6 +40,10 @@ export class DevRailRunPage implements OnInit, OnDestroy {
   readonly reviewSummary = signal('');
   readonly reviewComments = signal<DevRailReviewCommentResponse[]>([]);
   readonly selectedReviewId = signal<number | null>(null);
+  readonly externalReviewComments = signal<DevRailExternalReviewCommentResponse[]>([]);
+  readonly externalProjectId = signal('');
+  readonly externalRepositoryId = signal('');
+  readonly externalNumber = signal('');
   readonly commentFilePath = signal('');
   readonly commentBody = signal('');
   readonly loading = signal(true);
@@ -171,6 +176,32 @@ export class DevRailRunPage implements OnInit, OnDestroy {
   async selectReview(review: DevRailReviewResponse): Promise<void> {
     this.selectedReviewId.set(review.id);
     this.reviewComments.set(await this.api.listReviewComments(review.id));
+    this.externalReviewComments.set(await this.api.listExternalReviewComments(review.id));
+  }
+  async syncExternalReviewComments(): Promise<void> {
+    const reviewId = this.selectedReviewId();
+    const projectId = Number(this.externalProjectId());
+    const repositoryId = Number(this.externalRepositoryId());
+    const number = Number(this.externalNumber());
+    if (
+      !reviewId ||
+      ![projectId, repositoryId, number].every(
+        (value) => Number.isSafeInteger(value) && value > 0,
+      ) ||
+      this.busy()
+    )
+      return;
+    this.busy.set(true);
+    try {
+      this.externalReviewComments.set(
+        await this.api.syncExternalReviewComments(reviewId, { projectId, repositoryId, number }),
+      );
+      this.snack.open('外部审查意见已同步', '关闭', { duration: 2500 });
+    } catch (error) {
+      this.snack.open(apiErrorMessage(error, '同步外部审查意见失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.busy.set(false);
+    }
   }
   async createReviewComment(): Promise<void> {
     const reviewId = this.selectedReviewId();
