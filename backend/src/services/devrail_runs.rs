@@ -63,6 +63,158 @@ fn string_field(payload: &serde_json::Value, key: &str) -> Option<String> {
 fn integer_field(payload: &serde_json::Value, key: &str) -> Option<i64> {
     payload.get(key).and_then(|value| value.as_i64())
 }
+const MAX_PATCH_BYTES: usize = 1_000_000;
+
+fn sensitive_path(path: &str) -> bool {
+    let path = path.to_ascii_lowercase();
+    path.ends_with(".env")
+        || path.contains("/.env.")
+        || path.contains("secret")
+        || path.contains("credential")
+        || path.contains("private_key")
+        || path.ends_with(".pem")
+        || path.ends_with(".key")
+}
+
+fn redact_patch(content: &str) -> String {
+    content
+        .lines()
+        .map(|line| {
+            let lower = line.to_ascii_lowercase();
+            if (line.starts_with('+') || line.starts_with('-'))
+                && [
+                    "password",
+                    "token",
+                    "secret",
+                    "authorization",
+                    "cookie",
+                    "database_url",
+                    "private_key",
+                ]
+                .iter()
+                .any(|key| lower.contains(key))
+                && (line.contains('=') || line.contains(':'))
+            {
+                format!("{}[已脱敏的敏感字段]", &line[..1])
+            } else {
+                line.to_owned()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+pub async fn export_patch(
+    pool: &PgPool,
+    actor: &ActorContext,
+    id: i64,
+    controlled_workspace_root: &std::path::Path,
+) -> Result<DevRailPatchExportResponse, ApiError> {
+    let run = get_run(pool, actor, id).await?;
+    let controlled = tokio::fs::canonicalize(controlled_workspace_root)
+        .await
+        .map_err(ApiError::internal)?;
+    let workspace = tokio::fs::canonicalize(&run.cwd)
+        .await
+        .map_err(|_| ApiError::validation("运行工作区不存在或不可访问"))?;
+    if !workspace.starts_with(&controlled) {
+        return Err(ApiError::validation("运行工作区不在受控根目录内"));
+    }
+    let root = workspace
+        .to_str()
+        .ok_or_else(|| ApiError::validation("运行工作区路径无效"))?;
+    let names = tokio::time::timeout(
+        Duration::from_secs(15),
+        Command::new("git")
+            .args(["diff", "--no-ext-diff", "--name-only", "HEAD", "--"])
+            .current_dir(root)
+            .env_clear()
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .output(),
+    )
+    .await
+    .map_err(|_| ApiError::conflict("补丁导出超时"))?
+    .map_err(ApiError::internal)?;
+    if !names.status.success() {
+        return Err(ApiError::conflict("工作区不是可导出补丁的 Git 仓库"));
+    }
+    if String::from_utf8_lossy(&names.stdout)
+        .lines()
+        .any(sensitive_path)
+    {
+        return Err(ApiError::conflict("变更包含敏感文件，已拒绝导出补丁"));
+    }
+    let output = tokio::time::timeout(
+        Duration::from_secs(20),
+        Command::new("git")
+            .args([
+                "diff",
+                "--no-ext-diff",
+                "--no-textconv",
+                "--binary",
+                "HEAD",
+                "--",
+            ])
+            .current_dir(root)
+            .env_clear()
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .output(),
+    )
+    .await
+    .map_err(|_| ApiError::conflict("补丁导出超时"))?
+    .map_err(ApiError::internal)?;
+    if !output.status.success() {
+        return Err(ApiError::conflict("无法生成补丁"));
+    }
+    if output.stdout.len() > MAX_PATCH_BYTES {
+        return Err(ApiError::conflict("补丁超过 1MB 限制，无法导出"));
+    }
+    let content = redact_patch(&String::from_utf8_lossy(&output.stdout));
+    let mut tx = pool.begin().await.map_err(db_error)?;
+    repositories::audit_logs::record(
+        &mut tx,
+        Some(actor.user_id),
+        "devrail.run.patch_export",
+        "devrail_run",
+        Some(id),
+        json!({"bytes":content.len(),"redacted":content.contains("[已脱敏的敏感字段]")}),
+    )
+    .await
+    .map_err(db_error)?;
+    tx.commit().await.map_err(db_error)?;
+    Ok(DevRailPatchExportResponse {
+        run_id: id,
+        file_name: format!("devrail-run-{id}.patch"),
+        content,
+    })
+}
+
+#[cfg(test)]
+mod patch_export_tests {
+    use super::{redact_patch, sensitive_path};
+
+    #[test]
+    fn rejects_sensitive_file_paths() {
+        assert!(sensitive_path("config/.env.production"));
+        assert!(sensitive_path("keys/deploy.pem"));
+        assert!(!sensitive_path("src/main.rs"));
+    }
+
+    #[test]
+    fn redacts_sensitive_diff_assignments() {
+        let patch = "+DATABASE_URL=postgres://secret\n+let healthy = true;";
+        assert_eq!(
+            redact_patch(patch),
+            "+[已脱敏的敏感字段]\n+let healthy = true;"
+        );
+    }
+}
 fn key(value: &str) -> Result<String, ApiError> {
     let value = value.trim();
     if value.is_empty()

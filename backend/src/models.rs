@@ -1087,6 +1087,13 @@ pub struct DevRailChangesetResponse {
 }
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct DevRailPatchExportResponse {
+    pub run_id: i64,
+    pub file_name: String,
+    pub content: String,
+}
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct DevRailChangeFileResponse {
     pub path: String,
     pub status: String,

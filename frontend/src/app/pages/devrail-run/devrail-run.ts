@@ -95,6 +95,25 @@ export class DevRailRunPage implements OnInit, OnDestroy {
     }
   }
 
+  async downloadPatch(): Promise<void> {
+    if (this.busy()) return;
+    this.busy.set(true);
+    try {
+      const patch = await this.api.exportRunPatch(this.runId);
+      const url = URL.createObjectURL(new Blob([patch.content], { type: 'text/x-diff' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = patch.fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+      this.snack.open('补丁已下载', '关闭', { duration: 2500 });
+    } catch (error) {
+      this.snack.open(apiErrorMessage(error, '导出补丁失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
   onReviewerUserIdInput(event: Event): void {
     this.reviewerUserId.set((event.target as HTMLInputElement).value);
   }
