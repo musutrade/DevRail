@@ -34,7 +34,7 @@ pub(crate) async fn outbox(
     aggregate_id: Option<i64>,
     payload: &Value,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("INSERT INTO devrail_outbox_events (organization_id, event_type, aggregate_type, aggregate_id, payload) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (organization_id,event_type,aggregate_type,aggregate_id) DO NOTHING")
+    sqlx::query("INSERT INTO devrail_outbox_events (organization_id, event_type, aggregate_type, aggregate_id, payload) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING")
         .bind(organization_id).bind(event_type).bind(aggregate_type).bind(aggregate_id).bind(payload).execute(c).await.map(|_| ())
 }
 pub async fn list(

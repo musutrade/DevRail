@@ -16,7 +16,7 @@ DevRail 的 Codex Harness 开发系统 MVP **尚未实现完成**，因此不能
 - Phase 0 首批产品骨架：`devrail` 业务权限、项目/仓库/环境/任务迁移、受数据范围约束的 Rust CRUD API、OpenAPI/Angular 客户端生成和 `/devrail/projects` 基础页面；仓库远端 HEAD、默认分支、分支数量、完整远端分支列表、受控工作区提交摘要和环境健康检查已加入；
 - Phase 1 Harness 基础闭环：后端 `HarnessSupervisor` 受控启动 `codex app-server`，清空环境变量并限制工作区/并发/时限；运行快照、运行元数据、脱敏 JSONL 事件、单调游标、幂等键、异常退出摘要、优雅中断/强制终止、运行查询和 SSE API 已加入；
 - Phase 1 审批、重试与质量门禁基础闭环：审批迁移、数据范围查询、决策追加审计、Supervisor resolve 控制消息、终态 run 重试 API、指定 turn 的 thread/resume、审批中心 UI、审批撤回和过期 worker，以及受限命令白名单的独立质量门禁执行器已加入；质量门禁输出以稳定 log_ref 关联，提供脱敏、分页日志读取 API；
-- Phase 2 通知基础能力：站内通知事实表、transactional outbox、通知查询/未读计数/已读 API、终态 run 通知、审批状态通知、用户通知偏好 API/页面和 Angular 通知中心已加入；Web Push VAPID 配置校验、受保护公开配置接口、Service Worker 订阅初始化、设备注册、列表、撤销及加密存储已加入，dispatcher、delivery 重试、投递审计和 Grafana 投递告警已完成；完整自动化验收仍待补齐；
+- Phase 2 通知基础能力：站内通知事实表、按通知来源幂等的 transactional outbox、通知查询/未读计数/已读 API、终态 run 通知、审批状态通知、用户通知偏好 API/页面和 Angular 通知中心已加入；Web Push VAPID 配置校验、受保护公开配置接口、Service Worker 订阅初始化、设备注册、列表、撤销及加密存储已加入，dispatcher、delivery 重试、投递审计和 Grafana 投递告警已完成；完整自动化验收仍待补齐；
 - Phase 3 协作基础能力：任务评论持久化、数据范围查询、评论发布、编辑、软删除、变更审计、`@用户名` 提及通知和任务详情页评论区已加入；代码审查请求、指定审查人、通过/驳回决策、组织边界、审计、运行详情页审查区和逐文件意见已加入；受控工作区补丁导出、敏感文件拒绝和敏感字段脱敏、GitHub/GitLab 仓库识别、安全创建合并请求深链接、API 自动创建、状态同步和外部审查意见同步已加入；临时分支创建与删除 API 已加入，run 可持久化绑定临时分支并由后台 worker 通过受控凭据删除 GitHub/GitLab 远程分支后清理绑定（远程删除失败时保留绑定并重试）；GitHub/GitLab 外部评论的全部可见 note、编辑内容、删除标记以及 GitLab 和 GitHub 原生线程 resolved 状态已归一化，并通过 `changesetMatched` 完成基于 run 文件变更事件的文件级关联；
 - PR #23（审批撤回与过期 worker）和 PR #24（changeset/质量门禁查询）已合并到 `main`，合并提交分别为 `f50bb5c` 和 `2fc8d0c`，对应 CI、`arc-flow platform` 和供应链检查均成功。
 
