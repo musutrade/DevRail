@@ -75,7 +75,12 @@
     <section class="event-card" aria-labelledby="changeset-title">
       <div class="section-heading">
         <h2 id="changeset-title">文件变更</h2>
-        <span>{{ changes().length }} 个文件</span>
+        <div class="run-actions">
+          <span>{{ changes().length }} 个文件</span>
+          <button class="btn-outline" type="button" (click)="downloadPatch()" [disabled]="busy()">
+            <mat-icon>download</mat-icon>下载补丁
+          </button>
+        </div>
       </div>
       <ul class="event-list">
         @for (file of changes(); track file.path) {

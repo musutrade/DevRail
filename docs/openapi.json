@@ -4396,6 +4396,42 @@
         ]
       }
     },
+    "/runs/{id}/patch": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "exportDevRailRunPatch",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailPatchExportResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/runs/{id}/quality-gate-log": {
       "get": {
         "tags": [
@@ -6740,6 +6776,26 @@
           },
           "title": {
             "type": "string"
+          }
+        }
+      },
+      "DevRailPatchExportResponse": {
+        "type": "object",
+        "required": [
+          "runId",
+          "fileName",
+          "content"
+        ],
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },

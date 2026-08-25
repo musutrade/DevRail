@@ -34,6 +34,7 @@ export type { DevRailEnvironmentResponse } from './models/dev-rail-environment-r
 export type { DevRailNotificationPage } from './models/dev-rail-notification-page';
 export type { DevRailNotificationPreferencesResponse } from './models/dev-rail-notification-preferences-response';
 export type { DevRailNotificationResponse } from './models/dev-rail-notification-response';
+export type { DevRailPatchExportResponse } from './models/dev-rail-patch-export-response';
 export type { DevRailProjectMemberPage } from './models/dev-rail-project-member-page';
 export type { DevRailProjectMemberResponse } from './models/dev-rail-project-member-response';
 export type { DevRailProjectPage } from './models/dev-rail-project-page';

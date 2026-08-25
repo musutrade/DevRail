@@ -620,6 +620,15 @@ pub async fn get_run_changeset(
         .await
         .map(Json)
 }
+pub async fn export_run_patch(
+    State(s): State<AppState>,
+    auth: RequirePermission<RunRead>,
+    Path(id): Path<i64>,
+) -> Result<Json<DevRailPatchExportResponse>, ApiError> {
+    services::devrail_runs::export_patch(&s.pool, &auth, id, s.run_workspace_root.as_ref())
+        .await
+        .map(Json)
+}
 pub async fn get_run_quality_gates(
     State(s): State<AppState>,
     auth: RequirePermission<RunRead>,

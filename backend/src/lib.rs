@@ -85,6 +85,7 @@ const DEVRAIL_RUN_INTERRUPT_PATH: &str = "/api/v1/runs/{id}/interrupt";
 const DEVRAIL_RUN_RETRY_PATH: &str = "/api/v1/runs/{id}/retry";
 const DEVRAIL_RUN_EVENTS_PATH: &str = "/api/v1/runs/{id}/events";
 const DEVRAIL_RUN_CHANGESET_PATH: &str = "/api/v1/runs/{id}/changeset";
+const DEVRAIL_RUN_PATCH_PATH: &str = "/api/v1/runs/{id}/patch";
 const DEVRAIL_RUN_QUALITY_GATES_PATH: &str = "/api/v1/runs/{id}/quality-gates";
 const DEVRAIL_RUN_QUALITY_GATES_EXECUTE_PATH: &str = "/api/v1/runs/{id}/quality-gates/execute";
 const DEVRAIL_RUN_QUALITY_GATE_LOG_PATH: &str = "/api/v1/runs/{id}/quality-gate-log";
@@ -165,6 +166,7 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_RUN_RETRY_PATH, &["post"]),
     (DEVRAIL_RUN_EVENTS_PATH, &["get"]),
     (DEVRAIL_RUN_CHANGESET_PATH, &["get"]),
+    (DEVRAIL_RUN_PATCH_PATH, &["get"]),
     (DEVRAIL_RUN_QUALITY_GATES_PATH, &["get"]),
     (DEVRAIL_RUN_QUALITY_GATES_EXECUTE_PATH, &["post"]),
     (DEVRAIL_RUN_QUALITY_GATE_LOG_PATH, &["get"]),
@@ -400,6 +402,10 @@ fn base_router(state: AppState) -> Router {
         .route(
             DEVRAIL_RUN_CHANGESET_PATH,
             get(handlers::devrail::get_run_changeset),
+        )
+        .route(
+            DEVRAIL_RUN_PATCH_PATH,
+            get(handlers::devrail::export_run_patch),
         )
         .route(
             DEVRAIL_RUN_QUALITY_GATES_PATH,

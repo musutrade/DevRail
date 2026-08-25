@@ -105,6 +105,8 @@ export type { StreamDevRailRunEvents$Params as StreamDevRailRunEvents$Params } f
 export { streamDevRailRunEvents as streamDevRailRunEvents } from './fn/devrail/stream-dev-rail-run-events';
 export type { InterruptDevRailRun$Params as InterruptDevRailRun$Params } from './fn/devrail/interrupt-dev-rail-run';
 export { interruptDevRailRun as interruptDevRailRun } from './fn/devrail/interrupt-dev-rail-run';
+export type { ExportDevRailRunPatch$Params as ExportDevRailRunPatch$Params } from './fn/devrail/export-dev-rail-run-patch';
+export { exportDevRailRunPatch as exportDevRailRunPatch } from './fn/devrail/export-dev-rail-run-patch';
 export type { GetDevRailRunQualityGateLog$Params as GetDevRailRunQualityGateLog$Params } from './fn/devrail/get-dev-rail-run-quality-gate-log';
 export { getDevRailRunQualityGateLog as getDevRailRunQualityGateLog } from './fn/devrail/get-dev-rail-run-quality-gate-log';
 export type { GetDevRailRunQualityGates$Params as GetDevRailRunQualityGates$Params } from './fn/devrail/get-dev-rail-run-quality-gates';
