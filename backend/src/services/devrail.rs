@@ -108,6 +108,7 @@ fn normalize_webhook_payload(
         number,
         url,
         status,
+        event_id: None,
     };
     validate_webhook_payload(&payload)?;
     Ok(payload)
@@ -137,8 +138,27 @@ pub async fn handle_pull_request_webhook(
     {
         return Err(ApiError::forbidden("Webhook 签名无效"));
     }
-    let payload = normalize_webhook_payload(headers, body)?;
+    let mut payload = normalize_webhook_payload(headers, body)?;
+    payload.event_id = headers
+        .get("x-github-delivery")
+        .or_else(|| headers.get("x-gitlab-event-uuid"))
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned)
+        .or(payload.event_id);
     let mut tx = pool.begin().await.map_err(db_error)?;
+    if let Some(event_id) = payload.event_id.as_deref() {
+        if !repositories::devrail_pull_requests::claim_event(&mut tx, &payload.provider, event_id)
+            .await
+            .map_err(db_error)?
+        {
+            tx.commit().await.map_err(db_error)?;
+            return Ok(());
+        }
+    }
+    let owner =
+        repositories::devrail_pull_requests::repository_owner(&mut tx, payload.repository_id)
+            .await
+            .map_err(db_error)?;
     let updated = repositories::devrail_pull_requests::update_webhook(
         &mut tx,
         &payload.provider,
@@ -151,9 +171,41 @@ pub async fn handle_pull_request_webhook(
     .map_err(db_error)?;
     tx.commit().await.map_err(db_error)?;
     if updated {
+        if let Some((organization_id, department_id, owner_user_id)) = owner {
+            let mut tx = pool.begin().await.map_err(db_error)?;
+            let source_key = format!(
+                "pull_request:{}:{}:{}",
+                payload.provider, payload.repository_id, payload.number
+            );
+            let deep_link = format!("/devrail/repositories/{}", payload.repository_id);
+            let summary = format!(
+                "{} 合并请求 #{} 状态：{}",
+                payload.provider, payload.number, payload.status
+            );
+            repositories::devrail_notifications::create(
+                &mut tx,
+                &repositories::devrail_notifications::NewNotification {
+                    organization_id,
+                    department_id,
+                    recipient_user_id: owner_user_id,
+                    event_type: "devrail.pull_request.updated",
+                    level: "info",
+                    title: "合并请求状态已更新",
+                    summary: &summary,
+                    resource_type: Some("devrail_repository"),
+                    resource_id: Some(payload.repository_id),
+                    deep_link: Some(&deep_link),
+                    source_key: &source_key,
+                },
+            )
+            .await
+            .map_err(db_error)?;
+            repositories::devrail_notifications::outbox(&mut tx, organization_id, "notification.created", "devrail_pull_request", Some(payload.repository_id), &json!({"notificationSource": source_key, "eventType": "devrail.pull_request.updated"})).await.map_err(db_error)?;
+            tx.commit().await.map_err(db_error)?;
+        }
         Ok(())
     } else {
-        Err(ApiError::not_found("合并请求记录不存在"))
+        Ok(())
     }
 }
 
@@ -171,6 +223,7 @@ mod webhook_tests {
             number: 1,
             url: "https://example.test/pr/1".into(),
             status: "open".into(),
+            event_id: None,
         };
         assert!(validate_webhook_payload(&payload).is_err());
     }
@@ -183,6 +236,7 @@ mod webhook_tests {
             number: 12,
             url: "https://github.com/o/r/pull/12".into(),
             status: "closed".into(),
+            event_id: None,
         };
         assert!(validate_webhook_payload(&payload).is_ok());
     }
