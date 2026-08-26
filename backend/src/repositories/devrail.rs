@@ -12,8 +12,14 @@ use sqlx::{AssertSqlSafe, PgConnection, PgPool};
 const PROJECT_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, slug, name, description, status, default_repository_id, default_environment_id, notification_policy, quality_gate_template, created_at, updated_at, archived_at";
 const REPOSITORY_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, name, remote_url, protocol, default_branch, credential_ref, last_sync_status, last_head_sha, last_remote_branch, last_remote_branch_count, created_at, updated_at, archived_at";
 const ENVIRONMENT_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, name, workspace_root, network_mode, tool_policy, secret_refs, max_duration_secs, enabled, created_at, updated_at, archived_at";
-const TASK_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, repository_id, environment_id, assignee_user_id, title, goal, background, acceptance_criteria, constraints, priority, status, revision, dispatch_snapshot, dispatch_snapshot_digest, workflow_source, workflow_version, workflow_digest, scheduler_attempt, scheduler_retry_count, scheduler_max_attempts, scheduler_retry_at, scheduler_last_error, labels, due_at, created_at, updated_at, archived_at";
-const SCHEDULER_TASK_COLUMNS: &str = "t.id, t.organization_id, t.department_id, t.owner_user_id, t.project_id, t.repository_id, t.environment_id, t.assignee_user_id, t.title, t.goal, t.background, t.acceptance_criteria, t.constraints, t.priority, t.status, t.revision, t.dispatch_snapshot, t.dispatch_snapshot_digest, t.workflow_source, t.workflow_version, t.workflow_digest, t.scheduler_attempt, t.scheduler_retry_count, t.scheduler_max_attempts, t.scheduler_retry_at, t.scheduler_last_error, t.labels, t.due_at, t.created_at, t.updated_at, t.archived_at";
+const TASK_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, repository_id, environment_id, assignee_user_id, title, goal, background, acceptance_criteria, constraints, priority, status, revision, dispatch_snapshot, dispatch_snapshot_digest, workflow_source, workflow_version, workflow_digest, scheduler_attempt, scheduler_retry_count, scheduler_max_attempts, scheduler_retry_at, scheduler_last_error, creation_source, source_task_id, source_run_id, followup_depth, labels, due_at, created_at, updated_at, archived_at";
+const SCHEDULER_TASK_COLUMNS: &str = "t.id, t.organization_id, t.department_id, t.owner_user_id, t.project_id, t.repository_id, t.environment_id, t.assignee_user_id, t.title, t.goal, t.background, t.acceptance_criteria, t.constraints, t.priority, t.status, t.revision, t.dispatch_snapshot, t.dispatch_snapshot_digest, t.workflow_source, t.workflow_version, t.workflow_digest, t.scheduler_attempt, t.scheduler_retry_count, t.scheduler_max_attempts, t.scheduler_retry_at, t.scheduler_last_error, t.creation_source, t.source_task_id, t.source_run_id, t.followup_depth, t.labels, t.due_at, t.created_at, t.updated_at, t.archived_at";
+
+fn dependency_eligible_sql(task_alias: &str) -> String {
+    format!(
+        "NOT EXISTS (SELECT 1 FROM devrail_task_dependencies dependency JOIN devrail_tasks prerequisite ON prerequisite.id = dependency.prerequisite_task_id AND prerequisite.organization_id = dependency.organization_id WHERE dependency.task_id = {task_alias}.id AND dependency.organization_id = {task_alias}.organization_id AND prerequisite.status <> 'succeeded')"
+    )
+}
 
 pub(crate) struct NewProject<'a> {
     pub slug: &'a str,
@@ -84,6 +90,7 @@ pub(crate) struct EnvironmentUpdate<'a> {
     pub enabled: Option<bool>,
 }
 pub(crate) struct NewTask<'a> {
+    pub owner_user_id: i64,
     pub project_id: i64,
     pub repository_id: Option<i64>,
     pub environment_id: Option<i64>,
@@ -97,6 +104,10 @@ pub(crate) struct NewTask<'a> {
     pub labels: &'a Value,
     pub due_at: Option<chrono::DateTime<chrono::Utc>>,
     pub department_id: Option<i64>,
+    pub creation_source: &'a str,
+    pub source_task_id: Option<i64>,
+    pub source_run_id: Option<i64>,
+    pub followup_depth: i16,
 }
 pub(crate) struct TaskUpdate<'a> {
     pub title: Option<&'a str>,
@@ -124,6 +135,88 @@ pub(crate) struct TaskUpdate<'a> {
     pub workflow_version: Option<&'a str>,
     pub workflow_digest: Option<&'a str>,
     pub queue_max_attempts: Option<i32>,
+}
+
+pub(crate) struct NewTaskDependency<'a> {
+    pub task_id: i64,
+    pub prerequisite_task_id: i64,
+    pub failure_action: &'a str,
+    pub cancelled_action: &'a str,
+    pub timeout_action: &'a str,
+    pub creation_source: &'a str,
+    pub created_by_type: &'a str,
+    pub created_by_user_id: Option<i64>,
+}
+
+pub(crate) struct DependencyMutation<'a> {
+    pub idempotency_key: &'a str,
+    pub request_digest: &'a str,
+}
+
+pub(crate) struct NewFollowup<'a> {
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub source_task_id: i64,
+    pub source_run_id: i64,
+    pub idempotency_key: &'a str,
+    pub request_digest: &'a str,
+    pub task: NewTask<'a>,
+    pub dependencies: &'a [NewTaskDependency<'a>],
+}
+
+pub(crate) async fn create_followup_task(
+    c: &mut PgConnection,
+    actor: &ActorContext,
+    input: &NewFollowup<'_>,
+    max_followups: i64,
+) -> Result<(i64, DevRailTaskRow, bool), sqlx::Error> {
+    // Serialize proposals for one source run before checking the idempotency
+    // row. Without this lock concurrent recovery replays could both observe
+    // a missing request and race on the unique constraint.
+    sqlx::query_scalar::<_, i64>(
+        "SELECT id FROM devrail_runs WHERE id=$1 AND organization_id=$2 FOR UPDATE",
+    )
+    .bind(input.source_run_id)
+    .bind(actor.organization_id)
+    .fetch_optional(&mut *c)
+    .await?
+    .ok_or(sqlx::Error::RowNotFound)?;
+    if let Some(existing) = sqlx::query_as::<_, (i64, String, Option<i64>, String)>(
+        "SELECT id,request_digest,result_task_id,status FROM devrail_followup_requests WHERE organization_id=$1 AND source_run_id=$2 AND idempotency_key=$3 FOR UPDATE"
+    ).bind(actor.organization_id).bind(input.source_run_id).bind(input.idempotency_key).fetch_optional(&mut *c).await? {
+        if existing.1 != input.request_digest {
+            return Err(sqlx::Error::Protocol("后续任务幂等键对应不同请求".into()));
+        }
+        if let Some(task_id) = existing.2 {
+            let task = sqlx::query_as::<_, DevRailTaskRow>(AssertSqlSafe(format!(
+                "SELECT {TASK_COLUMNS} FROM devrail_tasks WHERE id=$1 AND organization_id=$2"
+            ))).bind(task_id).bind(actor.organization_id).fetch_one(&mut *c).await?;
+            return Ok((existing.0, task, true));
+        }
+        return Err(sqlx::Error::Protocol("后续任务请求正在处理".into()));
+    }
+    let count = sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM devrail_followup_requests WHERE organization_id=$1 AND source_run_id=$2"
+    ).bind(actor.organization_id).bind(input.source_run_id).fetch_one(&mut *c).await?;
+    if count >= max_followups {
+        return Err(sqlx::Error::Protocol("后续任务配额已用尽".into()));
+    }
+    let request_id = sqlx::query_scalar::<_, i64>(
+        "INSERT INTO devrail_followup_requests (organization_id,department_id,owner_user_id,source_task_id,source_run_id,idempotency_key,request_digest,status) VALUES ($1,$2,$3,$4,$5,$6,$7,'pending') RETURNING id"
+    ).bind(actor.organization_id).bind(input.department_id).bind(input.owner_user_id)
+        .bind(input.source_task_id).bind(input.source_run_id).bind(input.idempotency_key).bind(input.request_digest)
+        .fetch_one(&mut *c).await?;
+    let task = create_task(&mut *c, actor, &input.task).await?;
+    for dependency in input.dependencies {
+        sqlx::query("INSERT INTO devrail_task_dependencies (organization_id,department_id,owner_user_id,task_id,prerequisite_task_id,failure_action,cancelled_action,timeout_action,creation_source,created_by_type,created_by_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'agent_followup','agent',$9)")
+            .bind(actor.organization_id).bind(input.department_id).bind(input.owner_user_id)
+            .bind(task.id).bind(dependency.prerequisite_task_id)
+            .bind(dependency.failure_action).bind(dependency.cancelled_action).bind(dependency.timeout_action)
+            .bind(input.owner_user_id).execute(&mut *c).await?;
+    }
+    sqlx::query("UPDATE devrail_followup_requests SET status='succeeded',result_task_id=$3,completed_at=now() WHERE id=$1 AND organization_id=$2")
+        .bind(request_id).bind(actor.organization_id).bind(task.id).execute(&mut *c).await?;
+    Ok((request_id, task, false))
 }
 
 fn scope_sql(alias: &str) -> String {
@@ -516,6 +609,7 @@ pub(crate) async fn claim_scheduler_tasks(
     claim_lease_seconds: i64,
     priority_aging_seconds: i64,
 ) -> Result<Vec<DevRailTaskRow>, sqlx::Error> {
+    let dependency_eligible = dependency_eligible_sql("t");
     let sql = format!(
         r#"WITH candidates AS (
             SELECT t.id,
@@ -533,6 +627,7 @@ pub(crate) async fn claim_scheduler_tasks(
             WHERE t.status = 'queued'
               AND t.archived_at IS NULL
               AND t.scheduler_attempt < t.scheduler_max_attempts
+              AND {dependency_eligible}
               AND e.enabled
               AND e.archived_at IS NULL
               AND (
@@ -623,19 +718,22 @@ pub(crate) async fn scheduler_claim_is_current(
     claim_token: uuid::Uuid,
     claim_lease_seconds: i64,
 ) -> Result<bool, sqlx::Error> {
-    sqlx::query_scalar::<_, i64>(
-        "SELECT id FROM devrail_tasks
-         WHERE id = $1 AND status = 'queued'
+    let sql = format!(
+        "SELECT t.id FROM devrail_tasks t
+         WHERE t.id = $1 AND t.status = 'queued'
            AND scheduler_claim_token = $2
            AND scheduler_claimed_at >= now() - make_interval(secs => $3)
+           AND {}
          FOR UPDATE",
-    )
-    .bind(task_id)
-    .bind(claim_token)
-    .bind(claim_lease_seconds)
-    .fetch_optional(c)
-    .await
-    .map(|row| row.is_some())
+        dependency_eligible_sql("t")
+    );
+    sqlx::query_scalar::<_, i64>(AssertSqlSafe(sql))
+        .bind(task_id)
+        .bind(claim_token)
+        .bind(claim_lease_seconds)
+        .fetch_optional(c)
+        .await
+        .map(|row| row.is_some())
 }
 
 #[derive(Debug, Clone)]
@@ -652,6 +750,198 @@ pub(crate) struct SchedulerReconciliation {
     pub stale_runs: u64,
     pub exhausted_tasks: u64,
     pub pending_interruptions: Vec<PendingRunInterruption>,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct DependencyPropagationCandidate {
+    dependency_id: i64,
+    organization_id: i64,
+    department_id: Option<i64>,
+    owner_user_id: i64,
+    task_id: i64,
+    prerequisite_task_id: i64,
+    source_status_history_id: i64,
+    prerequisite_status: String,
+    action: String,
+}
+
+fn dependency_action_rank(action: &str) -> u8 {
+    match action {
+        "fail" => 0,
+        "skip" => 1,
+        _ => 2,
+    }
+}
+
+pub(crate) async fn reconcile_task_dependencies(pool: &PgPool) -> Result<u64, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    let candidates = sqlx::query_as::<_, DependencyPropagationCandidate>(
+        r#"WITH terminal_dependencies AS (
+            SELECT d.id AS dependency_id,
+                   d.organization_id,
+                   d.department_id,
+                   d.owner_user_id,
+                   d.task_id,
+                   d.prerequisite_task_id,
+                   history.id AS source_status_history_id,
+                   prerequisite.status AS prerequisite_status,
+                   CASE
+                       WHEN prerequisite.status = 'cancelled' THEN d.cancelled_action
+                       WHEN prerequisite.status = 'failed'
+                            AND failed_run.exit_reason IN ('timeout', 'stall')
+                           THEN d.timeout_action
+                       ELSE d.failure_action
+                   END AS action
+            FROM devrail_task_dependencies d
+            JOIN devrail_tasks prerequisite
+              ON prerequisite.id = d.prerequisite_task_id
+             AND prerequisite.organization_id = d.organization_id
+            JOIN LATERAL (
+                SELECT h.id
+                FROM devrail_task_status_history h
+                WHERE h.organization_id = prerequisite.organization_id
+                  AND h.task_id = prerequisite.id
+                  AND h.to_status = prerequisite.status
+                ORDER BY h.id DESC
+                LIMIT 1
+            ) history ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT r.exit_reason
+                FROM devrail_runs r
+                WHERE r.organization_id = prerequisite.organization_id
+                  AND r.task_id = prerequisite.id
+                  AND r.status = 'failed'
+                ORDER BY r.completed_at DESC NULLS LAST, r.id DESC
+                LIMIT 1
+            ) failed_run ON prerequisite.status = 'failed'
+            WHERE prerequisite.status IN ('failed', 'cancelled', 'skipped')
+        )
+        SELECT dependency_id, organization_id, department_id, owner_user_id,
+               task_id, prerequisite_task_id, source_status_history_id,
+               prerequisite_status, action
+        FROM terminal_dependencies
+        ORDER BY task_id,
+                 CASE action WHEN 'fail' THEN 0 WHEN 'skip' THEN 1 ELSE 2 END,
+                 dependency_id"#,
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    let mut propagated = 0_u64;
+    let mut offset = 0;
+    while offset < candidates.len() {
+        let task_id = candidates[offset].task_id;
+        let mut end = offset + 1;
+        while end < candidates.len() && candidates[end].task_id == task_id {
+            end += 1;
+        }
+        let task_candidates = &candidates[offset..end];
+        let winner = task_candidates
+            .iter()
+            .min_by_key(|candidate| dependency_action_rank(&candidate.action))
+            .expect("dependency candidate group is non-empty");
+        let current_status = sqlx::query_scalar::<_, String>(
+            "SELECT status FROM devrail_tasks WHERE id=$1 AND organization_id=$2 FOR UPDATE",
+        )
+        .bind(task_id)
+        .bind(winner.organization_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        let target_status = match (current_status.as_str(), winner.action.as_str()) {
+            ("queued", "fail") | ("skipped", "fail") => "failed",
+            ("queued", "skip") => "skipped",
+            _ => current_status.as_str(),
+        };
+        let trace_id = uuid::Uuid::new_v4().to_string();
+        for candidate in task_candidates {
+            sqlx::query(
+                "INSERT INTO devrail_dependency_propagations (organization_id,department_id,owner_user_id,dependency_id,source_status_history_id,action,result_status,trace_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (organization_id,dependency_id,source_status_history_id,action) DO NOTHING",
+            )
+            .bind(candidate.organization_id)
+            .bind(candidate.department_id)
+            .bind(candidate.owner_user_id)
+            .bind(candidate.dependency_id)
+            .bind(candidate.source_status_history_id)
+            .bind(&candidate.action)
+            .bind(target_status)
+            .bind(&trace_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+        if target_status != current_status {
+            let summary = if target_status == "skipped" {
+                "任务因前置任务终态而跳过"
+            } else {
+                "任务因前置任务终态而失败"
+            };
+            let reason = format!(
+                "前置任务 {} 已{}，依赖策略为 {}",
+                winner.prerequisite_task_id, winner.prerequisite_status, winner.action
+            );
+            sqlx::query("SELECT set_config('devrail.actor_type','system',true),set_config('devrail.actor_user_id','',true),set_config('devrail.transition_reason',$1,true),set_config('devrail.trace_id',$2,true)")
+                .bind(format!("dependency_{}", winner.action))
+                .bind(&trace_id)
+                .execute(&mut *tx)
+                .await?;
+            let updated = sqlx::query("UPDATE devrail_tasks SET status=$3,scheduler_claim_token=NULL,scheduler_claimed_at=NULL,scheduler_last_error=$4,updated_at=now() WHERE id=$1 AND organization_id=$2 AND status IN ('queued','skipped')")
+                .bind(task_id)
+                .bind(winner.organization_id)
+                .bind(target_status)
+                .bind(reason)
+                .execute(&mut *tx)
+                .await?
+                .rows_affected();
+            if updated == 1 {
+                let idempotency_key = format!(
+                    "dependency-propagation:{}:{}:{}",
+                    winner.dependency_id, winner.source_status_history_id, winner.action
+                );
+                sqlx::query("INSERT INTO devrail_task_events (organization_id,department_id,owner_user_id,task_id,cursor,event_type,idempotency_key,payload,summary) VALUES ($1,$2,$3,$4,COALESCE((SELECT max(cursor)+1 FROM devrail_task_events WHERE task_id=$4),1),'task.dependency.propagated',$5,$6,$7) ON CONFLICT (task_id,idempotency_key) DO NOTHING")
+                    .bind(winner.organization_id)
+                    .bind(winner.department_id)
+                    .bind(winner.owner_user_id)
+                    .bind(task_id)
+                    .bind(&idempotency_key)
+                    .bind(serde_json::json!({"dependencyId":winner.dependency_id,"prerequisiteTaskId":winner.prerequisite_task_id,"action":winner.action,"resultStatus":target_status}))
+                    .bind(summary)
+                    .execute(&mut *tx)
+                    .await?;
+                sqlx::query("INSERT INTO audit_logs (actor_user_id,action,target_type,target_id,details,trace_id,organization_id,department_id) VALUES (NULL,'devrail.task.dependency.propagate','devrail_task',$1,$2,$3,$4,$5)")
+                    .bind(task_id)
+                    .bind(serde_json::json!({"actorType":"system","dependencyId":winner.dependency_id,"prerequisiteTaskId":winner.prerequisite_task_id,"action":winner.action,"resultStatus":target_status,"sourceStatusHistoryId":winner.source_status_history_id}))
+                    .bind(&trace_id)
+                    .bind(winner.organization_id)
+                    .bind(winner.department_id)
+                    .execute(&mut *tx)
+                    .await?;
+                let source_key = format!("task:{task_id}:{idempotency_key}");
+                let deep_link = format!("/devrail/tasks/{task_id}");
+                let notification_id = sqlx::query_scalar::<_, i64>("INSERT INTO devrail_notifications (organization_id,department_id,recipient_user_id,event_type,level,title,summary,resource_type,resource_id,deep_link,source_key) VALUES ($1,$2,$3,'task.dependency.propagated',$4,$5,$6,'devrail_task',$7,$8,$9) ON CONFLICT (recipient_user_id,source_key) DO NOTHING RETURNING id")
+                    .bind(winner.organization_id)
+                    .bind(winner.department_id)
+                    .bind(winner.owner_user_id)
+                    .bind(if target_status == "skipped" { "warning" } else { "error" })
+                    .bind(if target_status == "skipped" { "任务已跳过" } else { "任务已失败" })
+                    .bind(summary)
+                    .bind(task_id)
+                    .bind(&deep_link)
+                    .bind(&source_key)
+                    .fetch_optional(&mut *tx)
+                    .await?;
+                if let Some(notification_id) = notification_id {
+                    sqlx::query("INSERT INTO devrail_outbox_events (organization_id,event_type,aggregate_type,aggregate_id,payload) VALUES ($1,'notification.created','devrail_task',$2,$3)")
+                        .bind(winner.organization_id)
+                        .bind(task_id)
+                        .bind(serde_json::json!({"notificationId":notification_id,"eventType":"task.dependency.propagated","summary":summary,"deepLink":deep_link}))
+                        .execute(&mut *tx)
+                        .await?;
+                }
+                propagated += 1;
+            }
+        }
+        offset = end;
+    }
+    tx.commit().await?;
+    Ok(propagated)
 }
 
 pub(crate) async fn reconcile_scheduler_state(
@@ -892,11 +1182,11 @@ pub(crate) async fn create_task(
     actor: &ActorContext,
     n: &NewTask<'_>,
 ) -> Result<DevRailTaskRow, sqlx::Error> {
-    let sql=format!("INSERT INTO devrail_tasks (organization_id,department_id,owner_user_id,project_id,repository_id,environment_id,assignee_user_id,title,goal,background,acceptance_criteria,constraints,priority,labels,due_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING {TASK_COLUMNS}");
+    let sql=format!("INSERT INTO devrail_tasks (organization_id,department_id,owner_user_id,project_id,repository_id,environment_id,assignee_user_id,title,goal,background,acceptance_criteria,constraints,priority,labels,due_at,creation_source,source_task_id,source_run_id,followup_depth) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING {TASK_COLUMNS}");
     sqlx::query_as::<_, DevRailTaskRow>(AssertSqlSafe(sql))
         .bind(actor.organization_id)
         .bind(n.department_id)
-        .bind(actor.user_id)
+        .bind(n.owner_user_id)
         .bind(n.project_id)
         .bind(n.repository_id)
         .bind(n.environment_id)
@@ -909,8 +1199,175 @@ pub(crate) async fn create_task(
         .bind(n.priority)
         .bind(n.labels)
         .bind(n.due_at)
+        .bind(n.creation_source)
+        .bind(n.source_task_id)
+        .bind(n.source_run_id)
+        .bind(n.followup_depth)
         .fetch_one(c)
         .await
+}
+
+pub(crate) async fn list_task_dependencies(
+    pool: &PgPool,
+    actor: &ActorContext,
+    task_id: i64,
+) -> Result<Vec<crate::models::DevRailTaskDependencyRow>, sqlx::Error> {
+    let sql = format!(
+        "WITH RECURSIVE visible_departments AS (SELECT id FROM departments WHERE id=$4 AND organization_id=$2 UNION SELECT child.id FROM departments child JOIN visible_departments parent ON child.parent_id=parent.id WHERE child.organization_id=$2) SELECT d.id,d.organization_id,d.department_id,d.owner_user_id,d.task_id,d.prerequisite_task_id,p.title AS prerequisite_title,p.status AS prerequisite_status,d.failure_action,d.cancelled_action,d.timeout_action,d.creation_source,d.created_at FROM devrail_task_dependencies d JOIN devrail_tasks p ON p.id=d.prerequisite_task_id AND p.organization_id=d.organization_id WHERE d.task_id=$5 AND {} AND {} ORDER BY d.id",
+        scope_sql("d"),
+        scope_sql("p")
+    );
+    sqlx::query_as::<_, crate::models::DevRailTaskDependencyRow>(AssertSqlSafe(sql))
+        .bind(actor.data_scope.as_str())
+        .bind(actor.organization_id)
+        .bind(actor.user_id)
+        .bind(actor.department_id)
+        .bind(task_id)
+        .fetch_all(pool)
+        .await
+}
+
+pub(crate) async fn list_task_dependents(
+    pool: &PgPool,
+    actor: &ActorContext,
+    task_id: i64,
+) -> Result<Vec<crate::models::DevRailTaskDependentRow>, sqlx::Error> {
+    let sql = format!(
+        "WITH RECURSIVE visible_departments AS (SELECT id FROM departments WHERE id=$4 AND organization_id=$2 UNION SELECT child.id FROM departments child JOIN visible_departments parent ON child.parent_id=parent.id WHERE child.organization_id=$2) SELECT d.id,d.task_id,t.title AS task_title,t.status AS task_status,d.failure_action,d.cancelled_action,d.timeout_action,d.creation_source,d.created_at FROM devrail_task_dependencies d JOIN devrail_tasks t ON t.id=d.task_id AND t.organization_id=d.organization_id WHERE d.prerequisite_task_id=$5 AND {} AND {} ORDER BY d.id",
+        scope_sql("d"),
+        scope_sql("t")
+    );
+    sqlx::query_as::<_, crate::models::DevRailTaskDependentRow>(AssertSqlSafe(sql))
+        .bind(actor.data_scope.as_str())
+        .bind(actor.organization_id)
+        .bind(actor.user_id)
+        .bind(actor.department_id)
+        .bind(task_id)
+        .fetch_all(pool)
+        .await
+}
+
+pub(crate) async fn append_task_event(
+    c: &mut PgConnection,
+    task: &DevRailTaskRow,
+    event_type: &str,
+    idempotency_key: &str,
+    payload: &Value,
+    summary: &str,
+) -> Result<crate::models::DevRailTaskEventRow, sqlx::Error> {
+    sqlx::query_as::<_, crate::models::DevRailTaskEventRow>(
+        "INSERT INTO devrail_task_events (organization_id,department_id,owner_user_id,task_id,cursor,event_type,idempotency_key,payload,summary) VALUES ($1,$2,$3,$4,COALESCE((SELECT max(cursor)+1 FROM devrail_task_events WHERE task_id=$4),1),$5,$6,$7,$8) ON CONFLICT (task_id,idempotency_key) DO UPDATE SET idempotency_key=EXCLUDED.idempotency_key RETURNING id,organization_id,department_id,owner_user_id,task_id,cursor,event_type,idempotency_key,payload,summary,occurred_at"
+    ).bind(task.organization_id).bind(task.department_id).bind(task.owner_user_id).bind(task.id)
+        .bind(event_type).bind(idempotency_key).bind(payload).bind(summary).fetch_one(c).await
+}
+
+pub(crate) async fn list_task_events(
+    pool: &PgPool,
+    actor: &ActorContext,
+    task_id: i64,
+    after_cursor: i64,
+    limit: i64,
+) -> Result<Vec<crate::models::DevRailTaskEventRow>, sqlx::Error> {
+    let sql = format!(
+        "WITH RECURSIVE visible_departments AS (SELECT id FROM departments WHERE id=$4 AND organization_id=$2 UNION SELECT child.id FROM departments child JOIN visible_departments parent ON child.parent_id=parent.id WHERE child.organization_id=$2) SELECT e.id,e.organization_id,e.department_id,e.owner_user_id,e.task_id,e.cursor,e.event_type,e.idempotency_key,e.payload,e.summary,e.occurred_at FROM devrail_task_events e WHERE e.task_id=$5 AND e.cursor>$6 AND {} ORDER BY e.cursor LIMIT $7",
+        scope_sql("e")
+    );
+    sqlx::query_as::<_, crate::models::DevRailTaskEventRow>(AssertSqlSafe(sql))
+        .bind(actor.data_scope.as_str())
+        .bind(actor.organization_id)
+        .bind(actor.user_id)
+        .bind(actor.department_id)
+        .bind(task_id)
+        .bind(after_cursor)
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+}
+
+pub(crate) async fn replace_task_dependencies(
+    c: &mut PgConnection,
+    actor: &ActorContext,
+    task_id: i64,
+    revision: i64,
+    mutation: &DependencyMutation<'_>,
+    dependencies: &[NewTaskDependency<'_>],
+) -> Result<(), sqlx::Error> {
+    let task_sql = format!(
+        "WITH RECURSIVE visible_departments AS (SELECT id FROM departments WHERE id=$4 AND organization_id=$2 UNION SELECT child.id FROM departments child JOIN visible_departments parent ON child.parent_id=parent.id WHERE child.organization_id=$2) SELECT t.department_id,t.owner_user_id,t.revision FROM devrail_tasks t WHERE t.id=$5 AND t.organization_id=$2 AND t.archived_at IS NULL AND {} FOR UPDATE",
+        scope_sql("t")
+    );
+    let (department_id, owner_user_id, current_revision) =
+        sqlx::query_as::<_, (Option<i64>, i64, i64)>(AssertSqlSafe(task_sql))
+            .bind(actor.data_scope.as_str())
+            .bind(actor.organization_id)
+            .bind(actor.user_id)
+            .bind(actor.department_id)
+            .bind(task_id)
+            .fetch_optional(&mut *c)
+            .await?
+            .ok_or(sqlx::Error::RowNotFound)?;
+    let existing = sqlx::query_as::<_, (String, String)>(
+        "SELECT request_digest, idempotency_key FROM devrail_task_dependency_mutations WHERE organization_id=$1 AND task_id=$2 AND idempotency_key=$3"
+    ).bind(actor.organization_id).bind(task_id).bind(mutation.idempotency_key).fetch_optional(&mut *c).await?;
+    if let Some((digest, _)) = existing {
+        if digest == mutation.request_digest {
+            return Ok(());
+        }
+        return Err(sqlx::Error::Protocol("依赖幂等键对应不同请求".into()));
+    }
+    if current_revision != revision {
+        return Err(sqlx::Error::Protocol("任务版本已变化".into()));
+    }
+    let mut ids = dependencies
+        .iter()
+        .map(|d| d.prerequisite_task_id)
+        .collect::<Vec<_>>();
+    ids.push(task_id);
+    ids.sort_unstable();
+    ids.dedup();
+    let lock_sql = format!(
+        "WITH RECURSIVE visible_departments AS (SELECT id FROM departments WHERE id=$4 AND organization_id=$2 UNION SELECT child.id FROM departments child JOIN visible_departments parent ON child.parent_id=parent.id WHERE child.organization_id=$2) SELECT t.id FROM devrail_tasks t WHERE t.id=ANY($5::bigint[]) AND t.organization_id=$2 AND t.archived_at IS NULL AND {} ORDER BY t.id FOR UPDATE",
+        scope_sql("t")
+    );
+    let locked = sqlx::query_scalar::<_, i64>(AssertSqlSafe(lock_sql))
+        .bind(actor.data_scope.as_str())
+        .bind(actor.organization_id)
+        .bind(actor.user_id)
+        .bind(actor.department_id)
+        .bind(&ids)
+        .fetch_all(&mut *c)
+        .await?;
+    if locked.len() != ids.len() {
+        return Err(sqlx::Error::RowNotFound);
+    }
+    for dependency in dependencies {
+        let reachable = sqlx::query_scalar::<_, bool>(
+            "WITH RECURSIVE reachable(id) AS (SELECT prerequisite_task_id FROM devrail_task_dependencies WHERE task_id=$1 AND organization_id=$2 UNION SELECT d.prerequisite_task_id FROM devrail_task_dependencies d JOIN reachable r ON d.task_id=r.id WHERE d.organization_id=$2) SELECT EXISTS (SELECT 1 FROM reachable WHERE id=$3)"
+        ).bind(dependency.prerequisite_task_id).bind(actor.organization_id).bind(task_id).fetch_one(&mut *c).await?;
+        if reachable {
+            return Err(sqlx::Error::Protocol("任务依赖会形成环".into()));
+        }
+    }
+    sqlx::query("DELETE FROM devrail_task_dependencies WHERE task_id=$1 AND organization_id=$2")
+        .bind(task_id)
+        .bind(actor.organization_id)
+        .execute(&mut *c)
+        .await?;
+    for dependency in dependencies {
+        sqlx::query("INSERT INTO devrail_task_dependencies (organization_id,department_id,owner_user_id,task_id,prerequisite_task_id,failure_action,cancelled_action,timeout_action,creation_source,created_by_type,created_by_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)")
+            .bind(actor.organization_id).bind(department_id).bind(owner_user_id)
+            .bind(dependency.task_id).bind(dependency.prerequisite_task_id)
+            .bind(dependency.failure_action).bind(dependency.cancelled_action).bind(dependency.timeout_action)
+            .bind(dependency.creation_source).bind(dependency.created_by_type).bind(dependency.created_by_user_id)
+            .execute(&mut *c).await?;
+    }
+    let result_revision = sqlx::query_scalar::<_, i64>(
+        "UPDATE devrail_tasks SET revision=revision+1,updated_at=now() WHERE id=$1 AND organization_id=$2 RETURNING revision"
+    ).bind(task_id).bind(actor.organization_id).fetch_one(&mut *c).await?;
+    sqlx::query("INSERT INTO devrail_task_dependency_mutations (organization_id,department_id,owner_user_id,task_id,idempotency_key,request_digest,result_revision) VALUES ($1,$2,$3,$4,$5,$6,$7)")
+        .bind(actor.organization_id).bind(department_id).bind(owner_user_id).bind(task_id)
+        .bind(mutation.idempotency_key).bind(mutation.request_digest).bind(result_revision).execute(&mut *c).await?;
+    Ok(())
 }
 pub(crate) async fn update_task(
     c: &mut PgConnection,
@@ -1500,7 +1957,15 @@ mod scheduler_integration_tests {
             .execute(&pool)
             .await
             .expect("cancel running task");
-        let cancellation = reconcile_scheduler_state(&pool, &[run_id], 30)
+        // Keep unrelated active fixtures out of this focused interruption
+        // assertion; the production reconciler still scans every run.
+        let active_run_ids = sqlx::query_scalar::<_, i64>(
+            "SELECT id FROM devrail_runs WHERE status IN ('starting','active')",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("active run ids");
+        let cancellation = reconcile_scheduler_state(&pool, &active_run_ids, 30)
             .await
             .expect("cancellation reconciliation");
         let run_interruptions = cancellation
@@ -1529,10 +1994,17 @@ mod scheduler_integration_tests {
             .await
             .expect("restore running task for stale reconciliation");
 
-        let first = reconcile_scheduler_state(&pool, &[], 30)
+        let protected_run_ids = sqlx::query_scalar::<_, i64>(
+            "SELECT id FROM devrail_runs WHERE status IN ('starting','active') AND id <> $1",
+        )
+        .bind(run_id)
+        .fetch_all(&pool)
+        .await
+        .expect("protected run ids");
+        let first = reconcile_scheduler_state(&pool, &protected_run_ids, 30)
             .await
             .expect("first reconciliation");
-        let second = reconcile_scheduler_state(&pool, &[], 30)
+        let second = reconcile_scheduler_state(&pool, &protected_run_ids, 30)
             .await
             .expect("second reconciliation");
         assert_eq!(first.stale_runs, 1);
@@ -1638,5 +2110,335 @@ mod scheduler_integration_tests {
         .await
         .expect("restart audit count");
         assert_eq!(restart_audits, 1);
+    }
+
+    #[tokio::test]
+    async fn dependency_claim_and_terminal_propagation_are_deterministic() {
+        let _guard = DATABASE_TEST_LOCK.lock().await;
+        let Some(pool) = test_pool().await else {
+            return;
+        };
+        let fixture = scheduler_fixture(&pool).await;
+        let prerequisite_id = queued_task(&pool, fixture, 3).await;
+        let downstream_id = queued_task(&pool, fixture, 3).await;
+        let (project_id, _, owner_user_id, department_id) = fixture;
+        let organization_id = sqlx::query_scalar::<_, i64>(
+            "SELECT organization_id FROM devrail_projects WHERE id=$1",
+        )
+        .bind(project_id)
+        .fetch_one(&pool)
+        .await
+        .expect("project organization");
+        sqlx::query(
+            "INSERT INTO devrail_task_dependencies
+             (organization_id, department_id, owner_user_id, task_id, prerequisite_task_id,
+              failure_action, cancelled_action, timeout_action, creation_source,
+              created_by_type, created_by_user_id)
+             VALUES ($1,$2,$3,$4,$5,'skip','skip','fail','manual','user',$3)",
+        )
+        .bind(organization_id)
+        .bind(department_id)
+        .bind(owner_user_id)
+        .bind(downstream_id)
+        .bind(prerequisite_id)
+        .execute(&pool)
+        .await
+        .expect("insert dependency");
+        let claim = claim_scheduler_tasks(&pool, Uuid::new_v4(), 100, 60, 3_600)
+            .await
+            .expect("claim dependency graph");
+        assert!(claim.iter().any(|task| task.id == prerequisite_id));
+        assert!(!claim.iter().any(|task| task.id == downstream_id));
+        sqlx::query("UPDATE devrail_tasks SET status='failed' WHERE id=$1")
+            .bind(prerequisite_id)
+            .execute(&pool)
+            .await
+            .expect("fail prerequisite");
+        let propagated = reconcile_task_dependencies(&pool)
+            .await
+            .expect("propagate dependency");
+        assert!(propagated >= 1);
+        let status =
+            sqlx::query_scalar::<_, String>("SELECT status FROM devrail_tasks WHERE id=$1")
+                .bind(downstream_id)
+                .fetch_one(&pool)
+                .await
+                .expect("downstream status");
+        assert_eq!(status, "skipped");
+        let replay = reconcile_task_dependencies(&pool)
+            .await
+            .expect("replay propagation");
+        assert_eq!(replay, 0);
+        let event_count = sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM devrail_task_events WHERE task_id=$1 AND event_type='task.dependency.propagated'",
+        )
+        .bind(downstream_id)
+        .fetch_one(&pool)
+        .await
+        .expect("dependency event count");
+        assert_eq!(event_count, 1);
+    }
+
+    #[tokio::test]
+    async fn dependency_replace_rejects_cycles_atomically() {
+        let _guard = DATABASE_TEST_LOCK.lock().await;
+        let Some(pool) = test_pool().await else {
+            return;
+        };
+        let fixture = scheduler_fixture(&pool).await;
+        let first = queued_task(&pool, fixture, 3).await;
+        let second = queued_task(&pool, fixture, 3).await;
+        let (project_id, _, owner_user_id, department_id) = fixture;
+        let organization_id = sqlx::query_scalar::<_, i64>(
+            "SELECT organization_id FROM devrail_projects WHERE id=$1",
+        )
+        .bind(project_id)
+        .fetch_one(&pool)
+        .await
+        .expect("project organization");
+        let actor = ActorContext {
+            actor_type: ActorType::User,
+            user_id: owner_user_id,
+            session_id: 1,
+            organization_id,
+            department_id,
+            data_scope: DataScope::Organization,
+            permission_codes: BTreeSet::new(),
+        };
+        let first_edge = NewTaskDependency {
+            task_id: first,
+            prerequisite_task_id: second,
+            failure_action: "wait",
+            cancelled_action: "wait",
+            timeout_action: "wait",
+            creation_source: "manual",
+            created_by_type: "user",
+            created_by_user_id: Some(owner_user_id),
+        };
+        let mut tx = pool.begin().await.expect("begin first dependency");
+        replace_task_dependencies(
+            &mut tx,
+            &actor,
+            first,
+            1,
+            &DependencyMutation {
+                idempotency_key: "cycle-first",
+                request_digest: &"a".repeat(64),
+            },
+            &[first_edge],
+        )
+        .await
+        .expect("first edge");
+        tx.commit().await.expect("commit first dependency");
+        let second_edge = NewTaskDependency {
+            task_id: second,
+            prerequisite_task_id: first,
+            failure_action: "wait",
+            cancelled_action: "wait",
+            timeout_action: "wait",
+            creation_source: "manual",
+            created_by_type: "user",
+            created_by_user_id: Some(owner_user_id),
+        };
+        let mut tx = pool.begin().await.expect("begin cycle dependency");
+        let error = replace_task_dependencies(
+            &mut tx,
+            &actor,
+            second,
+            1,
+            &DependencyMutation {
+                idempotency_key: "cycle-second",
+                request_digest: &"b".repeat(64),
+            },
+            &[second_edge],
+        )
+        .await
+        .expect_err("cycle must be rejected");
+        assert!(error.to_string().contains("形成环"));
+        tx.rollback().await.expect("rollback cycle dependency");
+        let edge_count = sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM devrail_task_dependencies WHERE task_id=$1",
+        )
+        .bind(second)
+        .fetch_one(&pool)
+        .await
+        .expect("second edge count");
+        assert_eq!(edge_count, 0);
+    }
+
+    #[tokio::test]
+    async fn followup_replay_is_idempotent_and_does_not_consume_quota() {
+        let _guard = DATABASE_TEST_LOCK.lock().await;
+        let Some(pool) = test_pool().await else {
+            return;
+        };
+        let fixture = scheduler_fixture(&pool).await;
+        let source_task_id = queued_task(&pool, fixture, 3).await;
+        let (project_id, _, owner_user_id, department_id) = fixture;
+        let organization_id = sqlx::query_scalar::<_, i64>(
+            "SELECT organization_id FROM devrail_projects WHERE id=$1",
+        )
+        .bind(project_id)
+        .fetch_one(&pool)
+        .await
+        .expect("project organization");
+        let actor = ActorContext {
+            actor_type: ActorType::System,
+            user_id: owner_user_id,
+            session_id: 0,
+            organization_id,
+            department_id,
+            data_scope: DataScope::Organization,
+            permission_codes: BTreeSet::from(["devrail:followup:create".to_owned()]),
+        };
+        let snapshot_id = sqlx::query_scalar::<_, i64>(
+            "INSERT INTO devrail_task_snapshots (organization_id,department_id,owner_user_id,task_id,snapshot) VALUES ($1,$2,$3,$4,'{}') RETURNING id",
+        )
+        .bind(organization_id)
+        .bind(department_id)
+        .bind(owner_user_id)
+        .bind(source_task_id)
+        .fetch_one(&pool)
+        .await
+        .expect("source snapshot");
+        let source_run_id = sqlx::query_scalar::<_, i64>(
+            "INSERT INTO devrail_runs (organization_id,department_id,owner_user_id,task_id,snapshot_id,idempotency_key,attempt,task_revision,workflow_source,workflow_version,workflow_digest,workflow_snapshot,actor_type,status,cwd,policy,startup_args_summary) VALUES ($1,$2,$3,$4,$5,$6,1,1,'legacy','legacy-v1',$7,'{}','system','active','/tmp','{}','[]') RETURNING id",
+        )
+        .bind(organization_id)
+        .bind(department_id)
+        .bind(owner_user_id)
+        .bind(source_task_id)
+        .bind(snapshot_id)
+        .bind(format!("followup-source-{source_task_id}"))
+        .bind("0".repeat(64))
+        .fetch_one(&pool)
+        .await
+        .expect("source run");
+        let labels = json!([]);
+        let task = NewTask {
+            owner_user_id,
+            project_id,
+            repository_id: None,
+            environment_id: None,
+            assignee_user_id: None,
+            title: "后续任务",
+            goal: "验证幂等重放",
+            background: None,
+            acceptance_criteria: None,
+            constraints: None,
+            priority: "normal",
+            labels: &labels,
+            due_at: None,
+            department_id,
+            creation_source: "agent_followup",
+            source_task_id: Some(source_task_id),
+            source_run_id: Some(source_run_id),
+            followup_depth: 1,
+        };
+        let dependencies: [NewTaskDependency<'_>; 0] = [];
+        let input = NewFollowup {
+            department_id,
+            owner_user_id,
+            source_task_id,
+            source_run_id,
+            idempotency_key: "followup-replay",
+            request_digest: &"c".repeat(64),
+            task,
+            dependencies: &dependencies,
+        };
+        let first = {
+            let mut tx = pool.begin().await.expect("first followup transaction");
+            let result = create_followup_task(&mut tx, &actor, &input, 8)
+                .await
+                .expect("first followup");
+            tx.commit().await.expect("commit first followup");
+            result
+        };
+        assert!(!first.2);
+        let second = {
+            let mut tx = pool.begin().await.expect("replay followup transaction");
+            let result = create_followup_task(&mut tx, &actor, &input, 8)
+                .await
+                .expect("replay followup");
+            tx.commit().await.expect("commit replay followup");
+            result
+        };
+        assert!(second.2);
+        assert_eq!(first.1.id, second.1.id);
+        let request_count = sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM devrail_followup_requests WHERE source_run_id=$1 AND idempotency_key='followup-replay'",
+        )
+        .bind(source_run_id)
+        .fetch_one(&pool)
+        .await
+        .expect("followup request count");
+        assert_eq!(request_count, 1);
+        sqlx::query("UPDATE devrail_runs SET status='completed', completed_at=now() WHERE id=$1")
+            .bind(source_run_id)
+            .execute(&pool)
+            .await
+            .expect("complete followup source run");
+    }
+
+    #[tokio::test]
+    async fn dependency_relation_queries_hide_out_of_scope_prerequisites() {
+        let _guard = DATABASE_TEST_LOCK.lock().await;
+        let Some(pool) = test_pool().await else {
+            return;
+        };
+        let fixture = scheduler_fixture(&pool).await;
+        let downstream_id = queued_task(&pool, fixture, 3).await;
+        let (project_id, environment_id, owner_user_id, department_id) = fixture;
+        let Some((other_owner, other_department)) = sqlx::query_as::<_, (i64, Option<i64>)>(
+            "SELECT id, department_id FROM users WHERE id <> $1 ORDER BY id LIMIT 1",
+        )
+        .bind(owner_user_id)
+        .fetch_optional(&pool)
+        .await
+        .expect("other owner query") else {
+            return;
+        };
+        let organization_id = sqlx::query_scalar::<_, i64>(
+            "SELECT organization_id FROM devrail_projects WHERE id=$1",
+        )
+        .bind(project_id)
+        .fetch_one(&pool)
+        .await
+        .expect("project organization");
+        let prerequisite_id = sqlx::query_scalar::<_, i64>(
+            "INSERT INTO devrail_tasks (organization_id,department_id,owner_user_id,project_id,environment_id,title,goal,status) VALUES ($1,$2,$3,$4,$5,'范围外前置','不可见','queued') RETURNING id",
+        )
+        .bind(organization_id)
+        .bind(other_department)
+        .bind(other_owner)
+        .bind(project_id)
+        .bind(environment_id)
+        .fetch_one(&pool)
+        .await
+        .expect("out of scope prerequisite");
+        sqlx::query(
+            "INSERT INTO devrail_task_dependencies (organization_id,department_id,owner_user_id,task_id,prerequisite_task_id,creation_source,created_by_type,created_by_user_id) VALUES ($1,$2,$3,$4,$5,'manual','user',$3)",
+        )
+        .bind(organization_id)
+        .bind(department_id)
+        .bind(owner_user_id)
+        .bind(downstream_id)
+        .bind(prerequisite_id)
+        .execute(&pool)
+        .await
+        .expect("scoped dependency");
+        let actor = ActorContext {
+            actor_type: ActorType::User,
+            user_id: owner_user_id,
+            session_id: 1,
+            organization_id,
+            department_id,
+            data_scope: DataScope::SelfOnly,
+            permission_codes: BTreeSet::new(),
+        };
+        let visible = list_task_dependencies(&pool, &actor, downstream_id)
+            .await
+            .expect("scoped relation query");
+        assert!(visible.is_empty());
     }
 }

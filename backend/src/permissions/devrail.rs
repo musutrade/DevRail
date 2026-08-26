@@ -32,6 +32,18 @@ pub struct TaskWrite;
 impl PermissionRequirement for TaskWrite {
     const CODE: &'static str = "devrail:task:write";
 }
+pub struct TaskDependencyRead;
+impl PermissionRequirement for TaskDependencyRead {
+    const CODE: &'static str = "devrail:task_dependency:read";
+}
+pub struct TaskDependencyWrite;
+impl PermissionRequirement for TaskDependencyWrite {
+    const CODE: &'static str = "devrail:task_dependency:write";
+}
+pub struct FollowupCreate;
+impl PermissionRequirement for FollowupCreate {
+    const CODE: &'static str = "devrail:followup:create";
+}
 pub struct CommentRead;
 impl PermissionRequirement for CommentRead {
     const CODE: &'static str = "devrail:comment:read";

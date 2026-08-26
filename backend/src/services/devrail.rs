@@ -10,12 +10,13 @@ use crate::orchestration::workflow::{
 };
 use crate::repositories::{self, devrail, devrail_members, devrail_workflows};
 use axum::{body::Bytes, http::HeaderMap};
+use chrono::Utc;
 use reqwest::Client;
 use serde_json::{json, Value};
 use sqlx::PgPool;
 use std::path::Path;
 use std::process::Stdio;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::process::Command;
 use url::Url;
 
@@ -374,6 +375,12 @@ fn text(value: &str, field: &str, max: usize) -> Result<String, ApiError> {
     Ok(value.to_string())
 }
 
+fn optional_text(value: Option<&str>, field: &str, max: usize) -> Result<Option<String>, ApiError> {
+    value
+        .map(|text_value| text(text_value, field, max))
+        .transpose()
+}
+
 fn slug(value: &str) -> Result<String, ApiError> {
     let value = value.trim();
     if !(3..=64).contains(&value.len())
@@ -541,12 +548,93 @@ fn task_response(row: DevRailTaskRow) -> DevRailTaskResponse {
         scheduler_max_attempts: row.scheduler_max_attempts,
         scheduler_retry_at: row.scheduler_retry_at,
         scheduler_last_error: row.scheduler_last_error,
+        creation_source: row.creation_source,
+        source_task_id: row.source_task_id,
+        source_run_id: row.source_run_id,
+        followup_depth: row.followup_depth,
+        blocked_reason: None,
+        prerequisites: Vec::new(),
+        dependents: Vec::new(),
         labels: row.labels,
         due_at: row.due_at,
         created_at: row.created_at,
         updated_at: row.updated_at,
         archived_at: row.archived_at,
     }
+}
+
+fn dependency_response(row: DevRailTaskDependencyRow) -> DevRailTaskDependencyResponse {
+    DevRailTaskDependencyResponse {
+        id: row.id,
+        task_id: row.task_id,
+        prerequisite_task_id: row.prerequisite_task_id,
+        prerequisite_title: row.prerequisite_title,
+        prerequisite_status: row.prerequisite_status,
+        failure_action: row.failure_action,
+        cancelled_action: row.cancelled_action,
+        timeout_action: row.timeout_action,
+        creation_source: row.creation_source,
+        created_at: row.created_at,
+    }
+}
+
+fn dependent_response(row: DevRailTaskDependentRow) -> DevRailTaskDependentResponse {
+    DevRailTaskDependentResponse {
+        id: row.id,
+        task_id: row.task_id,
+        task_title: row.task_title,
+        task_status: row.task_status,
+        failure_action: row.failure_action,
+        cancelled_action: row.cancelled_action,
+        timeout_action: row.timeout_action,
+        creation_source: row.creation_source,
+        created_at: row.created_at,
+    }
+}
+
+fn dependency_block_reason(prerequisites: &[DevRailTaskDependencyResponse]) -> Option<String> {
+    prerequisites.iter().find_map(|dependency| {
+        if dependency.prerequisite_status == "succeeded" {
+            None
+        } else if dependency.prerequisite_status == "failed" {
+            Some(format!("前置任务 {} 已失败", dependency.prerequisite_title))
+        } else if dependency.prerequisite_status == "cancelled" {
+            Some(format!("前置任务 {} 已取消", dependency.prerequisite_title))
+        } else if dependency.prerequisite_status == "skipped" {
+            Some(format!("前置任务 {} 已跳过", dependency.prerequisite_title))
+        } else {
+            Some(format!(
+                "正在等待前置任务 {}",
+                dependency.prerequisite_title
+            ))
+        }
+    })
+}
+
+async fn task_relations(
+    pool: &PgPool,
+    actor: &ActorContext,
+    task_id: i64,
+    revision: i64,
+) -> Result<DevRailTaskRelationsResponse, ApiError> {
+    let started = Instant::now();
+    let (prerequisite_rows, dependent_rows) = tokio::try_join!(
+        devrail::list_task_dependencies(pool, actor, task_id),
+        devrail::list_task_dependents(pool, actor, task_id)
+    )
+    .map_err(db_error)?;
+    let prerequisites = prerequisite_rows
+        .into_iter()
+        .map(dependency_response)
+        .collect::<Vec<_>>();
+    crate::app_metrics::record_dependency_query_duration(started.elapsed().as_secs_f64());
+    Ok(DevRailTaskRelationsResponse {
+        task_id,
+        revision,
+        blocked_reason: dependency_block_reason(&prerequisites),
+        prerequisites,
+        dependents: dependent_rows.into_iter().map(dependent_response).collect(),
+    })
 }
 
 pub async fn list_projects(
@@ -1942,6 +2030,7 @@ fn task_status(value: &str) -> Result<String, ApiError> {
         "succeeded",
         "failed",
         "cancelled",
+        "skipped",
         "archived",
     ]
     .contains(&value)
@@ -1982,11 +2071,445 @@ pub async fn get_task(
     project_id: i64,
     id: i64,
 ) -> Result<DevRailTaskResponse, ApiError> {
-    devrail::find_task(pool, actor, project_id, id)
+    let row = devrail::find_task(pool, actor, project_id, id)
         .await
         .map_err(db_error)?
-        .map(task_response)
-        .ok_or_else(|| ApiError::not_found("任务不存在或超出数据范围"))
+        .ok_or_else(|| ApiError::not_found("任务不存在或超出数据范围"))?;
+    let relations = task_relations(pool, actor, id, row.revision).await?;
+    let mut response = task_response(row);
+    response.blocked_reason = relations.blocked_reason;
+    response.prerequisites = relations.prerequisites;
+    response.dependents = relations.dependents;
+    Ok(response)
+}
+
+pub async fn get_task_relations(
+    pool: &PgPool,
+    actor: &ActorContext,
+    project_id: i64,
+    task_id: i64,
+) -> Result<DevRailTaskRelationsResponse, ApiError> {
+    let task = devrail::find_task(pool, actor, project_id, task_id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("任务不存在或超出数据范围"))?;
+    task_relations(pool, actor, task_id, task.revision).await
+}
+
+pub async fn get_task_relations_by_id(
+    pool: &PgPool,
+    actor: &ActorContext,
+    task_id: i64,
+) -> Result<DevRailTaskRelationsResponse, ApiError> {
+    let task = devrail::find_task_by_id(pool, actor, task_id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("任务不存在或超出数据范围"))?;
+    task_relations(pool, actor, task_id, task.revision).await
+}
+
+fn dependency_error(error: sqlx::Error) -> ApiError {
+    match error {
+        sqlx::Error::RowNotFound => ApiError::not_found("任务不存在或超出数据范围"),
+        sqlx::Error::Protocol(message)
+            if message.contains("形成环")
+                || message.contains("幂等键")
+                || message.contains("版本已变化") =>
+        {
+            let outcome = if message.contains("形成环") {
+                "cycle"
+            } else if message.contains("幂等键") {
+                "idempotency"
+            } else {
+                "revision"
+            };
+            crate::app_metrics::record_dependency_conflict(outcome);
+            ApiError::conflict(message)
+        }
+        other => db_error(other),
+    }
+}
+
+fn dependency_action(action: Option<&DevRailDependencyAction>) -> &'static str {
+    match action {
+        Some(DevRailDependencyAction::Skip) => "skip",
+        Some(DevRailDependencyAction::Fail) => "fail",
+        Some(DevRailDependencyAction::Wait) | None => "wait",
+    }
+}
+
+fn validate_idempotency_key(value: &str) -> Result<&str, ApiError> {
+    let value = value.trim();
+    if value.is_empty()
+        || value.len() > 128
+        || value
+            .bytes()
+            .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
+    {
+        return Err(ApiError::validation("幂等键格式无效"));
+    }
+    Ok(value)
+}
+
+pub async fn replace_task_dependencies(
+    pool: &PgPool,
+    actor: &ActorContext,
+    project_id: i64,
+    task_id: i64,
+    request: &ReplaceDevRailTaskDependenciesRequest,
+) -> Result<DevRailTaskRelationsResponse, ApiError> {
+    if !actor.has_permission("devrail:task_dependency:write") {
+        return Err(ApiError::forbidden("缺少管理任务依赖权限"));
+    }
+    let task = devrail::find_task(pool, actor, project_id, task_id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("任务不存在或超出数据范围"))?;
+    // A replay of an already committed mutation must remain idempotent even
+    // when the task reached a terminal state between attempts. New mutations
+    // still require draft/queued status and the repository revision check.
+    if !matches!(task.status.as_str(), "draft" | "queued") && request.revision >= task.revision {
+        return Err(ApiError::conflict("只有草稿或排队任务可以修改依赖"));
+    }
+    if request.revision <= 0 || request.dependencies.len() > 32 {
+        return Err(ApiError::validation("任务版本或依赖数量无效"));
+    }
+    let idempotency_key = validate_idempotency_key(&request.idempotency_key)?;
+    let mut dependencies = request.dependencies.clone();
+    dependencies.sort_by_key(|dependency| dependency.prerequisite_task_id);
+    if dependencies
+        .iter()
+        .any(|dependency| dependency.prerequisite_task_id == task_id)
+        || dependencies
+            .windows(2)
+            .any(|pair| pair[0].prerequisite_task_id == pair[1].prerequisite_task_id)
+    {
+        return Err(ApiError::validation("依赖不能指向自身或重复任务"));
+    }
+    let digest_value = serde_json::to_value(&dependencies)
+        .map_err(|_| ApiError::internal("依赖请求序列化失败"))?;
+    let request_digest = workflow::snapshot_digest(&digest_value)
+        .map_err(|_| ApiError::internal("依赖请求摘要计算失败"))?;
+    let created_by_type = match actor.actor_type {
+        crate::access::ActorType::User => "user",
+        crate::access::ActorType::System => "system",
+    };
+    let created_by_user_id =
+        matches!(actor.actor_type, crate::access::ActorType::User).then_some(actor.user_id);
+    let inputs = dependencies
+        .iter()
+        .map(|dependency| devrail::NewTaskDependency {
+            task_id,
+            prerequisite_task_id: dependency.prerequisite_task_id,
+            failure_action: dependency_action(dependency.failure_action.as_ref()),
+            cancelled_action: dependency_action(dependency.cancelled_action.as_ref()),
+            timeout_action: dependency_action(dependency.timeout_action.as_ref()),
+            creation_source: "manual",
+            created_by_type,
+            created_by_user_id,
+        })
+        .collect::<Vec<_>>();
+    let mut tx = pool.begin().await.map_err(db_error)?;
+    devrail::replace_task_dependencies(
+        &mut tx,
+        actor,
+        task_id,
+        request.revision,
+        &devrail::DependencyMutation {
+            idempotency_key,
+            request_digest: &request_digest,
+        },
+        &inputs,
+    )
+    .await
+    .map_err(dependency_error)?;
+    let event_key = format!("dependency-mutation:{idempotency_key}");
+    devrail::append_task_event(
+        &mut tx,
+        &task,
+        "task.dependencies.changed",
+        &event_key,
+        &json!({"taskId":task_id,"dependencyCount":inputs.len()}),
+        "任务依赖已更新",
+    )
+    .await
+    .map_err(db_error)?;
+    repositories::audit_logs::record_actor(
+        &mut tx,
+        actor,
+        "devrail.task.dependencies.replace",
+        "devrail_task",
+        Some(task_id),
+        json!({"projectId":project_id,"dependencyCount":inputs.len()}),
+    )
+    .await
+    .map_err(db_error)?;
+    repositories::devrail_notifications::outbox(
+        &mut tx,
+        actor.organization_id,
+        "task.dependencies.changed",
+        "devrail_task",
+        Some(task_id),
+        &json!({"taskId":task_id,"eventType":"task.dependencies.changed"}),
+    )
+    .await
+    .map_err(db_error)?;
+    tx.commit().await.map_err(db_error)?;
+    let refreshed = devrail::find_task(pool, actor, project_id, task_id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("任务不存在或超出数据范围"))?;
+    task_relations(pool, actor, task_id, refreshed.revision).await
+}
+
+pub async fn list_task_events(
+    pool: &PgPool,
+    actor: &ActorContext,
+    task_id: i64,
+    after_cursor: i64,
+    limit: i64,
+) -> Result<DevRailTaskEventPage, ApiError> {
+    devrail::find_task_by_id(pool, actor, task_id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("任务不存在或超出数据范围"))?;
+    let limit = limit.clamp(1, 200);
+    let rows = devrail::list_task_events(pool, actor, task_id, after_cursor, limit + 1)
+        .await
+        .map_err(db_error)?;
+    let next_cursor = (rows.len() as i64 > limit).then(|| rows[limit as usize - 1].cursor);
+    let items = rows
+        .into_iter()
+        .take(limit as usize)
+        .map(|row| DevRailTaskEventResponse {
+            cursor: row.cursor,
+            event_type: row.event_type,
+            payload: row.payload,
+            summary: row.summary,
+            occurred_at: row.occurred_at,
+        })
+        .collect();
+    Ok(DevRailTaskEventPage { items, next_cursor })
+}
+
+fn followup_error(error: sqlx::Error) -> ApiError {
+    match error {
+        sqlx::Error::Protocol(message) if message.contains("配额") => ApiError::rate_limited(60),
+        sqlx::Error::Protocol(message)
+            if message.contains("幂等键") || message.contains("正在处理") =>
+        {
+            ApiError::conflict(message)
+        }
+        sqlx::Error::RowNotFound => ApiError::not_found("来源 run 不存在或超出数据范围"),
+        other => db_error(other),
+    }
+}
+
+pub async fn create_followup_task(
+    pool: &PgPool,
+    actor: &ActorContext,
+    source_run_id: i64,
+    request: &CreateDevRailFollowupTaskRequest,
+) -> Result<DevRailFollowupTaskResponse, ApiError> {
+    if !matches!(actor.actor_type, crate::access::ActorType::System)
+        || !actor.has_permission("devrail:followup:create")
+    {
+        return Err(ApiError::forbidden("缺少创建后续任务权限"));
+    }
+    let idempotency_key = validate_idempotency_key(&request.idempotency_key)?;
+    let run = repositories::devrail_runs::find_run(pool, actor, source_run_id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("来源 run 不存在或超出数据范围"))?;
+    let completed_recently = run.completed_at.is_some_and(|completed_at| {
+        Utc::now().signed_duration_since(completed_at) <= chrono::Duration::minutes(15)
+    });
+    if !matches!(
+        run.status.as_str(),
+        "starting" | "active" | "awaiting_approval"
+    ) && !(run.status == "completed" && completed_recently)
+    {
+        return Err(ApiError::conflict("来源 run 当前不能创建后续任务"));
+    }
+    let source_task = devrail::find_task_by_id(pool, actor, run.task_id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("来源任务不存在或超出数据范围"))?;
+    if source_task.followup_depth >= 8 {
+        return Err(ApiError::conflict("后续任务层级已达到上限"));
+    }
+    let title = text(&request.title, "任务标题", 200)?;
+    let goal = text(&request.goal, "任务目标", 4000)?;
+    let background = optional_text(request.background.as_deref(), "任务背景", 16_000)?;
+    let acceptance_criteria =
+        optional_text(request.acceptance_criteria.as_deref(), "验收标准", 16_000)?;
+    let constraints = optional_text(request.constraints.as_deref(), "任务约束", 16_000)?;
+    let priority = priority(request.priority.as_deref().unwrap_or("normal"))?;
+    let labels = json!(request.labels.clone().unwrap_or_default());
+    let mut requested_dependencies = request.dependencies.clone().unwrap_or_default();
+    if requested_dependencies.len() >= 16 {
+        return Err(ApiError::validation("后续任务依赖数量超出上限"));
+    }
+    if !requested_dependencies
+        .iter()
+        .any(|dependency| dependency.prerequisite_task_id == source_task.id)
+    {
+        requested_dependencies.push(DevRailTaskDependencyInput {
+            prerequisite_task_id: source_task.id,
+            failure_action: None,
+            cancelled_action: None,
+            timeout_action: None,
+        });
+    }
+    requested_dependencies.sort_by_key(|dependency| dependency.prerequisite_task_id);
+    if requested_dependencies
+        .windows(2)
+        .any(|pair| pair[0].prerequisite_task_id == pair[1].prerequisite_task_id)
+    {
+        return Err(ApiError::validation("后续任务依赖不能重复"));
+    }
+    for dependency in &requested_dependencies {
+        let prerequisite = devrail::find_task_by_id(pool, actor, dependency.prerequisite_task_id)
+            .await
+            .map_err(db_error)?
+            .ok_or_else(|| ApiError::not_found("前置任务不存在或超出数据范围"))?;
+        if prerequisite.project_id != source_task.project_id {
+            return Err(ApiError::not_found("前置任务不存在或超出数据范围"));
+        }
+    }
+    let mut digest_request = request.clone();
+    digest_request.dependencies = Some(requested_dependencies.clone());
+    let request_digest = workflow::snapshot_digest(
+        &serde_json::to_value(&digest_request)
+            .map_err(|_| ApiError::internal("后续任务请求序列化失败"))?,
+    )
+    .map_err(|_| ApiError::internal("后续任务请求摘要计算失败"))?;
+    let dependency_inputs = requested_dependencies
+        .iter()
+        .map(|dependency| devrail::NewTaskDependency {
+            task_id: 0,
+            prerequisite_task_id: dependency.prerequisite_task_id,
+            failure_action: dependency_action(dependency.failure_action.as_ref()),
+            cancelled_action: dependency_action(dependency.cancelled_action.as_ref()),
+            timeout_action: dependency_action(dependency.timeout_action.as_ref()),
+            creation_source: "agent_followup",
+            created_by_type: "agent",
+            created_by_user_id: None,
+        })
+        .collect::<Vec<_>>();
+    let mut tx = pool.begin().await.map_err(db_error)?;
+    let (request_id, task, replayed) = devrail::create_followup_task(
+        &mut tx,
+        actor,
+        &devrail::NewFollowup {
+            department_id: source_task.department_id,
+            owner_user_id: source_task.owner_user_id,
+            source_task_id: source_task.id,
+            source_run_id,
+            idempotency_key,
+            request_digest: &request_digest,
+            task: devrail::NewTask {
+                owner_user_id: source_task.owner_user_id,
+                project_id: source_task.project_id,
+                repository_id: source_task.repository_id,
+                environment_id: source_task.environment_id,
+                assignee_user_id: None,
+                title: &title,
+                goal: &goal,
+                background: background.as_deref(),
+                acceptance_criteria: acceptance_criteria.as_deref(),
+                constraints: constraints.as_deref(),
+                priority: &priority,
+                labels: &labels,
+                due_at: request.due_at,
+                department_id: source_task.department_id,
+                creation_source: "agent_followup",
+                source_task_id: Some(source_task.id),
+                source_run_id: Some(source_run_id),
+                followup_depth: source_task.followup_depth + 1,
+            },
+            dependencies: &dependency_inputs,
+        },
+        8,
+    )
+    .await
+    .map_err(followup_error)?;
+    if !replayed {
+        let source_key = format!("followup:{request_id}:source");
+        devrail::append_task_event(
+            &mut tx,
+            &source_task,
+            "task.followup.created",
+            &source_key,
+            &json!({"sourceRunId":source_run_id,"resultTaskId":task.id}),
+            "Agent 已创建后续任务",
+        )
+        .await
+        .map_err(db_error)?;
+        let result_key = format!("followup:{request_id}:result");
+        devrail::append_task_event(
+            &mut tx,
+            &task,
+            "task.created.from_followup",
+            &result_key,
+            &json!({"sourceTaskId":source_task.id,"sourceRunId":source_run_id}),
+            "任务由 Agent 后续任务提议创建",
+        )
+        .await
+        .map_err(db_error)?;
+        repositories::audit_logs::record_actor(
+            &mut tx,
+            actor,
+            "devrail.task.followup.create",
+            "devrail_task",
+            Some(task.id),
+            json!({"sourceTaskId":source_task.id,"sourceRunId":source_run_id,"dependencyCount":dependency_inputs.len()}),
+        )
+        .await
+        .map_err(db_error)?;
+        repositories::devrail_notifications::outbox(
+            &mut tx,
+            actor.organization_id,
+            "task.followup.created",
+            "devrail_task",
+            Some(task.id),
+            &json!({"taskId":task.id,"eventType":"task.followup.created"}),
+        )
+        .await
+        .map_err(db_error)?;
+    }
+    tx.commit().await.map_err(db_error)?;
+    let relations = task_relations(pool, actor, task.id, task.revision).await?;
+    let mut task_response = task_response(task);
+    task_response.blocked_reason = relations.blocked_reason;
+    task_response.prerequisites = relations.prerequisites;
+    task_response.dependents = relations.dependents;
+    Ok(DevRailFollowupTaskResponse {
+        request_id,
+        source_task_id: source_task.id,
+        source_run_id,
+        task: task_response,
+        replayed,
+    })
+}
+
+pub async fn record_followup_rejection(
+    pool: &PgPool,
+    actor: &ActorContext,
+    source_run_id: i64,
+    reason: &'static str,
+) -> Result<(), sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    repositories::audit_logs::record_actor(
+        &mut tx,
+        actor,
+        "devrail.task.followup.reject",
+        "devrail_run",
+        Some(source_run_id),
+        json!({"reason": reason}),
+    )
+    .await?;
+    tx.commit().await
 }
 
 async fn validate_task_resources(
@@ -2172,6 +2695,7 @@ fn task_transition_allowed(current: &str, next: &str) -> bool {
                     "running" | "succeeded" | "failed" | "cancelled"
                 )
                 | ("succeeded" | "failed" | "cancelled", "archived")
+                | ("skipped", "archived")
                 | ("failed", "queued")
         )
 }
@@ -2201,6 +2725,7 @@ pub async fn create_task(
         &mut tx,
         actor,
         &devrail::NewTask {
+            owner_user_id: actor.user_id,
             project_id,
             repository_id: req.repository_id,
             environment_id: req.environment_id,
@@ -2214,6 +2739,10 @@ pub async fn create_task(
             labels: &labels,
             due_at: req.due_at,
             department_id,
+            creation_source: "manual",
+            source_task_id: None,
+            source_run_id: None,
+            followup_depth: 0,
         },
     )
     .await
@@ -2486,5 +3015,41 @@ mod tests {
         let missing = environment_health(true, None);
         assert!(!missing.0);
         assert_eq!(missing.4, "工作区不存在");
+    }
+
+    #[test]
+    fn validates_dependency_idempotency_keys_and_actions() {
+        assert_eq!(validate_idempotency_key("  edge-42 ").unwrap(), "edge-42");
+        assert!(validate_idempotency_key(" ").is_err());
+        assert!(validate_idempotency_key("edge key").is_err());
+        assert_eq!(dependency_action(None), "wait");
+        assert_eq!(
+            dependency_action(Some(&DevRailDependencyAction::Skip)),
+            "skip"
+        );
+        assert_eq!(
+            dependency_action(Some(&DevRailDependencyAction::Fail)),
+            "fail"
+        );
+    }
+
+    #[test]
+    fn dependency_block_reason_is_safe_and_deterministic() {
+        let dependency = DevRailTaskDependencyResponse {
+            id: 1,
+            task_id: 2,
+            prerequisite_task_id: 3,
+            prerequisite_title: "前置任务".to_owned(),
+            prerequisite_status: "failed".to_owned(),
+            failure_action: "fail".to_owned(),
+            cancelled_action: "wait".to_owned(),
+            timeout_action: "wait".to_owned(),
+            creation_source: "manual".to_owned(),
+            created_at: Utc::now(),
+        };
+        assert_eq!(
+            dependency_block_reason(&[dependency]).as_deref(),
+            Some("前置任务 前置任务 已失败")
+        );
     }
 }

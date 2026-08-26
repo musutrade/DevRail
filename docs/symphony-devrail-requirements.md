@@ -153,9 +153,8 @@ CI、供应链、CodeQL 与外部审查
 
 ### 4.2 本专项尚待补齐
 
-以下项目是需求，不代表现状已完成：
+以下项目仍是后续路线，不属于本专项：
 
-- 任务依赖/DAG、任务完成后创建后续任务。
 - Workspace 生命周期 hooks、跨运行可复现环境和终端清理保证。
 - 结构化日志/指标/Trace、测试产物、Playwright 截图/视频和失败诊断上下文。
 - 质量门禁失败后的受控修复 run，以及通知和外部供应商回调的完整端到端演练。
@@ -195,13 +194,13 @@ CI、供应链、CodeQL 与外部审查
 | Requirement ID | 状态 | 代码与验证证据 |
 | --- | --- | --- |
 | `SY-TRACK-001`–`SY-TRACK-004` | 已实现 | TaskTracker 领域端口与 PostgreSQL adapter、原子入队快照、状态历史触发器、mock tracker 和 PostgreSQL 并发/范围测试。 |
-| `SY-TRACK-005` | 部分实现 | queued、环境有效、无活动 run、退避、attempt 和优先级 aging 已在候选 SQL 中实现；DAG 依赖条件留待下一 change。 |
+| `SY-TRACK-005` | 已实现 | 候选与 claim SQL 统一排除未成功前置任务，reconciliation 在派发前固化终态传播；无依赖旧任务保持原行为。 |
 | `SY-WORKFLOW-001`–`SY-WORKFLOW-002` | 已实现 | 严格 loader 覆盖 front matter、未知字段、枚举/范围、封闭变量/过滤器、受控路径、大小和 UTF-8 测试。 |
 | `SY-WORKFLOW-003` | 已实现 | task/run workflow 三元身份与规范化快照持久化，Service 与 Repository SQL 双层 fail-closed，API/OpenAPI/Angular 诊断字段。 |
 | `SY-WORKFLOW-004` | 已实现 | 抖动轮询、摘要短路、持久化 last-known-good、坏候选去重、恢复/删除文件/跨组织数据库回归测试。 |
 | `SY-WORKFLOW-005` | 已实现 | 平台与仓库工具、网络、审批、受控根目录及资源上限安全交集和脱敏诊断测试。 |
 
-详细运维和配置��式见 [Symphony Orchestrator 运行手册](symphony-orchestrator-operations.md) 与 [仓库工作流契约](workflow-contract.md)。
+详细运维和配置格式见 [Symphony Orchestrator 运行手册](symphony-orchestrator-operations.md) 与 [仓库工作流契约](workflow-contract.md)。
 
 ### 5.3 Orchestrator 调度循环（P0）
 
@@ -240,6 +239,21 @@ CI、供应链、CodeQL 与外部审查
 **SY-DAG-003**：Agent 可通过受控 API 提议后续任务；后续任务必须经过 schema 校验、权限/范围校验和幂等去重，不能直接写数据库或提升权限。
 
 **SY-DAG-004**：依赖变化、后续任务创建和自动跳过均写入审计和事件，并在任务详情展示可追溯关系。
+
+### 5.5.1 DAG 与 follow-up 证据矩阵（2026-08-26）
+
+| Requirement ID | 状态 | 代码、迁移与测试证据 |
+| --- | --- | --- |
+| `SY-DAG-001` | 已实现 | `20260905100000_add_task_dependency_dag_and_followups.sql`、`replace_task_dependencies` 递归 CTE 与确定性锁；`dependency_replace_rejects_cycles_atomically`、范围裁剪集成测试覆盖环拒绝与回滚。 |
+| `SY-DAG-002` | 已实现 | `dependency_eligible_sql`、`reconcile_task_dependencies` 固化 `wait/skip/fail` 与 timeout/stall 策略；`dependency_claim_and_terminal_propagation_are_deterministic` 覆盖阻塞、跳过、重复传播。 |
+| `SY-DAG-003` | 已实现（受控入口） | Supervisor 解析固定 `devrail/followup.create` 工具事件，Service 从来源 run 派生范围、权限和资源；封闭 schema、未知字段、配额与 `followup_replay_is_idempotent_and_does_not_consume_quota` 已覆盖。 |
+| `SY-DAG-004` | 已实现 | 依赖变更/传播/follow-up 写入 task event、System Actor 审计、transactional outbox；任务详情 API/OpenAPI/Angular 展示关系、阻塞原因和创建来源，前端按权限提供编辑入口。 |
+
+权限边界：`task_dependency:read` 仅授予 DevRail 数据范围内的关系读取；
+`task_dependency:write` 仅授予组织/项目管理员级别的依赖变更；
+`followup:create` 不授予普通用户角色，仅由 Supervisor 派生的 System Actor 在来源
+run 范围内使用。所有三项权限均在迁移中以幂等种子绑定，API Handler 与 Service
+同时执行权限检查。
 
 ### 5.6 Workspace Manager（P1）
 
@@ -448,7 +462,7 @@ CI、供应链、CodeQL 与外部审查
 
 ### 12.4 P0 调度可靠性证据矩阵（2026-08-26）
 
-本矩阵只声明 `symphony-orchestrator-reconciliation` change 覆盖的 DevRail DB tracker 与 Harness 调度能力；外部 tracker、DAG 和 per-task workspace 不因此视为完成。
+本矩阵只声明 `symphony-orchestrator-reconciliation` change 覆盖的 DevRail DB tracker 与 Harness 调度能力；外部 tracker 和 per-task workspace 不因此视为完成。DAG/follow-up 证据见第 5.5.1 节。
 
 | 需求 ID | 状态 | 代码/迁移 | 自动化与运行证据 |
 | --- | --- | --- | --- |
@@ -493,7 +507,7 @@ cargo flow verify --all
 
 1. TaskTracker 抽象及 DevRail DB tracker（已完成）。
 2. `WORKFLOW.md`、严格模板、动态 reload 和 workflow 快照（已完成）。
-3. DAG 依赖、后续任务、确定性 workspace、hooks 和 continuation turns。
+3. 确定性 workspace、hooks 和 continuation turns。
 4. 完善指标、trace、成本预算和前端调度/诊断视图。
 5. 质量门禁失败生成受控修复 run，并在达到上限后转人工。
 

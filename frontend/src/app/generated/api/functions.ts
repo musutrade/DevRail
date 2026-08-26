@@ -85,6 +85,10 @@ export type { GetDevRailTask$Params as GetDevRailTask$Params } from './fn/devrai
 export { getDevRailTask as getDevRailTask } from './fn/devrail/get-dev-rail-task';
 export type { UpdateDevRailTask$Params as UpdateDevRailTask$Params } from './fn/devrail/update-dev-rail-task';
 export { updateDevRailTask as updateDevRailTask } from './fn/devrail/update-dev-rail-task';
+export type { GetDevRailTaskDependencies$Params as GetDevRailTaskDependencies$Params } from './fn/devrail/get-dev-rail-task-dependencies';
+export { getDevRailTaskDependencies as getDevRailTaskDependencies } from './fn/devrail/get-dev-rail-task-dependencies';
+export type { ReplaceDevRailTaskDependencies$Params as ReplaceDevRailTaskDependencies$Params } from './fn/devrail/replace-dev-rail-task-dependencies';
+export { replaceDevRailTaskDependencies as replaceDevRailTaskDependencies } from './fn/devrail/replace-dev-rail-task-dependencies';
 export type { GetDevRailPushConfig$Params as GetDevRailPushConfig$Params } from './fn/devrail/get-dev-rail-push-config';
 export { getDevRailPushConfig as getDevRailPushConfig } from './fn/devrail/get-dev-rail-push-config';
 export type { ListDevRailPushDevices$Params as ListDevRailPushDevices$Params } from './fn/devrail/list-dev-rail-push-devices';
@@ -137,6 +141,10 @@ export type { ListDevRailTaskComments$Params as ListDevRailTaskComments$Params }
 export { listDevRailTaskComments as listDevRailTaskComments } from './fn/devrail/list-dev-rail-task-comments';
 export type { CreateDevRailTaskComment$Params as CreateDevRailTaskComment$Params } from './fn/devrail/create-dev-rail-task-comment';
 export { createDevRailTaskComment as createDevRailTaskComment } from './fn/devrail/create-dev-rail-task-comment';
+export type { ListDevRailTaskEvents$Params as ListDevRailTaskEvents$Params } from './fn/devrail/list-dev-rail-task-events';
+export { listDevRailTaskEvents as listDevRailTaskEvents } from './fn/devrail/list-dev-rail-task-events';
+export type { StreamDevRailTaskEvents$Params as StreamDevRailTaskEvents$Params } from './fn/devrail/stream-dev-rail-task-events';
+export { streamDevRailTaskEvents as streamDevRailTaskEvents } from './fn/devrail/stream-dev-rail-task-events';
 export type { ListDevRailRuns$Params as ListDevRailRuns$Params } from './fn/devrail/list-dev-rail-runs';
 export { listDevRailRuns as listDevRailRuns } from './fn/devrail/list-dev-rail-runs';
 export type { CreateDevRailRun$Params as CreateDevRailRun$Params } from './fn/devrail/create-dev-rail-run';

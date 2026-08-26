@@ -94,6 +94,8 @@ pub(crate) trait TaskTracker: Send + Sync {
         running_run_ids: &[i64],
         stale_timeout_seconds: i64,
     ) -> Result<SchedulerReconciliation, TrackerError>;
+
+    async fn reconcile_dependencies(&self) -> Result<u64, TrackerError>;
 }
 
 #[derive(Debug, Clone)]
@@ -183,6 +185,12 @@ impl TaskTracker for PostgresTaskTracker {
         stale_timeout_seconds: i64,
     ) -> Result<SchedulerReconciliation, TrackerError> {
         devrail::reconcile_scheduler_state(&self.pool, running_run_ids, stale_timeout_seconds)
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn reconcile_dependencies(&self) -> Result<u64, TrackerError> {
+        devrail::reconcile_task_dependencies(&self.pool)
             .await
             .map_err(Into::into)
     }

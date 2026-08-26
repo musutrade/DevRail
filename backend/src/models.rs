@@ -223,11 +223,77 @@ pub struct DevRailTaskRow {
     pub scheduler_max_attempts: i32,
     pub scheduler_retry_at: Option<DateTime<Utc>>,
     pub scheduler_last_error: Option<String>,
+    pub creation_source: String,
+    pub source_task_id: Option<i64>,
+    pub source_run_id: Option<i64>,
+    pub followup_depth: i16,
     pub labels: Value,
     pub due_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub archived_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct DevRailTaskDependencyRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub task_id: i64,
+    pub prerequisite_task_id: i64,
+    pub prerequisite_title: String,
+    pub prerequisite_status: String,
+    pub failure_action: String,
+    pub cancelled_action: String,
+    pub timeout_action: String,
+    pub creation_source: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct DevRailTaskDependentRow {
+    pub id: i64,
+    pub task_id: i64,
+    pub task_title: String,
+    pub task_status: String,
+    pub failure_action: String,
+    pub cancelled_action: String,
+    pub timeout_action: String,
+    pub creation_source: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct DevRailFollowupRequestRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub source_task_id: i64,
+    pub source_run_id: i64,
+    pub idempotency_key: String,
+    pub request_digest: String,
+    pub status: String,
+    pub result_task_id: Option<i64>,
+    pub error_code: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct DevRailTaskEventRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub task_id: i64,
+    pub cursor: i64,
+    pub event_type: String,
+    pub idempotency_key: String,
+    pub payload: Value,
+    pub summary: Option<String>,
+    pub occurred_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -1065,7 +1131,7 @@ pub struct DevRailEnvironmentHealthResponse {
     pub message: String,
 }
 
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DevRailTaskResponse {
     pub id: i64,
@@ -1092,11 +1158,82 @@ pub struct DevRailTaskResponse {
     pub scheduler_max_attempts: i32,
     pub scheduler_retry_at: Option<DateTime<Utc>>,
     pub scheduler_last_error: Option<String>,
+    pub creation_source: String,
+    pub source_task_id: Option<i64>,
+    pub source_run_id: Option<i64>,
+    pub followup_depth: i16,
+    pub blocked_reason: Option<String>,
+    pub prerequisites: Vec<DevRailTaskDependencyResponse>,
+    pub dependents: Vec<DevRailTaskDependentResponse>,
     pub labels: Value,
     pub due_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub archived_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DevRailDependencyAction {
+    Wait,
+    Skip,
+    Fail,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailTaskDependencyResponse {
+    pub id: i64,
+    pub task_id: i64,
+    pub prerequisite_task_id: i64,
+    pub prerequisite_title: String,
+    pub prerequisite_status: String,
+    pub failure_action: String,
+    pub cancelled_action: String,
+    pub timeout_action: String,
+    pub creation_source: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailTaskDependentResponse {
+    pub id: i64,
+    pub task_id: i64,
+    pub task_title: String,
+    pub task_status: String,
+    pub failure_action: String,
+    pub cancelled_action: String,
+    pub timeout_action: String,
+    pub creation_source: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailTaskRelationsResponse {
+    pub task_id: i64,
+    pub revision: i64,
+    pub blocked_reason: Option<String>,
+    pub prerequisites: Vec<DevRailTaskDependencyResponse>,
+    pub dependents: Vec<DevRailTaskDependentResponse>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailTaskEventResponse {
+    pub cursor: i64,
+    pub event_type: String,
+    pub payload: Value,
+    pub summary: Option<String>,
+    pub occurred_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailTaskEventPage {
+    pub items: Vec<DevRailTaskEventResponse>,
+    pub next_cursor: Option<i64>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -1707,6 +1844,48 @@ pub struct CreateDevRailTaskRequest {
     pub repository_id: Option<i64>,
     pub environment_id: Option<i64>,
 }
+
+#[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DevRailTaskDependencyInput {
+    pub prerequisite_task_id: i64,
+    pub failure_action: Option<DevRailDependencyAction>,
+    pub cancelled_action: Option<DevRailDependencyAction>,
+    pub timeout_action: Option<DevRailDependencyAction>,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReplaceDevRailTaskDependenciesRequest {
+    pub revision: i64,
+    pub idempotency_key: String,
+    pub dependencies: Vec<DevRailTaskDependencyInput>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CreateDevRailFollowupTaskRequest {
+    pub idempotency_key: String,
+    pub title: String,
+    pub goal: String,
+    pub background: Option<String>,
+    pub acceptance_criteria: Option<String>,
+    pub constraints: Option<String>,
+    pub priority: Option<String>,
+    pub labels: Option<Vec<String>>,
+    pub due_at: Option<DateTime<Utc>>,
+    pub dependencies: Option<Vec<DevRailTaskDependencyInput>>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailFollowupTaskResponse {
+    pub request_id: i64,
+    pub source_task_id: i64,
+    pub source_run_id: i64,
+    pub task: DevRailTaskResponse,
+    pub replayed: bool,
+}
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateDevRailTaskRequest {
@@ -1893,5 +2072,39 @@ impl From<DashboardStatsRow> for DashboardStats {
             total_permissions: row.total_permissions,
             suspended_users: row.suspended_users,
         }
+    }
+}
+
+#[cfg(test)]
+mod dependency_contract_tests {
+    use super::*;
+
+    #[test]
+    fn dependency_actions_use_stable_wire_values() {
+        assert_eq!(
+            serde_json::to_string(&DevRailDependencyAction::Wait).unwrap(),
+            "\"wait\""
+        );
+        assert_eq!(
+            serde_json::to_string(&DevRailDependencyAction::Skip).unwrap(),
+            "\"skip\""
+        );
+        assert_eq!(
+            serde_json::to_string(&DevRailDependencyAction::Fail).unwrap(),
+            "\"fail\""
+        );
+        assert!(serde_json::from_str::<DevRailDependencyAction>("\"blocked\"").is_err());
+    }
+
+    #[test]
+    fn followup_input_rejects_scope_and_authority_fields() {
+        let result =
+            serde_json::from_value::<CreateDevRailFollowupTaskRequest>(serde_json::json!({
+                "idempotencyKey": "event-1",
+                "title": "后续任务",
+                "goal": "验证",
+                "organizationId": 42
+            }));
+        assert!(result.is_err());
     }
 }

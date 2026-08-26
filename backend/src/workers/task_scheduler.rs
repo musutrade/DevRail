@@ -101,6 +101,10 @@ async fn run_tick(
     policy: SchedulerPolicy,
 ) -> Result<(), TrackerError> {
     debug_assert_eq!(TICK_PHASES[0], TickPhase::Reconcile);
+    let dependency_propagations = tracker.reconcile_dependencies().await?;
+    if dependency_propagations > 0 {
+        crate::app_metrics::record_dependency_propagation("applied", dependency_propagations);
+    }
     let running_run_ids = supervisor.running_run_ids().await;
     let reconciliation = tracker
         .reconcile(&running_run_ids, policy.stall_timeout.as_secs() as i64)
@@ -321,6 +325,9 @@ fn scheduler_actor(task: &DevRailTaskRow) -> ActorContext {
         data_scope: DataScope::Organization,
         permission_codes: BTreeSet::from([
             "devrail:task:read".to_string(),
+            "devrail:task_dependency:read".to_string(),
+            "devrail:task_dependency:write".to_string(),
+            "devrail:followup:create".to_string(),
             "devrail:run:execute".to_string(),
         ]),
     }
@@ -410,6 +417,10 @@ mod tests {
             self.reconciliations.fetch_add(1, Ordering::SeqCst);
             Ok(crate::repositories::devrail::SchedulerReconciliation::default())
         }
+
+        async fn reconcile_dependencies(&self) -> Result<u64, TrackerError> {
+            Ok(0)
+        }
     }
 
     fn task() -> DevRailTaskRow {
@@ -440,6 +451,10 @@ mod tests {
             scheduler_max_attempts: 3,
             scheduler_retry_at: None,
             scheduler_last_error: None,
+            creation_source: "legacy".to_string(),
+            source_task_id: None,
+            source_run_id: None,
+            followup_depth: 0,
             labels: json!([]),
             due_at: None,
             created_at: Utc::now(),

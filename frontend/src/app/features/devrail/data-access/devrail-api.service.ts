@@ -10,6 +10,9 @@ import { getDevRailProject } from '../../../generated/api/fn/devrail/get-dev-rai
 import { getDevRailProjectPolicy } from '../../../generated/api/fn/devrail/get-dev-rail-project-policy';
 import { getDevRailRepository } from '../../../generated/api/fn/devrail/get-dev-rail-repository';
 import { getDevRailTask } from '../../../generated/api/fn/devrail/get-dev-rail-task';
+import { getDevRailTaskDependencies } from '../../../generated/api/fn/devrail/get-dev-rail-task-dependencies';
+import { listDevRailTaskEvents } from '../../../generated/api/fn/devrail/list-dev-rail-task-events';
+import { replaceDevRailTaskDependencies } from '../../../generated/api/fn/devrail/replace-dev-rail-task-dependencies';
 import { listDevRailEnvironments } from '../../../generated/api/fn/devrail/list-dev-rail-environments';
 import { listDevRailProjects } from '../../../generated/api/fn/devrail/list-dev-rail-projects';
 import { listDevRailRepositories } from '../../../generated/api/fn/devrail/list-dev-rail-repositories';
@@ -75,6 +78,9 @@ import type {
   DevRailProjectPolicyResponse,
   DevRailRepositoryPage,
   DevRailTaskPage,
+  DevRailTaskRelationsResponse,
+  DevRailTaskEventPage,
+  ReplaceDevRailTaskDependenciesRequest,
   UpdateDevRailEnvironmentRequest,
   UpdateDevRailProjectRequest,
   UpdateDevRailProjectPolicyRequest,
@@ -341,6 +347,23 @@ export class DevRailApiService {
   }
   getTask(projectId: number, id: number) {
     return this.api.invoke(getDevRailTask, { project_id: projectId, id });
+  }
+  getTaskDependencies(projectId: number, id: number): Promise<DevRailTaskRelationsResponse> {
+    return this.api.invoke(getDevRailTaskDependencies, { project_id: projectId, id });
+  }
+  replaceTaskDependencies(
+    projectId: number,
+    id: number,
+    body: ReplaceDevRailTaskDependenciesRequest,
+  ): Promise<DevRailTaskRelationsResponse> {
+    return this.api.invoke(replaceDevRailTaskDependencies, { project_id: projectId, id, body });
+  }
+  listTaskEvents(taskId: number, afterCursor = 0, limit = 100): Promise<DevRailTaskEventPage> {
+    return this.api.invoke(listDevRailTaskEvents, {
+      task_id: taskId,
+      after_cursor: afterCursor,
+      limit,
+    });
   }
   createTask(projectId: number, body: CreateDevRailTaskRequest) {
     return this.api.invoke(createDevRailTask, { project_id: projectId, body });
