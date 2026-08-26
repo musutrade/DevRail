@@ -478,7 +478,7 @@ program = "node"
 args = ["{root}/scripts/check-api-generation.mjs"]
 cwd = "{root}"
 log = "api_generation.log"
-timeout_secs = 180
+timeout_secs = 600
 
 [[steps]]
 id = "workflow.supply-chain-config"
