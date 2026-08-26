@@ -30,8 +30,12 @@ export interface DevRailRunResponse {
   status: string;
   stderrSummary?: (string | null);
   taskId: number;
+  taskRevision: number;
   threadId?: (string | null);
   traceId?: (string | null);
   turnId?: (string | null);
   updatedAt: string;
+  workflowDigest: string;
+  workflowSource: string;
+  workflowVersion: string;
 }

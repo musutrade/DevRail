@@ -86,6 +86,8 @@ pub struct AppConfig {
     pub scheduler_retry_jitter_percent: i64,
     pub scheduler_stall_secs: i64,
     pub scheduler_priority_aging_secs: i64,
+    pub workflow_reload_secs: i64,
+    pub workflow_reload_jitter_percent: i64,
     pub web_push_public_key: Option<String>,
     pub web_push_private_key: Option<String>,
     pub web_push_subject: Option<String>,
@@ -135,6 +137,8 @@ struct ConfigValues {
     scheduler_retry_jitter_percent: Option<String>,
     scheduler_stall_secs: Option<String>,
     scheduler_priority_aging_secs: Option<String>,
+    workflow_reload_secs: Option<String>,
+    workflow_reload_jitter_percent: Option<String>,
     web_push_public_key: Option<String>,
     web_push_private_key: Option<String>,
     web_push_subject: Option<String>,
@@ -189,6 +193,9 @@ impl AppConfig {
             scheduler_stall_secs: std::env::var("DEVRAIL_SCHEDULER_STALL_SECS").ok(),
             scheduler_priority_aging_secs: std::env::var("DEVRAIL_SCHEDULER_PRIORITY_AGING_SECS")
                 .ok(),
+            workflow_reload_secs: std::env::var("DEVRAIL_WORKFLOW_RELOAD_SECS").ok(),
+            workflow_reload_jitter_percent: std::env::var("DEVRAIL_WORKFLOW_RELOAD_JITTER_PERCENT")
+                .ok(),
             web_push_public_key: std::env::var("WEB_PUSH_VAPID_PUBLIC_KEY").ok(),
             web_push_private_key: std::env::var("WEB_PUSH_VAPID_PRIVATE_KEY").ok(),
             web_push_subject: std::env::var("WEB_PUSH_SUBJECT").ok(),
@@ -238,6 +245,8 @@ impl AppConfig {
             scheduler_retry_jitter_percent,
             scheduler_stall_secs,
             scheduler_priority_aging_secs,
+            workflow_reload_secs,
+            workflow_reload_jitter_percent,
             web_push_public_key,
             web_push_private_key,
             web_push_subject,
@@ -420,6 +429,20 @@ impl AppConfig {
             60,
             604_800,
         )?;
+        let workflow_reload_secs = bounded_i64(
+            "DEVRAIL_WORKFLOW_RELOAD_SECS",
+            workflow_reload_secs,
+            15,
+            1,
+            3_600,
+        )?;
+        let workflow_reload_jitter_percent = bounded_i64(
+            "DEVRAIL_WORKFLOW_RELOAD_JITTER_PERCENT",
+            workflow_reload_jitter_percent,
+            20,
+            0,
+            100,
+        )?;
         if scheduler_claim_lease_secs <= scheduler_poll_secs {
             bail!("DEVRAIL_SCHEDULER_CLAIM_LEASE_SECS must exceed DEVRAIL_SCHEDULER_POLL_SECS");
         }
@@ -485,6 +508,8 @@ impl AppConfig {
             scheduler_retry_jitter_percent,
             scheduler_stall_secs,
             scheduler_priority_aging_secs,
+            workflow_reload_secs,
+            workflow_reload_jitter_percent,
             web_push_public_key,
             web_push_private_key,
             web_push_subject,
@@ -648,6 +673,8 @@ mod tests {
         assert_eq!(config.scheduler_claim_lease_secs, 60);
         assert_eq!(config.scheduler_retry_jitter_percent, 20);
         assert_eq!(config.scheduler_priority_aging_secs, 3_600);
+        assert_eq!(config.workflow_reload_secs, 15);
+        assert_eq!(config.workflow_reload_jitter_percent, 20);
         assert!(config.auto_migrate);
         assert!(config.trusted_proxy_cidrs.is_empty());
     }

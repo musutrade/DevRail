@@ -209,6 +209,10 @@ patterns = ["rust-toolchain.toml"]
 components = ["backend", "workflow"]
 
 [[scope.rules]]
+patterns = ["WORKFLOW.md"]
+components = ["backend", "workflow"]
+
+[[scope.rules]]
 patterns = [
   ".arc-flow/**",
   "codex-audit-pipeline/tools/arc-flow/**",

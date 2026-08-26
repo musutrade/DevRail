@@ -149,6 +149,15 @@ async fn run(config: AppConfig, metadata: TelemetryMetadata) -> anyhow::Result<(
         scheduler_policy,
         shutdown.clone(),
     );
+    let workflow_reloader = arc_admin_backend::workers::workflow_reloader::spawn(
+        state.pool.clone(),
+        PathBuf::from(&config.run_workspace_root),
+        arc_admin_backend::workers::workflow_reloader::WorkflowReloaderPolicy {
+            poll_interval: Duration::from_secs(config.workflow_reload_secs as u64),
+            jitter_percent: u8::try_from(config.workflow_reload_jitter_percent).unwrap_or_default(),
+        },
+        shutdown.clone(),
+    );
     arc_admin_backend::workers::notification_dispatcher::spawn(
         state.pool.clone(),
         state.mfa.clone(),
@@ -167,7 +176,7 @@ async fn run(config: AppConfig, metadata: TelemetryMetadata) -> anyhow::Result<(
     .with_graceful_shutdown(shutdown_signal(shutdown.clone()))
     .await?;
     shutdown.cancel();
-    scheduler.await?;
+    let _ = tokio::try_join!(scheduler, workflow_reloader)?;
     Ok(())
 }
 

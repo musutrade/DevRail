@@ -614,6 +614,8 @@ backend/src/
 | `DEVRAIL_SCHEDULER_RETRY_JITTER_PERCENT` | 重试抖动百分比，范围 0–100 |
 | `DEVRAIL_SCHEDULER_STALL_SECS` | 无有效事件的 stall 判定阈值秒数 |
 | `DEVRAIL_SCHEDULER_PRIORITY_AGING_SECS` | 等待任务提升一级有效优先级所需秒数 |
+| `DEVRAIL_WORKFLOW_RELOAD_SECS` | `WORKFLOW.md` 对账间隔秒数，范围 1–3600 |
+| `DEVRAIL_WORKFLOW_RELOAD_JITTER_PERCENT` | workflow 对账正向抖动百分比，范围 0–100 |
 | `DEVRAIL_OUTBOX_BATCH_SIZE` | outbox worker 每批领取数量 |
 | `DEVRAIL_OUTBOX_POLL_INTERVAL_MS` | outbox 轮询间隔 |
 | `WEB_PUSH_VAPID_PUBLIC_KEY` | 对前端公开的 VAPID public key |

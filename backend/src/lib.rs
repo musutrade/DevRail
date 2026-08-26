@@ -19,6 +19,7 @@ pub mod handlers;
 pub mod mfa;
 pub mod models;
 pub mod openapi;
+pub mod orchestration;
 pub mod permissions;
 pub mod repositories;
 pub mod services;

@@ -61,6 +61,18 @@ pub fn initialize() {
             "devrail_run_reconciliation_total",
             "DevRail 运行对账修正总数"
         );
+        describe_counter!(
+            "devrail_workflow_reload_total",
+            "DevRail workflow 动态加载结果总数"
+        );
+        describe_histogram!(
+            "devrail_workflow_reload_duration_seconds",
+            "DevRail workflow 对账耗时（秒）"
+        );
+        describe_gauge!(
+            "devrail_workflow_reload_healthy",
+            "DevRail workflow reloader 最近一次对账是否成功"
+        );
     });
 }
 
@@ -122,6 +134,29 @@ pub fn record_active_runs(count: i64) {
     gauge!("devrail_run_active").set(count.max(0) as f64);
 }
 
+pub fn record_workflow_reload(outcome: &str) {
+    counter!("devrail_workflow_reload_total", "outcome" => workflow_reload_outcome(outcome))
+        .increment(1);
+}
+
+pub fn record_workflow_reload_duration(duration: std::time::Duration) {
+    histogram!("devrail_workflow_reload_duration_seconds").record(duration.as_secs_f64());
+}
+
+pub fn record_workflow_reload_health(healthy: bool) {
+    gauge!("devrail_workflow_reload_healthy").set(if healthy { 1.0 } else { 0.0 });
+}
+
+fn workflow_reload_outcome(outcome: &str) -> &'static str {
+    match outcome {
+        "accepted" => "accepted",
+        "unchanged" => "unchanged",
+        "rejected_with_fallback" => "rejected_with_fallback",
+        "rejected_without_fallback" => "rejected_without_fallback",
+        _ => "other",
+    }
+}
+
 pub fn record_push_delivery(outcome: &str) {
     counter!("devrail_push_delivery_total", "outcome" => outcome.to_string()).increment(1);
 }
@@ -178,5 +213,7 @@ mod tests {
         assert_eq!(scheduler_dispatch_outcome("task-123"), "other");
         assert_eq!(reconciliation_outcome("task_cancelled"), "task_cancelled");
         assert_eq!(reconciliation_outcome("run-456"), "other");
+        assert_eq!(workflow_reload_outcome("accepted"), "accepted");
+        assert_eq!(workflow_reload_outcome("environment-42"), "other");
     }
 }

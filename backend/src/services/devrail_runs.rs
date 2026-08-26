@@ -33,6 +33,10 @@ fn run_response(row: DevRailRunRow) -> DevRailRunResponse {
         snapshot_id: row.snapshot_id,
         idempotency_key: row.idempotency_key,
         attempt: row.attempt,
+        task_revision: row.task_revision,
+        workflow_source: row.workflow_source,
+        workflow_version: row.workflow_version,
+        workflow_digest: row.workflow_digest,
         actor_type: row.actor_type,
         last_heartbeat_at: row.last_heartbeat_at,
         last_event_at: row.last_event_at,
@@ -429,10 +433,21 @@ async fn create_run_with_context(
         return Err(ApiError::conflict("运行环境已禁用"));
     }
     let cwd = PathBuf::from(&environment.workspace_root);
-    let input = bounded_input(req.input.as_deref(), &task.goal)?;
-    let snapshot = json!({"taskId":task.id,"projectId":task.project_id,"title":task.title,"goal":task.goal,"background":task.background,"acceptanceCriteria":task.acceptance_criteria,"constraints":task.constraints,"labels":task.labels,"environmentId":environment.id,"workspaceRoot":environment.workspace_root,"networkMode":environment.network_mode,"toolPolicy":environment.tool_policy});
+    let workflow_snapshot = validate_workflow_identity(
+        task.dispatch_snapshot.get("workflow"),
+        &task.workflow_source,
+        &task.workflow_version,
+        &task.workflow_digest,
+    )?
+    .clone();
+    let workflow_prompt = workflow_snapshot
+        .get("renderedPrompt")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(&task.goal);
+    let input = bounded_input(req.input.as_deref(), workflow_prompt)?;
+    let snapshot = task.dispatch_snapshot.clone();
     let scheduler_policy = supervisor.scheduler_policy();
-    let policy = json!({"version":"devrail-policy-v1","networkMode":environment.network_mode,"toolPolicy":environment.tool_policy,"secretRefs":[],"scheduler":{"priorityAgingSeconds":scheduler_policy.priority_aging_seconds},"retry":{"maxAttempts":task.scheduler_max_attempts,"baseDelaySeconds":scheduler_policy.retry_base_seconds,"maxDelaySeconds":scheduler_policy.retry_max_seconds,"jitterPercent":scheduler_policy.retry_jitter_percent,"stallSeconds":scheduler_policy.stall_timeout.as_secs()}});
+    let policy = json!({"version":"devrail-policy-v1","networkMode":environment.network_mode,"toolPolicy":environment.tool_policy,"secretRefs":[],"workflowDigest":task.workflow_digest,"workflowConfig":workflow_snapshot.get("config"),"scheduler":{"priorityAgingSeconds":scheduler_policy.priority_aging_seconds},"retry":{"maxAttempts":task.scheduler_max_attempts,"baseDelaySeconds":scheduler_policy.retry_base_seconds,"maxDelaySeconds":scheduler_policy.retry_max_seconds,"jitterPercent":scheduler_policy.retry_jitter_percent,"stallSeconds":scheduler_policy.stall_timeout.as_secs()}});
     let startup_args = json!(["app-server"]);
     let reservation = supervisor
         .reserve()
@@ -470,6 +485,11 @@ async fn create_run_with_context(
             snapshot_id,
             idempotency_key: &idempotency_key,
             attempt,
+            task_revision: task.revision,
+            workflow_source: &task.workflow_source,
+            workflow_version: &task.workflow_version,
+            workflow_digest: &task.workflow_digest,
+            workflow_snapshot: &workflow_snapshot,
             actor_type: actor.actor_type.as_str(),
             parent_run_id,
             parent_turn_id: parent_turn_id.as_deref(),
@@ -566,6 +586,26 @@ async fn create_run_with_context(
         return Err(ApiError::conflict(error.to_string()));
     }
     Ok(run_response(row))
+}
+
+fn validate_workflow_identity<'a>(
+    snapshot: Option<&'a serde_json::Value>,
+    source: &str,
+    version: &str,
+    digest: &str,
+) -> Result<&'a serde_json::Value, ApiError> {
+    let snapshot = snapshot.ok_or_else(|| ApiError::conflict("任务派发快照缺少 workflow 身份"))?;
+    let snapshot_version = snapshot
+        .get("declaredVersion")
+        .or_else(|| snapshot.get("version"))
+        .and_then(serde_json::Value::as_str);
+    if snapshot.get("source").and_then(serde_json::Value::as_str) != Some(source)
+        || snapshot_version != Some(version)
+        || snapshot.get("digest").and_then(serde_json::Value::as_str) != Some(digest)
+    {
+        return Err(ApiError::conflict("任务 workflow 快照身份不一致"));
+    }
+    Ok(snapshot)
 }
 pub async fn get_run(
     pool: &PgPool,
@@ -908,5 +948,175 @@ mod tests {
         assert_eq!(quality_gate_commands(&template).unwrap().len(), 2);
         let rejected = serde_json::json!({"gates":[{"name":"危险","command":"sh -c rm -rf"}]});
         assert!(quality_gate_commands(&rejected).is_err());
+    }
+
+    #[test]
+    fn workflow_identity_requires_source_version_and_digest_to_match() {
+        let digest = "a".repeat(64);
+        let snapshot = serde_json::json!({
+            "source": "repository",
+            "declaredVersion": "v1",
+            "digest": digest,
+        });
+        assert!(
+            validate_workflow_identity(Some(&snapshot), "repository", "v1", &"a".repeat(64),)
+                .is_ok()
+        );
+        assert!(
+            validate_workflow_identity(Some(&snapshot), "default", "v1", &"a".repeat(64),).is_err()
+        );
+        assert!(
+            validate_workflow_identity(Some(&snapshot), "repository", "v2", &"a".repeat(64),)
+                .is_err()
+        );
+        assert!(
+            validate_workflow_identity(Some(&snapshot), "repository", "v1", &"b".repeat(64),)
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn queued_workflow_snapshot_reaches_harness_once_without_drift() {
+        let _guard = crate::db::DATABASE_TEST_LOCK.lock().await;
+        let Ok(database_url) = std::env::var("TEST_DATABASE_URL") else {
+            return;
+        };
+        let pool = crate::db::init_pool(&database_url)
+            .await
+            .expect("connect test database");
+        crate::db::run_migrations(&pool)
+            .await
+            .expect("run migrations");
+        let controlled_root =
+            std::env::temp_dir().join(format!("devrail-workflow-e2e-{}", uuid::Uuid::new_v4()));
+        let workspace = controlled_root.join("repository");
+        tokio::fs::create_dir_all(&workspace)
+            .await
+            .expect("create controlled workspace");
+        tokio::fs::write(
+            workspace.join("WORKFLOW.md"),
+            include_str!("../../../WORKFLOW.md"),
+        )
+        .await
+        .expect("write workflow contract");
+        tokio::fs::write(
+            workspace.join("app-server"),
+            b"IFS= read -r initialize\nprintf '%s\\n' '{\"id\":\"initialize\",\"result\":{}}'\nIFS= read -r thread\nIFS= read -r turn\nprintf '%s\\n' \"$turn\" > captured-turn.json\nsleep 30\n",
+        )
+        .await
+        .expect("write fake app-server");
+        let fixture = crate::repositories::devrail_runs::create_workflow_e2e_fixture(
+            &pool,
+            workspace.to_string_lossy().as_ref(),
+        )
+        .await
+        .expect("create workflow fixture");
+        let queued = crate::services::devrail::update_task(
+            &pool,
+            &fixture.actor,
+            fixture.project_id,
+            fixture.task_id,
+            &crate::models::UpdateDevRailTaskRequest {
+                title: None,
+                goal: None,
+                background: crate::models::NullablePatch::Missing,
+                acceptance_criteria: crate::models::NullablePatch::Missing,
+                constraints: crate::models::NullablePatch::Missing,
+                priority: None,
+                status: Some("queued".to_string()),
+                assignee_user_id: crate::models::NullablePatch::Missing,
+                labels: None,
+                due_at: crate::models::NullablePatch::Missing,
+                repository_id: crate::models::NullablePatch::Missing,
+                environment_id: crate::models::NullablePatch::Missing,
+            },
+            &controlled_root,
+        )
+        .await
+        .expect("queue task with workflow snapshot");
+        assert_eq!(queued.workflow_source, "repository");
+        let claim_token = uuid::Uuid::new_v4();
+        let claimed =
+            crate::repositories::devrail::claim_scheduler_tasks(&pool, claim_token, 100, 60, 3_600)
+                .await
+                .expect("claim queued task");
+        assert!(claimed.iter().any(|task| task.id == fixture.task_id));
+        let supervisor = HarnessSupervisor::new(
+            pool.clone(),
+            "bash".to_string(),
+            1,
+            30,
+            controlled_root.to_string_lossy().into_owned(),
+            1,
+            crate::workers::task_scheduler::SchedulerPolicy::default(),
+        );
+        let request = CreateDevRailRunRequest {
+            environment_id: fixture.environment_id,
+            idempotency_key: format!("scheduler:{}:1", fixture.task_id),
+            model_id: None,
+            input: None,
+            branch_name: None,
+        };
+        let run = create_scheduled_run(
+            &pool,
+            &fixture.actor,
+            &supervisor,
+            fixture.task_id,
+            &request,
+            claim_token,
+        )
+        .await
+        .expect("create scheduled run");
+        assert_eq!(run.workflow_digest, queued.workflow_digest);
+        assert_eq!(run.workflow_source, queued.workflow_source);
+        assert_eq!(run.workflow_version, queued.workflow_version);
+        assert_eq!(run.task_revision, queued.revision);
+
+        let captured_path = workspace.join("captured-turn.json");
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+        let captured = loop {
+            if let Ok(value) = tokio::fs::read_to_string(&captured_path).await {
+                break value;
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "fake app-server did not capture turn input"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        };
+        let turn: serde_json::Value =
+            serde_json::from_str(captured.trim()).expect("parse captured turn");
+        let input = turn
+            .pointer("/params/input")
+            .and_then(serde_json::Value::as_str)
+            .expect("turn input");
+        assert!(input.contains("工作流端到端任务"));
+        assert!(input.contains("执行不可变工作流快照"));
+        assert!(input.contains("输入必须来自已渲染工作流"));
+
+        let duplicate = create_scheduled_run(
+            &pool,
+            &fixture.actor,
+            &supervisor,
+            fixture.task_id,
+            &request,
+            claim_token,
+        )
+        .await
+        .expect("same idempotency key returns existing run");
+        assert_eq!(duplicate.id, run.id);
+        assert_eq!(
+            crate::repositories::devrail_runs::count_task_runs_for_test(&pool, fixture.task_id,)
+                .await
+                .expect("count task runs"),
+            1
+        );
+        supervisor
+            .interrupt(run.id)
+            .await
+            .expect("stop fake app-server");
+        tokio::fs::remove_dir_all(&controlled_root)
+            .await
+            .expect("cleanup controlled workspace");
     }
 }

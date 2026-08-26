@@ -3,7 +3,12 @@
 use crate::access::ActorContext;
 use crate::error::{db_error, ApiError};
 use crate::models::*;
-use crate::repositories::{self, devrail, devrail_members};
+use crate::orchestration::workflow::{
+    self, PlatformWorkflowPolicy, WorkflowEnvironmentTemplateContext,
+    WorkflowRepositoryTemplateContext, WorkflowSnapshot, WorkflowTaskContext,
+    WorkflowTaskTemplateContext,
+};
+use crate::repositories::{self, devrail, devrail_members, devrail_workflows};
 use axum::{body::Bytes, http::HeaderMap};
 use reqwest::Client;
 use serde_json::{json, Value};
@@ -527,6 +532,10 @@ fn task_response(row: DevRailTaskRow) -> DevRailTaskResponse {
         constraints: row.constraints,
         priority: row.priority,
         status: row.status,
+        revision: row.revision,
+        workflow_source: row.workflow_source,
+        workflow_version: row.workflow_version,
+        workflow_digest: row.workflow_digest,
         scheduler_attempt: row.scheduler_attempt,
         scheduler_retry_count: row.scheduler_retry_count,
         scheduler_max_attempts: row.scheduler_max_attempts,
@@ -2010,6 +2019,163 @@ async fn validate_task_resources(
     Ok(())
 }
 
+#[derive(Debug)]
+struct QueueTaskDraft {
+    project_id: i64,
+    repository_id: Option<i64>,
+    environment_id: i64,
+    task_id: i64,
+    revision: i64,
+    title: String,
+    goal: String,
+    background: Option<String>,
+    acceptance_criteria: Option<String>,
+    constraints: Option<String>,
+    labels: Value,
+}
+
+struct QueueTaskArtifacts {
+    workflow: WorkflowSnapshot,
+    dispatch_snapshot: Value,
+    dispatch_snapshot_digest: String,
+    department_id: Option<i64>,
+    owner_user_id: i64,
+}
+
+async fn build_queue_task_artifacts(
+    pool: &PgPool,
+    actor: &ActorContext,
+    controlled_workspace_root: &Path,
+    draft: &QueueTaskDraft,
+) -> Result<QueueTaskArtifacts, ApiError> {
+    let environment = get_environment(pool, actor, draft.project_id, draft.environment_id).await?;
+    if !environment.enabled {
+        return Err(ApiError::conflict("运行环境已禁用"));
+    }
+    let repository = match draft.repository_id {
+        Some(repository_id) => {
+            Some(get_repository(pool, actor, draft.project_id, repository_id).await?)
+        }
+        None => None,
+    };
+    let mut platform_policy = PlatformWorkflowPolicy::secure_default(environment.max_duration_secs);
+    platform_policy.network_allowed = environment.network_mode == "allowlist";
+    if let Some(allowed_tools) = environment
+        .tool_policy
+        .get("allowedTools")
+        .and_then(Value::as_array)
+    {
+        let environment_tools = allowed_tools
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect::<std::collections::BTreeSet<_>>();
+        platform_policy
+            .allowed_tools
+            .retain(|tool| environment_tools.contains(tool));
+    }
+    let workflow = match workflow::load_repository_workflow(
+        controlled_workspace_root,
+        Path::new(&environment.workspace_root),
+        &platform_policy,
+    )
+    .await
+    {
+        Ok(workflow) => workflow,
+        Err(load_error) => {
+            let Some(last_known_good) =
+                devrail_workflows::last_known_good(pool, actor, draft.environment_id)
+                    .await
+                    .map_err(db_error)?
+            else {
+                return Err(ApiError::validation(load_error.to_string()));
+            };
+            let restored: WorkflowSnapshot =
+                serde_json::from_value(last_known_good.normalized_snapshot).map_err(|_| {
+                    ApiError::conflict("持久化 workflow 快照无效，无法安全创建任务快照")
+                })?;
+            if restored.digest != last_known_good.digest
+                || restored.source.as_str() != last_known_good.source
+                || restored.declared_version != last_known_good.declared_version
+            {
+                return Err(ApiError::conflict(
+                    "持久化 workflow 身份不一致，无法安全创建任务快照",
+                ));
+            }
+            restored
+        }
+    };
+    let rendered_workflow = workflow::render_workflow(
+        &workflow,
+        &WorkflowTaskContext {
+            task: WorkflowTaskTemplateContext {
+                id: draft.task_id,
+                title: &draft.title,
+                goal: &draft.goal,
+                background: draft.background.as_deref(),
+                acceptance_criteria: draft.acceptance_criteria.as_deref(),
+                constraints: draft.constraints.as_deref(),
+            },
+            repository: WorkflowRepositoryTemplateContext {
+                name: repository.as_ref().map(|value| value.name.as_str()),
+                default_branch: repository
+                    .as_ref()
+                    .map(|value| value.default_branch.as_str()),
+            },
+            environment: WorkflowEnvironmentTemplateContext {
+                name: &environment.name,
+                workspace_root: &environment.workspace_root,
+            },
+        },
+    )
+    .map_err(|error| ApiError::validation(error.to_string()))?;
+    let task_snapshot = json!({
+        "taskId": draft.task_id,
+        "projectId": draft.project_id,
+        "repositoryId": draft.repository_id,
+        "environmentId": draft.environment_id,
+        "title": draft.title,
+        "goal": draft.goal,
+        "background": draft.background,
+        "acceptanceCriteria": draft.acceptance_criteria,
+        "constraints": draft.constraints,
+        "labels": draft.labels,
+        "workspaceRoot": environment.workspace_root,
+        "networkMode": environment.network_mode,
+        "toolPolicy": environment.tool_policy,
+    });
+    let dispatch_snapshot =
+        workflow::task_dispatch_snapshot(&task_snapshot, draft.revision, &rendered_workflow);
+    let dispatch_snapshot_digest = workflow::snapshot_digest(&dispatch_snapshot)
+        .map_err(|error| ApiError::validation(error.to_string()))?;
+    Ok(QueueTaskArtifacts {
+        workflow,
+        dispatch_snapshot,
+        dispatch_snapshot_digest,
+        department_id: environment.department_id,
+        owner_user_id: environment.owner_user_id,
+    })
+}
+
+fn task_transition_allowed(current: &str, next: &str) -> bool {
+    current == next
+        || matches!(
+            (current, next),
+            ("draft", "queued" | "cancelled" | "archived")
+                | ("queued", "cancelled" | "failed")
+                | (
+                    "running",
+                    "awaiting_approval" | "succeeded" | "failed" | "cancelled"
+                )
+                | (
+                    "awaiting_approval",
+                    "running" | "succeeded" | "failed" | "cancelled"
+                )
+                | ("succeeded" | "failed" | "cancelled", "archived")
+                | ("failed", "queued")
+        )
+}
+
 pub async fn create_task(
     pool: &PgPool,
     actor: &ActorContext,
@@ -2071,6 +2237,7 @@ pub async fn update_task(
     project_id: i64,
     id: i64,
     req: &UpdateDevRailTaskRequest,
+    controlled_workspace_root: &Path,
 ) -> Result<DevRailTaskResponse, ApiError> {
     let title = req
         .title
@@ -2108,23 +2275,115 @@ pub async fn update_task(
     }
     let labels = req.labels.as_ref().map(|v| json!(v));
     let current = get_task(pool, actor, project_id, id).await?;
+    if let Some(next_status) = status.as_deref() {
+        if !task_transition_allowed(&current.status, next_status) {
+            return Err(ApiError::conflict(format!(
+                "任务不能从 {} 转换为 {}",
+                current.status, next_status
+            )));
+        }
+    }
+    let next_repository_id = if repository_set {
+        repository_id
+    } else {
+        current.repository_id
+    };
+    let next_environment_id = if environment_set {
+        environment_id
+    } else {
+        current.environment_id
+    };
     validate_task_resources(
         pool,
         actor,
         project_id,
-        if repository_set {
-            repository_id
-        } else {
-            current.repository_id
-        },
-        if environment_set {
-            environment_id
-        } else {
-            current.environment_id
-        },
+        next_repository_id,
+        next_environment_id,
     )
     .await?;
+    let next_title = title.clone().unwrap_or_else(|| current.title.clone());
+    let next_goal = goal.clone().unwrap_or_else(|| current.goal.clone());
+    let next_background = if background_set {
+        background.clone()
+    } else {
+        current.background.clone()
+    };
+    let next_acceptance_criteria = if acceptance_set {
+        acceptance_criteria.clone()
+    } else {
+        current.acceptance_criteria.clone()
+    };
+    let next_constraints = if constraints_set {
+        constraints.clone()
+    } else {
+        current.constraints.clone()
+    };
+    let dispatch_input_changed = next_title != current.title
+        || next_goal != current.goal
+        || next_background != current.background
+        || next_acceptance_criteria != current.acceptance_criteria
+        || next_constraints != current.constraints
+        || next_repository_id != current.repository_id
+        || next_environment_id != current.environment_id;
+    if matches!(
+        current.status.as_str(),
+        "queued" | "running" | "awaiting_approval"
+    ) && dispatch_input_changed
+    {
+        return Err(ApiError::conflict(
+            "已排队或运行中的任务输入不可原地修改；请取消后重建任务",
+        ));
+    }
+    let queue_artifacts = if status.as_deref() == Some("queued") && current.status != "queued" {
+        let environment_id =
+            next_environment_id.ok_or_else(|| ApiError::validation("排队任务必须关联运行环境"))?;
+        Some(
+            build_queue_task_artifacts(
+                pool,
+                actor,
+                controlled_workspace_root,
+                &QueueTaskDraft {
+                    project_id,
+                    repository_id: next_repository_id,
+                    environment_id,
+                    task_id: id,
+                    revision: current.revision + i64::from(dispatch_input_changed),
+                    title: next_title,
+                    goal: next_goal,
+                    background: next_background,
+                    acceptance_criteria: next_acceptance_criteria,
+                    constraints: next_constraints,
+                    labels: labels.clone().unwrap_or_else(|| current.labels.clone()),
+                },
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
     let mut tx = pool.begin().await.map_err(db_error)?;
+    if let Some(artifacts) = queue_artifacts.as_ref() {
+        let queue_environment_id =
+            next_environment_id.ok_or_else(|| ApiError::validation("排队任务必须关联运行环境"))?;
+        let normalized_snapshot = serde_json::to_value(&artifacts.workflow)
+            .map_err(|_| ApiError::internal("workflow 快照序列化失败"))?;
+        devrail_workflows::accept_version(
+            &mut tx,
+            &devrail_workflows::NewWorkflowVersion {
+                organization_id: actor.organization_id,
+                department_id: artifacts.department_id,
+                owner_user_id: artifacts.owner_user_id,
+                environment_id: queue_environment_id,
+                source: artifacts.workflow.source.as_str(),
+                declared_version: &artifacts.workflow.declared_version,
+                digest: &artifacts.workflow.digest,
+                normalized_snapshot: &normalized_snapshot,
+                prompt_body: &artifacts.workflow.prompt_template,
+            },
+        )
+        .await
+        .map_err(db_error)?;
+    }
     if !devrail::update_task(
         &mut tx,
         actor,
@@ -2150,6 +2409,24 @@ pub async fn update_task(
             repository_id,
             environment_set,
             environment_id,
+            queue_snapshot: queue_artifacts
+                .as_ref()
+                .map(|artifacts| &artifacts.dispatch_snapshot),
+            queue_snapshot_digest: queue_artifacts
+                .as_ref()
+                .map(|artifacts| artifacts.dispatch_snapshot_digest.as_str()),
+            workflow_source: queue_artifacts
+                .as_ref()
+                .map(|artifacts| artifacts.workflow.source.as_str()),
+            workflow_version: queue_artifacts
+                .as_ref()
+                .map(|artifacts| artifacts.workflow.declared_version.as_str()),
+            workflow_digest: queue_artifacts
+                .as_ref()
+                .map(|artifacts| artifacts.workflow.digest.as_str()),
+            queue_max_attempts: queue_artifacts
+                .as_ref()
+                .map(|artifacts| artifacts.workflow.config.retry.max_attempts),
         },
     )
     .await
@@ -2163,7 +2440,7 @@ pub async fn update_task(
         "devrail.task.update",
         "devrail_task",
         Some(id),
-        json!({"projectId":project_id,"repositoryId":if repository_set { repository_id } else { current.repository_id },"environmentId":if environment_set { environment_id } else { current.environment_id }}),
+        json!({"projectId":project_id,"repositoryId":next_repository_id,"environmentId":next_environment_id,"workflowDigest":queue_artifacts.as_ref().map(|artifacts| artifacts.workflow.digest.as_str())}),
     )
     .await
     .map_err(db_error)?;
