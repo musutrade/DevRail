@@ -1,6 +1,6 @@
 //! Opaque Cookie session authentication and typed permission extractors.
 
-use crate::access::{ActorContext, DataScope};
+use crate::access::{ActorContext, ActorType, DataScope};
 use crate::error::ApiError;
 use crate::repositories;
 use crate::AppState;
@@ -188,6 +188,7 @@ async fn authenticate(parts: &mut Parts, state: &AppState) -> Result<ActorContex
         .ok_or_else(|| ApiError::internal("认证上下文包含无效的数据范围"))?;
     crate::telemetry::record_authenticated_user(context.user_id);
     Ok(ActorContext {
+        actor_type: ActorType::User,
         session_id: context.session_id,
         user_id: context.user_id,
         organization_id: context.organization_id,

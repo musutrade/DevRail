@@ -5,9 +5,11 @@ use arc_admin_backend::config::{AppConfig, AppEnvironment, LogFormat};
 use arc_admin_backend::mfa::MfaConfig;
 use arc_admin_backend::telemetry::{self, TelemetryMetadata};
 use arc_admin_backend::workers::harness_supervisor::HarnessSupervisor;
+use arc_admin_backend::workers::task_scheduler::SchedulerPolicy;
 use arc_admin_backend::{build_router_with_metadata_and_cors, db, AppState};
 use std::process::ExitCode;
-use std::{net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
+use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 
 #[tokio::main]
@@ -84,6 +86,15 @@ async fn run(config: AppConfig, metadata: TelemetryMetadata) -> anyhow::Result<(
         tracing::info!("automatic database migrations disabled");
     }
 
+    let scheduler_policy = SchedulerPolicy {
+        poll_interval: Duration::from_secs(config.scheduler_poll_secs as u64),
+        claim_lease_seconds: config.scheduler_claim_lease_secs,
+        retry_base_seconds: config.scheduler_retry_base_secs,
+        retry_max_seconds: config.scheduler_retry_max_secs,
+        retry_jitter_percent: config.scheduler_retry_jitter_percent,
+        stall_timeout: Duration::from_secs(config.scheduler_stall_secs as u64),
+        priority_aging_seconds: config.scheduler_priority_aging_secs,
+    };
     let supervisor = Arc::new(HarnessSupervisor::new(
         pool.clone(),
         config.harness_command.clone(),
@@ -91,6 +102,7 @@ async fn run(config: AppConfig, metadata: TelemetryMetadata) -> anyhow::Result<(
         config.run_max_duration_secs,
         config.run_workspace_root.clone(),
         config.run_graceful_interrupt_secs,
+        scheduler_policy,
     ));
     let recovered = supervisor.recover_stale_runs().await?;
     if recovered > 0 {
@@ -130,7 +142,13 @@ async fn run(config: AppConfig, metadata: TelemetryMetadata) -> anyhow::Result<(
         state.supervisor.clone(),
     );
     arc_admin_backend::workers::branch_cleanup::spawn(state.pool.clone());
-    arc_admin_backend::workers::task_scheduler::spawn(state.pool.clone(), state.supervisor.clone());
+    let shutdown = CancellationToken::new();
+    let scheduler = arc_admin_backend::workers::task_scheduler::spawn(
+        state.pool.clone(),
+        state.supervisor.clone(),
+        scheduler_policy,
+        shutdown.clone(),
+    );
     arc_admin_backend::workers::notification_dispatcher::spawn(
         state.pool.clone(),
         state.mfa.clone(),
@@ -146,12 +164,14 @@ async fn run(config: AppConfig, metadata: TelemetryMetadata) -> anyhow::Result<(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
-    .with_graceful_shutdown(shutdown_signal())
+    .with_graceful_shutdown(shutdown_signal(shutdown.clone()))
     .await?;
+    shutdown.cancel();
+    scheduler.await?;
     Ok(())
 }
 
-async fn shutdown_signal() {
+async fn shutdown_signal(shutdown: CancellationToken) {
     let ctrl_c = async {
         tokio::signal::ctrl_c()
             .await
@@ -173,5 +193,6 @@ async fn shutdown_signal() {
         () = ctrl_c => {},
         () = terminate => {},
     }
+    shutdown.cancel();
     tracing::info!("shutdown signal received");
 }

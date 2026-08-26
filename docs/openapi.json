@@ -8289,6 +8289,9 @@
           "taskId",
           "snapshotId",
           "idempotencyKey",
+          "attempt",
+          "actorType",
+          "cleanupStatus",
           "status",
           "cwd",
           "policy",
@@ -8298,6 +8301,13 @@
           "updatedAt"
         ],
         "properties": {
+          "actorType": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer",
+            "format": "int32"
+          },
           "branchExpiresAt": {
             "type": [
               "string",
@@ -8310,6 +8320,9 @@
               "string",
               "null"
             ]
+          },
+          "cleanupStatus": {
+            "type": "string"
           },
           "completedAt": {
             "type": [
@@ -8351,7 +8364,34 @@
           "idempotencyKey": {
             "type": "string"
           },
+          "lastEventAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lastHeartbeatAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
           "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parentRunId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "parentTurnId": {
             "type": [
               "string",
               "null"
@@ -8363,6 +8403,12 @@
             "format": "int32"
           },
           "recoverySuggestion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retryReason": {
             "type": [
               "string",
               "null"
@@ -8543,6 +8589,9 @@
           "goal",
           "priority",
           "status",
+          "schedulerAttempt",
+          "schedulerRetryCount",
+          "schedulerMaxAttempts",
           "labels",
           "createdAt",
           "updatedAt"
@@ -8634,6 +8683,31 @@
               "null"
             ],
             "format": "int64"
+          },
+          "schedulerAttempt": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "schedulerLastError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "schedulerMaxAttempts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "schedulerRetryAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "schedulerRetryCount": {
+            "type": "integer",
+            "format": "int32"
           },
           "status": {
             "type": "string"

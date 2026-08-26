@@ -14,9 +14,17 @@ fn db_error(error: sqlx::Error) -> ApiError {
     ApiError::internal(error)
 }
 #[derive(Debug, Clone)]
-pub struct ResumeContext {
+struct ResumeContext {
     pub thread_id: String,
     pub turn_id: Option<String>,
+}
+
+#[derive(Default)]
+struct RunCreationContext {
+    resume: Option<ResumeContext>,
+    scheduler_claim_token: Option<uuid::Uuid>,
+    parent_run_id: Option<i64>,
+    parent_turn_id: Option<String>,
 }
 fn run_response(row: DevRailRunRow) -> DevRailRunResponse {
     DevRailRunResponse {
@@ -24,6 +32,14 @@ fn run_response(row: DevRailRunRow) -> DevRailRunResponse {
         task_id: row.task_id,
         snapshot_id: row.snapshot_id,
         idempotency_key: row.idempotency_key,
+        attempt: row.attempt,
+        actor_type: row.actor_type,
+        last_heartbeat_at: row.last_heartbeat_at,
+        last_event_at: row.last_event_at,
+        retry_reason: row.retry_reason,
+        parent_run_id: row.parent_run_id,
+        parent_turn_id: row.parent_turn_id,
+        cleanup_status: row.cleanup_status,
         branch_name: row.branch_name,
         branch_expires_at: row.branch_expires_at,
         status: row.status,
@@ -327,17 +343,53 @@ pub async fn create_run(
     task_id: i64,
     req: &CreateDevRailRunRequest,
 ) -> Result<DevRailRunResponse, ApiError> {
-    create_run_with_resume(pool, actor, supervisor, task_id, req, None).await
+    create_run_with_context(
+        pool,
+        actor,
+        supervisor,
+        task_id,
+        req,
+        RunCreationContext::default(),
+    )
+    .await
 }
 
-async fn create_run_with_resume(
+pub(crate) async fn create_scheduled_run(
     pool: &PgPool,
     actor: &ActorContext,
     supervisor: &HarnessSupervisor,
     task_id: i64,
     req: &CreateDevRailRunRequest,
-    resume: Option<ResumeContext>,
+    claim_token: uuid::Uuid,
 ) -> Result<DevRailRunResponse, ApiError> {
+    create_run_with_context(
+        pool,
+        actor,
+        supervisor,
+        task_id,
+        req,
+        RunCreationContext {
+            scheduler_claim_token: Some(claim_token),
+            ..RunCreationContext::default()
+        },
+    )
+    .await
+}
+
+async fn create_run_with_context(
+    pool: &PgPool,
+    actor: &ActorContext,
+    supervisor: &HarnessSupervisor,
+    task_id: i64,
+    req: &CreateDevRailRunRequest,
+    context: RunCreationContext,
+) -> Result<DevRailRunResponse, ApiError> {
+    let RunCreationContext {
+        resume,
+        scheduler_claim_token,
+        parent_run_id,
+        parent_turn_id,
+    } = context;
     let idempotency_key = key(&req.idempotency_key)?;
     let branch_name = req
         .branch_name
@@ -366,6 +418,9 @@ async fn create_run_with_resume(
         .await
         .map_err(db_error)?
         .ok_or_else(|| ApiError::not_found("任务不存在或超出数据范围"))?;
+    if scheduler_claim_token.is_some() && task.status != "queued" {
+        return Err(ApiError::validation("任务已不在调度队列中"));
+    }
     let environment = devrail::find_environment(pool, actor, task.project_id, req.environment_id)
         .await
         .map_err(db_error)?
@@ -376,13 +431,37 @@ async fn create_run_with_resume(
     let cwd = PathBuf::from(&environment.workspace_root);
     let input = bounded_input(req.input.as_deref(), &task.goal)?;
     let snapshot = json!({"taskId":task.id,"projectId":task.project_id,"title":task.title,"goal":task.goal,"background":task.background,"acceptanceCriteria":task.acceptance_criteria,"constraints":task.constraints,"labels":task.labels,"environmentId":environment.id,"workspaceRoot":environment.workspace_root,"networkMode":environment.network_mode,"toolPolicy":environment.tool_policy});
-    let policy = json!({"version":"devrail-policy-v1","networkMode":environment.network_mode,"toolPolicy":environment.tool_policy,"secretRefs":[]});
+    let scheduler_policy = supervisor.scheduler_policy();
+    let policy = json!({"version":"devrail-policy-v1","networkMode":environment.network_mode,"toolPolicy":environment.tool_policy,"secretRefs":[],"scheduler":{"priorityAgingSeconds":scheduler_policy.priority_aging_seconds},"retry":{"maxAttempts":task.scheduler_max_attempts,"baseDelaySeconds":scheduler_policy.retry_base_seconds,"maxDelaySeconds":scheduler_policy.retry_max_seconds,"jitterPercent":scheduler_policy.retry_jitter_percent,"stallSeconds":scheduler_policy.stall_timeout.as_secs()}});
     let startup_args = json!(["app-server"]);
+    let reservation = supervisor
+        .reserve()
+        .map_err(|error| ApiError::conflict(error.to_string()))?;
     let mut tx = pool.begin().await.map_err(db_error)?;
+    if let Some(claim_token) = scheduler_claim_token {
+        if !devrail::scheduler_claim_is_current(
+            &mut tx,
+            task.id,
+            claim_token,
+            scheduler_policy.claim_lease_seconds,
+        )
+        .await
+        .map_err(db_error)?
+        {
+            return Err(ApiError::conflict("调度租约已失效"));
+        }
+    }
     let snapshot_id =
         devrail_runs::create_snapshot(&mut tx, actor, task.id, &snapshot, task.department_id)
             .await
             .map_err(db_error)?;
+    let attempt = if matches!(actor.actor_type, crate::access::ActorType::System) {
+        task.scheduler_attempt.max(1)
+    } else {
+        devrail_runs::next_attempt(&mut tx, task.id)
+            .await
+            .map_err(db_error)?
+    };
     let row = devrail_runs::create_run(
         &mut tx,
         &devrail_runs::NewRun {
@@ -390,6 +469,10 @@ async fn create_run_with_resume(
             task_id: task.id,
             snapshot_id,
             idempotency_key: &idempotency_key,
+            attempt,
+            actor_type: actor.actor_type.as_str(),
+            parent_run_id,
+            parent_turn_id: parent_turn_id.as_deref(),
             branch_name,
             branch_expires_at,
             cwd: &environment.workspace_root,
@@ -400,43 +483,51 @@ async fn create_run_with_resume(
         },
     )
     .await
-    .map_err(|error| {
-        if let sqlx::Error::Database(db) = &error {
-            if db
-                .constraint()
-                .is_some_and(|c| c == "uq_devrail_active_run_per_task")
-            {
-                return ApiError::conflict("该任务已有活动运行");
-            }
+    .map_err(db_error)?;
+    let Some(row) = row else {
+        tx.rollback().await.map_err(db_error)?;
+        if let Some(existing) =
+            devrail_runs::find_run_by_idempotency(pool, actor, task.id, &idempotency_key)
+                .await
+                .map_err(db_error)?
+        {
+            return Ok(run_response(existing));
         }
-        db_error(error)
-    })?;
+        return Err(ApiError::conflict("该任务已有相同 attempt 或活动运行"));
+    };
     devrail_runs::update_task_status(&mut tx, task.id, "running")
         .await
         .map_err(db_error)?;
-    repositories::audit_logs::record(
+    repositories::audit_logs::record_actor(
         &mut tx,
-        Some(actor.user_id),
+        actor,
         "devrail.run.create",
         "devrail_run",
         Some(row.id),
-        json!({"taskId":task.id,"environmentId":environment.id}),
+        json!({"taskId":task.id,"environmentId":environment.id,"actorType":actor.actor_type.as_str(),"attempt":row.attempt,"reason":if scheduler_claim_token.is_some() {"scheduler_dispatch"} else {"user_request"},"policyVersion":"devrail-policy-v1"}),
     )
     .await
     .map_err(db_error)?;
     tx.commit().await.map_err(db_error)?;
     if let Err(error) = supervisor
-        .launch(RunLaunch {
-            run_id: row.id,
-            task_id: task.id,
-            organization_id: actor.organization_id,
-            department_id: task.department_id,
-            owner_user_id: actor.user_id,
-            cwd,
-            input,
-            resume_thread_id: resume.as_ref().map(|value| value.thread_id.clone()),
-            resume_turn_id: resume.and_then(|value| value.turn_id),
-        })
+        .launch_reserved(
+            RunLaunch {
+                run_id: row.id,
+                task_id: task.id,
+                organization_id: actor.organization_id,
+                department_id: task.department_id,
+                owner_user_id: actor.user_id,
+                cwd,
+                input,
+                resume_thread_id: resume.as_ref().map(|value| value.thread_id.clone()),
+                resume_turn_id: resume.and_then(|value| value.turn_id),
+                attempt: row.attempt,
+                max_attempts: task.scheduler_max_attempts,
+                automatic: scheduler_claim_token.is_some(),
+                scheduler_policy,
+            },
+            reservation,
+        )
         .await
     {
         let capacity = matches!(&error, SupervisorError::Capacity);
@@ -562,7 +653,11 @@ pub async fn retry_run(
     } else {
         None
     };
-    create_run_with_resume(
+    let parent_turn_id = req
+        .resume_from_turn_id
+        .clone()
+        .or_else(|| previous.turn_id.clone());
+    create_run_with_context(
         pool,
         actor,
         supervisor,
@@ -574,7 +669,12 @@ pub async fn retry_run(
             input: req.input.clone(),
             branch_name: previous.branch_name,
         },
-        resume,
+        RunCreationContext {
+            resume,
+            scheduler_claim_token: None,
+            parent_run_id: Some(previous.id),
+            parent_turn_id,
+        },
     )
     .await
 }

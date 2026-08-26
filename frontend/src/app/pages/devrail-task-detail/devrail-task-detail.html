@@ -8,6 +8,21 @@
   @if (loading()) {
     <div class="loading-wrap" role="status"><mat-progress-spinner diameter="32" /></div>
   } @else if (task(); as current) {
+    @if (current.status === 'queued' || current.schedulerLastError) {
+      <section class="comments" aria-labelledby="scheduler-status-title">
+        <h2 id="scheduler-status-title">调度状态</h2>
+        <p>当前执行尝试：{{ current.schedulerAttempt }} / {{ current.schedulerMaxAttempts }}</p>
+        <p>调度重试次数：{{ current.schedulerRetryCount }}</p>
+        @if (current.schedulerRetryAt) {
+          <p>下次调度时间：{{ current.schedulerRetryAt | date: 'yyyy-MM-dd HH:mm:ss' }}</p>
+        } @else if (current.status === 'queued') {
+          <p>任务正在等待可用的 Harness 容量和健康运行环境。</p>
+        }
+        @if (current.schedulerLastError) {
+          <p role="alert">最近调度原因：{{ current.schedulerLastError }}</p>
+        }
+      </section>
+    }
     <form class="task-form" #taskForm (submit)="$event.preventDefault(); save(taskForm)">
       <label>标题<input name="title" [value]="current.title" required /></label>
       <label

@@ -31,6 +31,21 @@ export class DevRailTasksPage implements OnInit {
   private readonly snack = inject(MatSnackBar);
   projectId = 0;
 
+  statusLabel(status: string): string {
+    return (
+      {
+        draft: '草稿',
+        queued: '排队中',
+        running: '运行中',
+        awaiting_approval: '等待审批',
+        succeeded: '已完成',
+        failed: '失败',
+        cancelled: '已取消',
+        archived: '已归档',
+      }[status] ?? status
+    );
+  }
+
   ngOnInit(): void {
     this.projectId = Number(this.route.snapshot.paramMap.get('projectId'));
     void this.load();

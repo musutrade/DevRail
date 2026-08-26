@@ -49,12 +49,28 @@ impl DataScope {
 
 #[derive(Debug, Clone)]
 pub struct ActorContext {
+    pub actor_type: ActorType,
     pub user_id: i64,
     pub session_id: i64,
     pub organization_id: i64,
     pub department_id: Option<i64>,
     pub data_scope: DataScope,
     pub permission_codes: BTreeSet<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActorType {
+    User,
+    System,
+}
+
+impl ActorType {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::User => "user",
+            Self::System => "system",
+        }
+    }
 }
 
 impl ActorContext {

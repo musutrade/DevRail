@@ -19,6 +19,11 @@ export interface DevRailTaskResponse {
   priority: string;
   projectId: number;
   repositoryId?: (number | null);
+  schedulerAttempt: number;
+  schedulerLastError?: (string | null);
+  schedulerMaxAttempts: number;
+  schedulerRetryAt?: (string | null);
+  schedulerRetryCount: number;
   status: string;
   title: string;
   updatedAt: string;

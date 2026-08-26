@@ -89,6 +89,39 @@ pub async fn record(
     Ok(())
 }
 
+pub async fn record_actor(
+    connection: &mut PgConnection,
+    actor: &ActorContext,
+    action: &str,
+    target_type: &str,
+    target_id: Option<i64>,
+    details: Value,
+) -> Result<(), sqlx::Error> {
+    let trace_id = crate::telemetry::current_trace_id().or_else(|| {
+        matches!(actor.actor_type, crate::access::ActorType::System)
+            .then(|| uuid::Uuid::new_v4().to_string())
+    });
+    let actor_user_id =
+        matches!(actor.actor_type, crate::access::ActorType::User).then_some(actor.user_id);
+    sqlx::query(
+        "INSERT INTO audit_logs
+             (actor_user_id, action, target_type, target_id, details, trace_id,
+              organization_id, department_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+    )
+    .bind(actor_user_id)
+    .bind(action)
+    .bind(target_type)
+    .bind(target_id)
+    .bind(details)
+    .bind(trace_id)
+    .bind(actor.organization_id)
+    .bind(actor.department_id)
+    .execute(connection)
+    .await?;
+    Ok(())
+}
+
 pub async fn list(
     pool: &PgPool,
     actor: &ActorContext,
