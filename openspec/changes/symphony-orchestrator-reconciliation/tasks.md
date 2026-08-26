@@ -36,4 +36,4 @@
 - [x] 6.1 补齐真实 PostgreSQL 多 worker 竞争、claim 过期、重启、断流、超时、取消和终态幂等集成测试；验证相关 Rust 测试在隔离 `TEST_DATABASE_URL` 下通过
 - [x] 6.2 执行 secret scan、架构审计、Rust/Angular 测试和 `cargo flow verify --all`；验证完整门禁输出 `TEST_SUMMARY: PASS`
 - [x] 6.3 更新 `docs/devrail-implementation-status.md`、专项需求证据矩阵和运行手册，关联 ADR-0001、ADR-0002 及本 change；验证文档链接、需求 ID 和测试命令可复查
-- [ ] 6.4 在 PR 描述中列出需求 ID、ADR、OpenSpec change、迁移、测试、风险和回滚方案，并监控 CI/供应链/CodeQL；验证所有 required checks 成功后再归档 change
+- [x] 6.4 在 PR 描述中列出需求 ID、ADR、OpenSpec change、迁移、测试、风险和回滚方案，并监控 CI/供应链/CodeQL；验证所有 required checks 成功后再归档 change
