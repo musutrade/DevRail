@@ -2,7 +2,7 @@ use crate::access::ActorContext;
 use crate::error::ApiError;
 use crate::models::*;
 use crate::repositories::{self, devrail, devrail_runs};
-use crate::workers::harness_supervisor::{HarnessSupervisor, RunLaunch};
+use crate::workers::harness_supervisor::{HarnessSupervisor, RunLaunch, SupervisorError};
 use serde_json::json;
 use sqlx::PgPool;
 use std::path::PathBuf;
@@ -439,6 +439,7 @@ async fn create_run_with_resume(
         })
         .await
     {
+        let capacity = matches!(&error, SupervisorError::Capacity);
         let mut cleanup = pool.begin().await.map_err(db_error)?;
         let trace = uuid::Uuid::new_v4().to_string();
         devrail_runs::update_run_terminal(
@@ -446,18 +447,30 @@ async fn create_run_with_resume(
             &devrail_runs::TerminalRunUpdate {
                 run_id: row.id,
                 status: "failed",
-                exit_reason: "launch_failed",
+                exit_reason: if capacity {
+                    "capacity"
+                } else {
+                    "launch_failed"
+                },
                 exit_code: None,
                 stderr_summary: None,
                 trace_id: &trace,
-                recovery_suggestion: Some("Harness 进程未能启动；检查命令配置和受控工作区"),
+                recovery_suggestion: Some(if capacity {
+                    "Harness 并发额度已用尽；任务将留在队列中稍后重试"
+                } else {
+                    "Harness 进程未能启动；检查命令配置和受控工作区"
+                }),
             },
         )
         .await
         .map_err(db_error)?;
-        devrail_runs::update_task_status(&mut cleanup, task.id, "failed")
-            .await
-            .map_err(db_error)?;
+        devrail_runs::update_task_status(
+            &mut cleanup,
+            task.id,
+            if capacity { "queued" } else { "failed" },
+        )
+        .await
+        .map_err(db_error)?;
         cleanup.commit().await.map_err(db_error)?;
         return Err(ApiError::conflict(error.to_string()));
     }
