@@ -47,4 +47,4 @@
 
 - [x] 7.1 对后端、前端、迁移和 workflow 组件执行定向 format/lint/check/test/build，修复全部诊断且不增加 Clippy allow；以 `cargo flow verify` 的组件结果验证。
 - [x] 7.2 执行 `cargo flow verify --all`，确保 secret scan、审计、Rust/Angular 测试、OpenAPI、迁移、供应链和构建全部通过，并保存最终证据。
-- [ ] 7.3 使用明确文件清单提交、推送并创建或更新 PR，监控 CI、arc-flow、供应链与 CodeQL；以提交 SHA、PR URL 和全部必需检查成功验证。
+- [x] 7.3 使用明确文件清单提交、推送并创建或更新 PR，监控 CI、arc-flow、供应链与 CodeQL；以提交 SHA、PR URL 和全部必需检查成功验证。
