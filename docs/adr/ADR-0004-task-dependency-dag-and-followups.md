@@ -65,4 +65,7 @@ DevRail 已具备 PostgreSQL TaskTracker、原子 claim、稳定 attempt、workf
 - 前端验证：任务详情 Vitest、桌面/移动 Playwright、真实全栈 smoke 和生产构建；
 - 最终门禁：2026-08-26 `cargo flow verify --all` 全部通过，OpenSpec 严格校验通过。
 
-提交 SHA 和 PR URL 在远端交付后记录于 PR 及 OpenSpec 交付任务，避免在提交前写入不可验证的占位值。
+- 实现提交：`dbc2dcc8d1321b9d4235b3be3ce529b44d767283`；
+- 交付 PR：[musutrade/DevRail#75](https://github.com/musutrade/DevRail/pull/75)；
+- 远端验证：CI、Supply chain security 和 arc-flow platform 均成功；CodeQL
+  按工作流路径条件正常跳过。
