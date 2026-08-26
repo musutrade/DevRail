@@ -12,8 +12,8 @@ use sqlx::{AssertSqlSafe, PgConnection, PgPool};
 const PROJECT_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, slug, name, description, status, default_repository_id, default_environment_id, notification_policy, quality_gate_template, created_at, updated_at, archived_at";
 const REPOSITORY_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, name, remote_url, protocol, default_branch, credential_ref, last_sync_status, last_head_sha, last_remote_branch, last_remote_branch_count, created_at, updated_at, archived_at";
 const ENVIRONMENT_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, name, workspace_root, network_mode, tool_policy, secret_refs, max_duration_secs, enabled, created_at, updated_at, archived_at";
-const TASK_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, repository_id, environment_id, assignee_user_id, title, goal, background, acceptance_criteria, constraints, priority, status, scheduler_attempt, scheduler_retry_count, scheduler_max_attempts, scheduler_retry_at, scheduler_last_error, labels, due_at, created_at, updated_at, archived_at";
-const SCHEDULER_TASK_COLUMNS: &str = "t.id, t.organization_id, t.department_id, t.owner_user_id, t.project_id, t.repository_id, t.environment_id, t.assignee_user_id, t.title, t.goal, t.background, t.acceptance_criteria, t.constraints, t.priority, t.status, t.scheduler_attempt, t.scheduler_retry_count, t.scheduler_max_attempts, t.scheduler_retry_at, t.scheduler_last_error, t.labels, t.due_at, t.created_at, t.updated_at, t.archived_at";
+const TASK_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, repository_id, environment_id, assignee_user_id, title, goal, background, acceptance_criteria, constraints, priority, status, revision, dispatch_snapshot, dispatch_snapshot_digest, workflow_source, workflow_version, workflow_digest, scheduler_attempt, scheduler_retry_count, scheduler_max_attempts, scheduler_retry_at, scheduler_last_error, labels, due_at, created_at, updated_at, archived_at";
+const SCHEDULER_TASK_COLUMNS: &str = "t.id, t.organization_id, t.department_id, t.owner_user_id, t.project_id, t.repository_id, t.environment_id, t.assignee_user_id, t.title, t.goal, t.background, t.acceptance_criteria, t.constraints, t.priority, t.status, t.revision, t.dispatch_snapshot, t.dispatch_snapshot_digest, t.workflow_source, t.workflow_version, t.workflow_digest, t.scheduler_attempt, t.scheduler_retry_count, t.scheduler_max_attempts, t.scheduler_retry_at, t.scheduler_last_error, t.labels, t.due_at, t.created_at, t.updated_at, t.archived_at";
 
 pub(crate) struct NewProject<'a> {
     pub slug: &'a str,
@@ -118,6 +118,12 @@ pub(crate) struct TaskUpdate<'a> {
     pub repository_id: Option<i64>,
     pub environment_set: bool,
     pub environment_id: Option<i64>,
+    pub queue_snapshot: Option<&'a Value>,
+    pub queue_snapshot_digest: Option<&'a str>,
+    pub workflow_source: Option<&'a str>,
+    pub workflow_version: Option<&'a str>,
+    pub workflow_digest: Option<&'a str>,
+    pub queue_max_attempts: Option<i32>,
 }
 
 fn scope_sql(alias: &str) -> String {
@@ -521,6 +527,9 @@ pub(crate) async fn claim_scheduler_tasks(
             JOIN devrail_environments e
               ON e.id = t.environment_id
              AND e.organization_id = t.organization_id
+             AND e.project_id = t.project_id
+             AND e.owner_user_id = t.owner_user_id
+             AND e.department_id IS NOT DISTINCT FROM t.department_id
             WHERE t.status = 'queued'
               AND t.archived_at IS NULL
               AND t.scheduler_attempt < t.scheduler_max_attempts
@@ -910,7 +919,87 @@ pub(crate) async fn update_task(
     id: i64,
     u: &TaskUpdate<'_>,
 ) -> Result<bool, sqlx::Error> {
-    let r=sqlx::query("UPDATE devrail_tasks SET title=COALESCE($5,title),goal=COALESCE($6,goal),background=CASE WHEN $7 THEN $8 ELSE background END,acceptance_criteria=CASE WHEN $9 THEN $10 ELSE acceptance_criteria END,constraints=CASE WHEN $11 THEN $12 ELSE constraints END,priority=COALESCE($13,priority),status=COALESCE($14,status),assignee_user_id=CASE WHEN $15 THEN $16 ELSE assignee_user_id END,labels=COALESCE($17,labels),due_at=CASE WHEN $18 THEN $19 ELSE due_at END,repository_id=CASE WHEN $20 THEN $21 ELSE repository_id END,environment_id=CASE WHEN $22 THEN $23 ELSE environment_id END,archived_at=CASE WHEN $14='archived' THEN COALESCE(archived_at,now()) WHEN $14 IS NOT NULL THEN NULL ELSE archived_at END,updated_at=now() WHERE id=$1 AND project_id=$2 AND organization_id=$3 AND ($4='all' OR owner_user_id=$24 OR $4='organization' OR ($4 IN ('department','department_and_children') AND department_id=$25)) AND archived_at IS NULL").bind(id).bind(project_id).bind(actor.organization_id).bind(actor.data_scope.as_str()).bind(u.title).bind(u.goal).bind(u.background_set).bind(u.background).bind(u.acceptance_set).bind(u.acceptance_criteria).bind(u.constraints_set).bind(u.constraints).bind(u.priority).bind(u.status).bind(u.assignee_set).bind(u.assignee_user_id).bind(u.labels).bind(u.due_at_set).bind(u.due_at).bind(u.repository_set).bind(u.repository_id).bind(u.environment_set).bind(u.environment_id).bind(actor.user_id).bind(actor.department_id).execute(c).await?;
+    if u.status.is_some() {
+        sqlx::query(
+            "SELECT set_config('devrail.actor_type',$1,true),
+                    set_config('devrail.actor_user_id',$2,true),
+                    set_config('devrail.transition_reason',$3,true),
+                    set_config('devrail.trace_id',$4,true)",
+        )
+        .bind(actor.actor_type.as_str())
+        .bind(actor.user_id.to_string())
+        .bind("task_api_update")
+        .bind(uuid::Uuid::new_v4().to_string())
+        .execute(&mut *c)
+        .await?;
+    }
+    let r = sqlx::query(
+        "UPDATE devrail_tasks
+         SET title=COALESCE($5,title), goal=COALESCE($6,goal),
+             background=CASE WHEN $7 THEN $8 ELSE background END,
+             acceptance_criteria=CASE WHEN $9 THEN $10 ELSE acceptance_criteria END,
+             constraints=CASE WHEN $11 THEN $12 ELSE constraints END,
+             priority=COALESCE($13,priority), status=COALESCE($14,status),
+             assignee_user_id=CASE WHEN $15 THEN $16 ELSE assignee_user_id END,
+             labels=COALESCE($17,labels),
+             due_at=CASE WHEN $18 THEN $19 ELSE due_at END,
+             repository_id=CASE WHEN $20 THEN $21 ELSE repository_id END,
+             environment_id=CASE WHEN $22 THEN $23 ELSE environment_id END,
+             dispatch_snapshot=CASE WHEN $14='queued' THEN COALESCE($26,dispatch_snapshot) ELSE dispatch_snapshot END,
+             dispatch_snapshot_digest=CASE WHEN $14='queued' THEN COALESCE($27,dispatch_snapshot_digest) ELSE dispatch_snapshot_digest END,
+             workflow_source=CASE WHEN $14='queued' THEN COALESCE($28,workflow_source) ELSE workflow_source END,
+             workflow_version=CASE WHEN $14='queued' THEN COALESCE($29,workflow_version) ELSE workflow_version END,
+             workflow_digest=CASE WHEN $14='queued' THEN COALESCE($30,workflow_digest) ELSE workflow_digest END,
+             scheduler_max_attempts=CASE WHEN $14='queued' THEN COALESCE($31,scheduler_max_attempts) ELSE scheduler_max_attempts END,
+             archived_at=CASE
+                 WHEN $14='archived' THEN COALESCE(archived_at,now())
+                 WHEN $14 IS NOT NULL THEN NULL ELSE archived_at END,
+             updated_at=now()
+         WHERE id=$1 AND project_id=$2 AND organization_id=$3
+           AND ($4='all' OR owner_user_id=$24 OR $4='organization'
+                OR ($4 IN ('department','department_and_children') AND department_id=$25))
+           AND archived_at IS NULL
+           AND ($14::text IS NULL OR status=$14 OR
+                (status='draft' AND $14 IN ('queued','cancelled','archived')) OR
+                (status='queued' AND $14 IN ('cancelled','failed')) OR
+                (status='running' AND $14 IN ('awaiting_approval','succeeded','failed','cancelled')) OR
+                (status='awaiting_approval' AND $14 IN ('running','succeeded','failed','cancelled')) OR
+                (status IN ('succeeded','failed','cancelled') AND $14='archived') OR
+                (status='failed' AND $14='queued'))",
+    )
+    .bind(id)
+    .bind(project_id)
+    .bind(actor.organization_id)
+    .bind(actor.data_scope.as_str())
+    .bind(u.title)
+    .bind(u.goal)
+    .bind(u.background_set)
+    .bind(u.background)
+    .bind(u.acceptance_set)
+    .bind(u.acceptance_criteria)
+    .bind(u.constraints_set)
+    .bind(u.constraints)
+    .bind(u.priority)
+    .bind(u.status)
+    .bind(u.assignee_set)
+    .bind(u.assignee_user_id)
+    .bind(u.labels)
+    .bind(u.due_at_set)
+    .bind(u.due_at)
+    .bind(u.repository_set)
+    .bind(u.repository_id)
+    .bind(u.environment_set)
+    .bind(u.environment_id)
+    .bind(actor.user_id)
+    .bind(actor.department_id)
+    .bind(u.queue_snapshot)
+    .bind(u.queue_snapshot_digest)
+    .bind(u.workflow_source)
+    .bind(u.workflow_version)
+    .bind(u.workflow_digest)
+    .bind(u.queue_max_attempts)
+    .execute(c)
+    .await?;
     Ok(r.rows_affected() > 0)
 }
 
@@ -992,6 +1081,129 @@ mod scheduler_integration_tests {
         .fetch_one(pool)
         .await
         .expect("create queued task")
+    }
+
+    #[tokio::test]
+    async fn queued_snapshot_is_atomic_immutable_and_audited() {
+        let _guard = DATABASE_TEST_LOCK.lock().await;
+        let Some(pool) = test_pool().await else {
+            return;
+        };
+        let fixture = scheduler_fixture(&pool).await;
+        let (project_id, environment_id, owner_user_id, department_id) = fixture;
+        let organization_id = sqlx::query_scalar::<_, i64>(
+            "SELECT organization_id FROM devrail_projects WHERE id=$1",
+        )
+        .bind(project_id)
+        .fetch_one(&pool)
+        .await
+        .expect("project organization");
+        let task_id = sqlx::query_scalar::<_, i64>(
+            "INSERT INTO devrail_tasks
+                 (organization_id, department_id, owner_user_id, project_id,
+                  environment_id, title, goal)
+             VALUES ($1,$2,$3,$4,$5,'快照任务','验证不可变快照') RETURNING id",
+        )
+        .bind(organization_id)
+        .bind(department_id)
+        .bind(owner_user_id)
+        .bind(project_id)
+        .bind(environment_id)
+        .fetch_one(&pool)
+        .await
+        .expect("create draft task");
+        let actor = ActorContext {
+            actor_type: ActorType::User,
+            user_id: owner_user_id,
+            session_id: 1,
+            organization_id,
+            department_id,
+            data_scope: DataScope::Organization,
+            permission_codes: BTreeSet::new(),
+        };
+        let dispatch_snapshot = json!({
+            "schemaVersion": 1,
+            "taskRevision": 1,
+            "workflow": {
+                "source": "repository",
+                "declaredVersion": "v1",
+                "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+        });
+        let mut tx = pool.begin().await.expect("begin queue transition");
+        assert!(update_task(
+            &mut tx,
+            &actor,
+            project_id,
+            task_id,
+            &TaskUpdate {
+                title: None,
+                goal: None,
+                background_set: false,
+                background: None,
+                acceptance_set: false,
+                acceptance_criteria: None,
+                constraints_set: false,
+                constraints: None,
+                priority: None,
+                status: Some("queued"),
+                assignee_set: false,
+                assignee_user_id: None,
+                labels: None,
+                due_at_set: false,
+                due_at: None,
+                repository_set: false,
+                repository_id: None,
+                environment_set: false,
+                environment_id: None,
+                queue_snapshot: Some(&dispatch_snapshot),
+                queue_snapshot_digest: Some(
+                    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                ),
+                workflow_source: Some("repository"),
+                workflow_version: Some("v1"),
+                workflow_digest: Some(
+                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                ),
+                queue_max_attempts: Some(4),
+            },
+        )
+        .await
+        .expect("queue task"));
+        tx.commit().await.expect("commit queue transition");
+        let stored = sqlx::query_as::<_, (String, i64, String, String, i32)>(
+            "SELECT status, revision, workflow_source, workflow_digest,
+                    scheduler_max_attempts
+             FROM devrail_tasks WHERE id=$1",
+        )
+        .bind(task_id)
+        .fetch_one(&pool)
+        .await
+        .expect("queued snapshot identity");
+        assert_eq!(stored.0, "queued");
+        assert_eq!(stored.1, 1);
+        assert_eq!(stored.2, "repository");
+        assert_eq!(stored.3, "a".repeat(64));
+        assert_eq!(stored.4, 4);
+        let history = sqlx::query_as::<_, (String, String, String, i64)>(
+            "SELECT from_status, to_status, reason, actor_user_id
+             FROM devrail_task_status_history WHERE task_id=$1",
+        )
+        .bind(task_id)
+        .fetch_one(&pool)
+        .await
+        .expect("status history");
+        assert_eq!(history.0, "draft");
+        assert_eq!(history.1, "queued");
+        assert_eq!(history.2, "task_api_update");
+        assert_eq!(history.3, owner_user_id);
+        assert!(
+            sqlx::query("UPDATE devrail_tasks SET title='漂移标题' WHERE id=$1")
+                .bind(task_id)
+                .execute(&pool)
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]
@@ -1147,6 +1359,7 @@ mod scheduler_integration_tests {
         };
         let policy = json!({"version":"test-policy"});
         let startup_args = json!(["app-server"]);
+        let workflow_snapshot = json!({"source":"legacy","version":"legacy-v1","digest":"0000000000000000000000000000000000000000000000000000000000000000"});
         let first_key = format!("scheduler:{task_id}:1");
         let mut tx = pool.begin().await.expect("begin run transaction");
         let first_run = devrail_runs::create_run(
@@ -1157,6 +1370,11 @@ mod scheduler_integration_tests {
                 snapshot_id,
                 idempotency_key: &first_key,
                 attempt: 1,
+                task_revision: 1,
+                workflow_source: "legacy",
+                workflow_version: "legacy-v1",
+                workflow_digest: "0000000000000000000000000000000000000000000000000000000000000000",
+                workflow_snapshot: &workflow_snapshot,
                 actor_type: "system",
                 parent_run_id: None,
                 parent_turn_id: None,
@@ -1180,6 +1398,11 @@ mod scheduler_integration_tests {
                 snapshot_id,
                 idempotency_key: &first_key,
                 attempt: 1,
+                task_revision: 1,
+                workflow_source: "legacy",
+                workflow_version: "legacy-v1",
+                workflow_digest: "0000000000000000000000000000000000000000000000000000000000000000",
+                workflow_snapshot: &workflow_snapshot,
                 actor_type: "system",
                 parent_run_id: None,
                 parent_turn_id: None,
@@ -1209,6 +1432,11 @@ mod scheduler_integration_tests {
                 snapshot_id,
                 idempotency_key: &second_key,
                 attempt: 2,
+                task_revision: 1,
+                workflow_source: "legacy",
+                workflow_version: "legacy-v1",
+                workflow_digest: "0000000000000000000000000000000000000000000000000000000000000000",
+                workflow_snapshot: &workflow_snapshot,
                 actor_type: "system",
                 parent_run_id: Some(first_run.id),
                 parent_turn_id: Some("turn-parent"),
@@ -1352,6 +1580,11 @@ mod scheduler_integration_tests {
                 snapshot_id,
                 idempotency_key: &restart_key,
                 attempt: 3,
+                task_revision: 1,
+                workflow_source: "legacy",
+                workflow_version: "legacy-v1",
+                workflow_digest: "0000000000000000000000000000000000000000000000000000000000000000",
+                workflow_snapshot: &workflow_snapshot,
                 actor_type: "system",
                 parent_run_id: Some(run_id),
                 parent_turn_id: Some("turn-parent"),

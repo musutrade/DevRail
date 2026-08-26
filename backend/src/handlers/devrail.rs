@@ -469,9 +469,16 @@ pub async fn update_task(
     Path((project_id, id)): Path<(i64, i64)>,
     Json(req): Json<UpdateDevRailTaskRequest>,
 ) -> Result<Json<DevRailTaskResponse>, ApiError> {
-    services::devrail::update_task(&s.pool, &auth, project_id, id, &req)
-        .await
-        .map(Json)
+    services::devrail::update_task(
+        &s.pool,
+        &auth,
+        project_id,
+        id,
+        &req,
+        s.run_workspace_root.as_path(),
+    )
+    .await
+    .map(Json)
 }
 
 pub async fn create_run(

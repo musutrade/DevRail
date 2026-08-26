@@ -1148,6 +1148,7 @@ mod tests {
         let idempotency_key = format!("scheduler:{task_id}:1");
         let policy_value = json!({"version":"stall-test"});
         let startup_args = json!(["app-server"]);
+        let workflow_snapshot = json!({"source":"legacy","version":"legacy-v1","digest":"0000000000000000000000000000000000000000000000000000000000000000"});
         let run = devrail_runs::create_run(
             &mut tx,
             &devrail_runs::NewRun {
@@ -1156,6 +1157,11 @@ mod tests {
                 snapshot_id,
                 idempotency_key: &idempotency_key,
                 attempt: 1,
+                task_revision: 1,
+                workflow_source: "legacy",
+                workflow_version: "legacy-v1",
+                workflow_digest: "0000000000000000000000000000000000000000000000000000000000000000",
+                workflow_snapshot: &workflow_snapshot,
                 actor_type: "system",
                 parent_run_id: None,
                 parent_turn_id: None,
@@ -1278,6 +1284,11 @@ sleep 30
                 snapshot_id,
                 idempotency_key: &second_key,
                 attempt: 2,
+                task_revision: 1,
+                workflow_source: "legacy",
+                workflow_version: "legacy-v1",
+                workflow_digest: "0000000000000000000000000000000000000000000000000000000000000000",
+                workflow_snapshot: &workflow_snapshot,
                 actor_type: "system",
                 parent_run_id: Some(run.id),
                 parent_turn_id: None,
@@ -1386,6 +1397,11 @@ sleep 30
                 snapshot_id,
                 idempotency_key: &timeout_key,
                 attempt: 3,
+                task_revision: 1,
+                workflow_source: "legacy",
+                workflow_version: "legacy-v1",
+                workflow_digest: "0000000000000000000000000000000000000000000000000000000000000000",
+                workflow_snapshot: &workflow_snapshot,
                 actor_type: "system",
                 parent_run_id: Some(recovery_run.id),
                 parent_turn_id: Some("turn-transport"),

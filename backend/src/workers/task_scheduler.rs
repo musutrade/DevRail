@@ -7,7 +7,7 @@
 use crate::access::{ActorContext, ActorType, DataScope};
 use crate::error::ApiError;
 use crate::models::{CreateDevRailRunRequest, DevRailTaskRow};
-use crate::repositories::devrail;
+use crate::orchestration::task_tracker::{PostgresTaskTracker, TaskTracker, TrackerError};
 use crate::services::devrail_runs;
 use crate::workers::harness_supervisor::HarnessSupervisor;
 use chrono::{Duration as ChronoDuration, Utc};
@@ -64,6 +64,17 @@ pub fn spawn(
     policy: SchedulerPolicy,
     shutdown: CancellationToken,
 ) -> tokio::task::JoinHandle<()> {
+    let tracker = Arc::new(PostgresTaskTracker::new(pool.clone()));
+    spawn_with_tracker(pool, tracker, supervisor, policy, shutdown)
+}
+
+fn spawn_with_tracker(
+    pool: PgPool,
+    tracker: Arc<dyn TaskTracker>,
+    supervisor: Arc<HarnessSupervisor>,
+    policy: SchedulerPolicy,
+    shutdown: CancellationToken,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(policy.poll_interval);
         loop {
@@ -74,8 +85,8 @@ pub fn spawn(
                     break;
                 }
                 _ = interval.tick() => {
-                    if let Err(error) = run_tick(&pool, &supervisor, policy).await {
-                        tracing::error!(error = %error, "DevRail task scheduler tick failed");
+                    if let Err(error) = run_tick(&pool, tracker.as_ref(), &supervisor, policy).await {
+                        tracing::error!(error_kind = ?error.kind(), error = %error, "DevRail task scheduler tick failed");
                     }
                 }
             }
@@ -85,17 +96,15 @@ pub fn spawn(
 
 async fn run_tick(
     pool: &PgPool,
+    tracker: &dyn TaskTracker,
     supervisor: &HarnessSupervisor,
     policy: SchedulerPolicy,
-) -> Result<(), sqlx::Error> {
+) -> Result<(), TrackerError> {
     debug_assert_eq!(TICK_PHASES[0], TickPhase::Reconcile);
     let running_run_ids = supervisor.running_run_ids().await;
-    let reconciliation = devrail::reconcile_scheduler_state(
-        pool,
-        &running_run_ids,
-        policy.stall_timeout.as_secs() as i64,
-    )
-    .await?;
+    let reconciliation = tracker
+        .reconcile(&running_run_ids, policy.stall_timeout.as_secs() as i64)
+        .await?;
     for pending in &reconciliation.pending_interruptions {
         match supervisor
             .interrupt_for_reconciliation(pending.run_id, &pending.reason)
@@ -133,14 +142,14 @@ async fn run_tick(
     }
     crate::app_metrics::record_reconciliation("ok");
     let claim_token = Uuid::new_v4();
-    let tasks = devrail::claim_scheduler_tasks(
-        pool,
-        claim_token,
-        CLAIM_BATCH_SIZE,
-        policy.claim_lease_seconds,
-        policy.priority_aging_seconds,
-    )
-    .await?;
+    let tasks = tracker
+        .claim_dispatch_candidates(
+            claim_token,
+            CLAIM_BATCH_SIZE,
+            policy.claim_lease_seconds,
+            policy.priority_aging_seconds,
+        )
+        .await?;
     if tasks.is_empty() {
         crate::app_metrics::record_scheduler_dispatch("empty");
         return Ok(());
@@ -149,8 +158,15 @@ async fn run_tick(
         claimed_tasks = tasks.len(),
         "DevRail scheduler claimed queued tasks"
     );
-    for task in tasks {
-        if !devrail::renew_scheduler_claim(pool, task.id, claim_token, policy.claim_lease_seconds)
+    for claimed_task in tasks {
+        let actor = scheduler_actor(&claimed_task);
+        let Some(task) = tracker.find_task(&actor, claimed_task.id).await? else {
+            crate::app_metrics::record_scheduler_dispatch("stale_claim");
+            let _ = tracker.release_claim(claimed_task.id, claim_token).await;
+            continue;
+        };
+        if !tracker
+            .renew_claim(task.id, claim_token, policy.claim_lease_seconds)
             .await?
         {
             crate::app_metrics::record_scheduler_claim_conflict();
@@ -167,25 +183,27 @@ async fn run_tick(
             if matches!(error, ApiError::Conflict(ref message) if message == "Harness 并发额度已用尽")
             {
                 crate::app_metrics::record_scheduler_dispatch("capacity");
-                let _ = devrail::release_scheduler_claim(pool, task.id, claim_token).await;
+                let _ = tracker.release_claim(task.id, claim_token).await;
             } else if is_retryable(&error) && task.scheduler_attempt < task.scheduler_max_attempts {
                 crate::app_metrics::record_scheduler_dispatch("failed");
                 let retry_at = Utc::now() + retry_delay(task.scheduler_attempt, policy);
-                if devrail::schedule_retry(pool, task.id, claim_token, retry_at, reason)
+                if tracker
+                    .schedule_retry(task.id, claim_token, retry_at, reason)
                     .await
                     .unwrap_or(false)
                 {
                     crate::app_metrics::record_scheduler_retry();
                 } else {
-                    let _ = devrail::release_scheduler_claim(pool, task.id, claim_token).await;
+                    let _ = tracker.release_claim(task.id, claim_token).await;
                 }
-            } else if devrail::fail_scheduler_task(pool, task.id, claim_token, reason)
+            } else if tracker
+                .fail_task(task.id, claim_token, reason)
                 .await
                 .unwrap_or(false)
             {
                 crate::app_metrics::record_scheduler_dispatch("permanent_failure");
             } else {
-                let _ = devrail::release_scheduler_claim(pool, task.id, claim_token).await;
+                let _ = tracker.release_claim(task.id, claim_token).await;
             }
         } else {
             crate::app_metrics::record_scheduler_dispatch("started");
@@ -315,9 +333,84 @@ fn scheduler_idempotency_key(task_id: i64, attempt: i32) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
     use chrono::Utc;
     use serde_json::json;
     use sqlx::postgres::PgPoolOptions;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[derive(Default)]
+    struct EmptyTracker {
+        reconciliations: AtomicUsize,
+        claims: AtomicUsize,
+    }
+
+    #[async_trait]
+    impl TaskTracker for EmptyTracker {
+        async fn find_task(
+            &self,
+            _actor: &ActorContext,
+            _task_id: i64,
+        ) -> Result<Option<DevRailTaskRow>, TrackerError> {
+            Ok(None)
+        }
+
+        async fn claim_dispatch_candidates(
+            &self,
+            _claim_token: Uuid,
+            _limit: i64,
+            _claim_lease_seconds: i64,
+            _priority_aging_seconds: i64,
+        ) -> Result<Vec<DevRailTaskRow>, TrackerError> {
+            self.claims.fetch_add(1, Ordering::SeqCst);
+            Ok(Vec::new())
+        }
+
+        async fn renew_claim(
+            &self,
+            _task_id: i64,
+            _claim_token: Uuid,
+            _claim_lease_seconds: i64,
+        ) -> Result<bool, TrackerError> {
+            Ok(false)
+        }
+
+        async fn release_claim(
+            &self,
+            _task_id: i64,
+            _claim_token: Uuid,
+        ) -> Result<bool, TrackerError> {
+            Ok(false)
+        }
+
+        async fn schedule_retry(
+            &self,
+            _task_id: i64,
+            _claim_token: Uuid,
+            _retry_at: chrono::DateTime<Utc>,
+            _reason: &str,
+        ) -> Result<bool, TrackerError> {
+            Ok(false)
+        }
+
+        async fn fail_task(
+            &self,
+            _task_id: i64,
+            _claim_token: Uuid,
+            _reason: &str,
+        ) -> Result<bool, TrackerError> {
+            Ok(false)
+        }
+
+        async fn reconcile(
+            &self,
+            _running_run_ids: &[i64],
+            _stale_timeout_seconds: i64,
+        ) -> Result<crate::repositories::devrail::SchedulerReconciliation, TrackerError> {
+            self.reconciliations.fetch_add(1, Ordering::SeqCst);
+            Ok(crate::repositories::devrail::SchedulerReconciliation::default())
+        }
+    }
 
     fn task() -> DevRailTaskRow {
         DevRailTaskRow {
@@ -336,6 +429,12 @@ mod tests {
             constraints: None,
             priority: "normal".to_string(),
             status: "queued".to_string(),
+            revision: 1,
+            dispatch_snapshot: json!({"schemaVersion": 1}),
+            dispatch_snapshot_digest: "0".repeat(64),
+            workflow_source: "legacy".to_string(),
+            workflow_version: "legacy-v1".to_string(),
+            workflow_digest: "0".repeat(64),
             scheduler_attempt: 0,
             scheduler_retry_count: 0,
             scheduler_max_attempts: 3,
@@ -440,5 +539,27 @@ mod tests {
             .await
             .expect("scheduler shutdown must not block")
             .expect("scheduler worker must join cleanly");
+    }
+
+    #[tokio::test]
+    async fn scheduler_tick_uses_injected_tracker_without_database_access() {
+        let pool = PgPoolOptions::new()
+            .connect_lazy("postgres://devrail:unused@127.0.0.1:1/devrail")
+            .expect("lazy test pool");
+        let supervisor = HarnessSupervisor::new(
+            pool.clone(),
+            "codex".to_string(),
+            1,
+            60,
+            "/tmp/devrail-workspaces".to_string(),
+            1,
+            SchedulerPolicy::default(),
+        );
+        let tracker = EmptyTracker::default();
+        run_tick(&pool, &tracker, &supervisor, SchedulerPolicy::default())
+            .await
+            .expect("empty tracker tick");
+        assert_eq!(tracker.reconciliations.load(Ordering::SeqCst), 1);
+        assert_eq!(tracker.claims.load(Ordering::SeqCst), 1);
     }
 }

@@ -1123,6 +1123,18 @@ mod tests {
     }
 
     #[test]
+    fn repository_api_generation_timeout_covers_cold_runner() {
+        let config = repository_config();
+        let step = config
+            .steps
+            .iter()
+            .find(|step| step.id == "workflow.api-generation")
+            .expect("API generation step");
+
+        assert!(step.timeout_secs >= 600);
+    }
+
+    #[test]
     fn existing_v2_config_defaults_the_secret_rule_path() {
         let source = include_str!("../../../../.arc-flow/flow.toml")
             .lines()

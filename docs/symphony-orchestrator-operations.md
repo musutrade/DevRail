@@ -2,7 +2,7 @@
 
 更新日期：2026-08-26
 
-本文覆盖 OpenSpec change `symphony-orchestrator-reconciliation` 已实现的 DevRail DB tracker、调度控制循环和 Harness 恢复能力。外部 tracker、`WORKFLOW.md`、DAG 和独立 workspace manager 不在本手册范围内。
+本文覆盖 OpenSpec change `symphony-orchestrator-reconciliation` 与 `tasktracker-workflow-foundation` 已实现的 TaskTracker、调度控制循环、仓库 workflow 和 Harness 恢复能力。外部 tracker、DAG 和独立 workspace manager 不在本手册范围内。
 
 ## 启动配置
 
@@ -20,8 +20,16 @@
 | `DEVRAIL_SCHEDULER_RETRY_JITTER_PERCENT` | 20 | 0–100 | OS 随机源生成的正向抖动比例 |
 | `DEVRAIL_SCHEDULER_STALL_SECS` | 120 | 2–86400，且大于轮询间隔 | 无 stdout/stderr 有效活动的 stall 阈值 |
 | `DEVRAIL_SCHEDULER_PRIORITY_AGING_SECS` | 3600 | 60–604800 | queued 任务每等待一个周期提升一级有效优先级 |
+| `DEVRAIL_WORKFLOW_RELOAD_SECS` | 15 | 1–3600 | workflow 对账轮询间隔 |
+| `DEVRAIL_WORKFLOW_RELOAD_JITTER_PERCENT` | 20 | 0–100 | workflow 对账正向抖动比例 |
 
 claim 租约只保护“已领取、尚未启动”的窗口。run 创建后并发额度由 Supervisor reservation 持有，数据库事实由 run 状态、心跳和事件游标维护。实际调度/重试策略会写入 run policy 快照，运行中修改环境变量不会改变现有 run。
+
+## WORKFLOW.md 运行语义
+
+仓库作者按 [仓库工作流契约](workflow-contract.md) 维护根目录 `WORKFLOW.md`。文件缺失时使用版本化安全默认值；路径越界、未知字段/模板能力或安全权限扩大都会拒绝候选版本。
+
+workflow 在任务进入 `queued` 时锁定。文件后续变化不会改变已排队任务和活动 run；合法 reload 只影响之后入队的任务。任务详情和 run 详情应显示相同的来源、版本与摘要。不得通过数据库手工替换快照。
 
 ## 指标与建议告警
 
@@ -35,6 +43,9 @@ claim 租约只保护“已领取、尚未启动”的窗口。run 创建后并�
 | `devrail_scheduler_stall_total` | stall 和进程缺失修正数 | 任意持续增长均应调查 Harness 日志 |
 | `devrail_run_active` | starting/active/awaiting approval 数量 | 长期等于并发上限且队列增长 |
 | `devrail_run_reconciliation_total{outcome}` | claim、stale、取消、环境失效和重启修正 | `stale_run`、`retry_exhausted` 出现即告警 |
+| `devrail_workflow_reload_total{outcome}` | accepted、unchanged、rejected、fallback 等固定结果 | `rejected`/`fallback` 持续增长 |
+| `devrail_workflow_reload_duration_seconds` | 单轮 workflow 对账耗时 | P95 接近轮询间隔 |
+| `devrail_workflow_reload_healthy` | 最近一轮对账是否成功 | 连续为 0 |
 
 指标标签由代码白名单归一化，未知值统一记为 `other`，不得把 task、run、组织或错误文本写入标签。
 
@@ -66,9 +77,16 @@ claim 租约只保护“已领取、尚未启动”的窗口。run 创建后并�
 3. 周期 reconciliation 会处理数据库 active 但 Supervisor 无进程的 stale run，避免无限期 active。
 4. 通过 run 详情核对 `exitReason`、`traceId`、`recoverySuggestion` 和 `cleanupStatus`。
 
+### WORKFLOW.md 非法或删除
+
+1. 查看 `devrail_workflow_reload_total`、System Actor 的 `devrail.workflow.reject` 审计和环境对应的最近摘要；诊断不会包含正文、完整路径或 secret。
+2. 相同坏候选只创建一条失败证据并累加次数，last-known-good 继续服务新入队任务；不要手工清空版本表。
+3. 修复文件后等待下一轮对账。删除文件会发布安全默认 workflow，不会修改既有 task/run。
+4. 在任务与 run 详情核对 workflow 来源、版本和摘要；三元身份不一致时 run 创建会 fail closed。
+
 ## 发布与回滚
 
-迁移 `20260826030000_add_symphony_scheduler_reliability.sql` 是添加式迁移：历史 run 按创建顺序回填 attempt，审计/事件不重写。旧版本不传 attempt 时，兼容触发器会在插入前分配下一 attempt；当前版本显式传入正 attempt，不经过兼容分配。
+迁移 `20260826030000_add_symphony_scheduler_reliability.sql` 与 `20260904100000_add_tasktracker_workflow_foundation.sql` 均为添加式迁移。后者为历史 queued/active task 和 run 回填明确的 `legacy/default` 身份，并保留旧 INSERT 默认值；回滚时保留新增快照、版本、失败证据和状态历史表。
 
 发布顺序：
 
@@ -84,6 +102,7 @@ claim 租约只保护“已领取、尚未启动”的窗口。run 创建后并�
 ```bash
 export PATH="/home/gem/.npm-global/bin:$PATH"
 openspec validate symphony-orchestrator-reconciliation --strict
+openspec validate tasktracker-workflow-foundation --strict
 cargo flow scope
 cargo flow verify --all
 ```

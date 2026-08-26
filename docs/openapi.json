@@ -8290,6 +8290,10 @@
           "snapshotId",
           "idempotencyKey",
           "attempt",
+          "taskRevision",
+          "workflowSource",
+          "workflowVersion",
+          "workflowDigest",
           "actorType",
           "cleanupStatus",
           "status",
@@ -8439,6 +8443,10 @@
             "type": "integer",
             "format": "int64"
           },
+          "taskRevision": {
+            "type": "integer",
+            "format": "int64"
+          },
           "threadId": {
             "type": [
               "string",
@@ -8460,6 +8468,15 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "workflowDigest": {
+            "type": "string"
+          },
+          "workflowSource": {
+            "type": "string"
+          },
+          "workflowVersion": {
+            "type": "string"
           }
         }
       },
@@ -8589,6 +8606,10 @@
           "goal",
           "priority",
           "status",
+          "revision",
+          "workflowSource",
+          "workflowVersion",
+          "workflowDigest",
           "schedulerAttempt",
           "schedulerRetryCount",
           "schedulerMaxAttempts",
@@ -8684,6 +8705,10 @@
             ],
             "format": "int64"
           },
+          "revision": {
+            "type": "integer",
+            "format": "int64"
+          },
           "schedulerAttempt": {
             "type": "integer",
             "format": "int32"
@@ -8718,6 +8743,15 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "workflowDigest": {
+            "type": "string"
+          },
+          "workflowSource": {
+            "type": "string"
+          },
+          "workflowVersion": {
+            "type": "string"
           }
         }
       },

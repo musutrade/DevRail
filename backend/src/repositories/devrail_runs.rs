@@ -5,7 +5,7 @@ use crate::models::{DevRailRunEventRow, DevRailRunRow};
 use serde_json::Value;
 use sqlx::{AssertSqlSafe, PgConnection, PgPool};
 
-const RUN_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, attempt, actor_type, last_heartbeat_at, last_event_at, retry_reason, parent_run_id, parent_turn_id, cleanup_status, branch_name, branch_expires_at, status, thread_id, turn_id, harness_version, model_id, cwd, policy, startup_args_summary, exit_reason, exit_code, stderr_summary, trace_id, recovery_suggestion, recovery_attempts, started_at, completed_at, created_at, updated_at";
+const RUN_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, attempt, task_revision, workflow_source, workflow_version, workflow_digest, workflow_snapshot, actor_type, last_heartbeat_at, last_event_at, retry_reason, parent_run_id, parent_turn_id, cleanup_status, branch_name, branch_expires_at, status, thread_id, turn_id, harness_version, model_id, cwd, policy, startup_args_summary, exit_reason, exit_code, stderr_summary, trace_id, recovery_suggestion, recovery_attempts, started_at, completed_at, created_at, updated_at";
 const EVENT_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, run_id, cursor, event_type, source_event_id, idempotency_key, payload, summary, occurred_at";
 const MAX_TRANSPORT_RECOVERY_ATTEMPTS: i32 = 2;
 
@@ -25,6 +25,11 @@ pub(crate) struct NewRun<'a> {
     pub snapshot_id: i64,
     pub idempotency_key: &'a str,
     pub attempt: i32,
+    pub task_revision: i64,
+    pub workflow_source: &'a str,
+    pub workflow_version: &'a str,
+    pub workflow_digest: &'a str,
+    pub workflow_snapshot: &'a Value,
     pub actor_type: &'a str,
     pub parent_run_id: Option<i64>,
     pub parent_turn_id: Option<&'a str>,
@@ -75,7 +80,15 @@ pub(crate) async fn create_run(
     c: &mut PgConnection,
     input: &NewRun<'_>,
 ) -> Result<Option<DevRailRunRow>, sqlx::Error> {
-    let sql = format!("INSERT INTO devrail_runs (organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, attempt, actor_type, parent_run_id, parent_turn_id, branch_name, branch_expires_at, status, cwd, policy, startup_args_summary, model_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'starting',$13,$14,$15,$16) ON CONFLICT DO NOTHING RETURNING {RUN_COLUMNS}");
+    let sql = format!(
+        "INSERT INTO devrail_runs (organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, attempt, task_revision, workflow_source, workflow_version, workflow_digest, workflow_snapshot, actor_type, parent_run_id, parent_turn_id, branch_name, branch_expires_at, status, cwd, policy, startup_args_summary, model_id)
+         SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'starting',$18,$19,$20,$21
+         FROM devrail_tasks t
+         WHERE t.id=$4 AND t.organization_id=$1 AND t.revision=$8
+           AND t.workflow_source=$9 AND t.workflow_version=$10 AND t.workflow_digest=$11
+           AND t.dispatch_snapshot->'workflow'=$12::jsonb
+         ON CONFLICT DO NOTHING RETURNING {RUN_COLUMNS}"
+    );
     sqlx::query_as::<_, DevRailRunRow>(AssertSqlSafe(sql))
         .bind(input.actor.organization_id)
         .bind(input.department_id)
@@ -84,6 +97,11 @@ pub(crate) async fn create_run(
         .bind(input.snapshot_id)
         .bind(input.idempotency_key)
         .bind(input.attempt)
+        .bind(input.task_revision)
+        .bind(input.workflow_source)
+        .bind(input.workflow_version)
+        .bind(input.workflow_digest)
+        .bind(input.workflow_snapshot)
         .bind(input.actor_type)
         .bind(input.parent_run_id)
         .bind(input.parent_turn_id)
@@ -371,6 +389,99 @@ pub(crate) async fn prepare_harness_test_attempt(
     Ok(())
 }
 
+#[cfg(test)]
+pub(crate) struct WorkflowE2eFixture {
+    pub actor: ActorContext,
+    pub project_id: i64,
+    pub environment_id: i64,
+    pub task_id: i64,
+}
+
+#[cfg(test)]
+pub(crate) async fn create_workflow_e2e_fixture(
+    pool: &PgPool,
+    workspace_root: &str,
+) -> Result<WorkflowE2eFixture, sqlx::Error> {
+    use crate::access::{ActorType, DataScope};
+    use std::collections::BTreeSet;
+
+    let (owner_user_id, organization_id, department_id) =
+        sqlx::query_as::<_, (i64, i64, Option<i64>)>(
+            "SELECT id, organization_id, department_id FROM users ORDER BY id LIMIT 1",
+        )
+        .fetch_one(pool)
+        .await?;
+    let suffix = uuid::Uuid::new_v4().simple().to_string();
+    let project_id = sqlx::query_scalar::<_, i64>(
+        "INSERT INTO devrail_projects
+             (organization_id, department_id, owner_user_id, slug, name)
+         VALUES ($1,$2,$3,$4,'Workflow 端到端测试') RETURNING id",
+    )
+    .bind(organization_id)
+    .bind(department_id)
+    .bind(owner_user_id)
+    .bind(format!("workflow-e2e-{suffix}"))
+    .fetch_one(pool)
+    .await?;
+    let environment_id = sqlx::query_scalar::<_, i64>(
+        "INSERT INTO devrail_environments
+             (organization_id, department_id, owner_user_id, project_id,
+              name, workspace_root, network_mode, tool_policy)
+         VALUES ($1,$2,$3,$4,$5,$6,'off','{}') RETURNING id",
+    )
+    .bind(organization_id)
+    .bind(department_id)
+    .bind(owner_user_id)
+    .bind(project_id)
+    .bind(format!("workflow-e2e-{suffix}"))
+    .bind(workspace_root)
+    .fetch_one(pool)
+    .await?;
+    let task_id = sqlx::query_scalar::<_, i64>(
+        "INSERT INTO devrail_tasks
+             (organization_id, department_id, owner_user_id, project_id,
+              environment_id, title, goal, acceptance_criteria)
+         VALUES ($1,$2,$3,$4,$5,'工作流端到端任务','执行不可变工作流快照','输入必须来自已渲染工作流')
+         RETURNING id",
+    )
+    .bind(organization_id)
+    .bind(department_id)
+    .bind(owner_user_id)
+    .bind(project_id)
+    .bind(environment_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(WorkflowE2eFixture {
+        actor: ActorContext {
+            actor_type: ActorType::System,
+            user_id: owner_user_id,
+            session_id: 0,
+            organization_id,
+            department_id,
+            data_scope: DataScope::Organization,
+            permission_codes: BTreeSet::from([
+                "devrail:task:read".to_string(),
+                "devrail:task:update".to_string(),
+                "devrail:run:execute".to_string(),
+            ]),
+        },
+        project_id,
+        environment_id,
+        task_id,
+    })
+}
+
+#[cfg(test)]
+pub(crate) async fn count_task_runs_for_test(
+    pool: &PgPool,
+    task_id: i64,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar("SELECT count(*) FROM devrail_runs WHERE task_id=$1")
+        .bind(task_id)
+        .fetch_one(pool)
+        .await
+}
+
 pub async fn find_run(
     pool: &PgPool,
     actor: &ActorContext,
@@ -540,4 +651,125 @@ pub async fn find_quality_gate_log(
         .bind(log_ref)
         .fetch_optional(pool)
         .await
+}
+
+#[cfg(test)]
+mod workflow_identity_tests {
+    use super::*;
+    use crate::access::{ActorType, DataScope};
+    use crate::db::DATABASE_TEST_LOCK;
+    use serde_json::json;
+    use std::collections::BTreeSet;
+
+    #[tokio::test]
+    async fn run_insert_requires_and_copies_exact_task_workflow_identity() {
+        let _guard = DATABASE_TEST_LOCK.lock().await;
+        let Ok(database_url) = std::env::var("TEST_DATABASE_URL") else {
+            return;
+        };
+        let pool = crate::db::init_pool(&database_url)
+            .await
+            .expect("connect test database");
+        crate::db::run_migrations(&pool)
+            .await
+            .expect("run migrations");
+        let suffix = uuid::Uuid::new_v4().simple().to_string();
+        let (owner_user_id, organization_id, department_id, task_id) =
+            create_harness_test_task(&pool, &suffix)
+                .await
+                .expect("create task");
+        let actor = ActorContext {
+            actor_type: ActorType::System,
+            user_id: owner_user_id,
+            session_id: 0,
+            organization_id,
+            department_id,
+            data_scope: DataScope::Organization,
+            permission_codes: BTreeSet::new(),
+        };
+        let dispatch_snapshot = sqlx::query_scalar::<_, Value>(
+            "SELECT dispatch_snapshot FROM devrail_tasks
+             WHERE organization_id=$1 AND id=$2",
+        )
+        .bind(organization_id)
+        .bind(task_id)
+        .fetch_one(&pool)
+        .await
+        .expect("read task snapshot");
+        let workflow_snapshot = dispatch_snapshot
+            .get("workflow")
+            .cloned()
+            .expect("workflow snapshot");
+        let legacy_digest = "0".repeat(64);
+        let policy = json!({"version":"workflow-identity-test"});
+        let startup_args = json!(["app-server"]);
+        let mut tx = pool.begin().await.expect("begin run transaction");
+        let snapshot_id =
+            create_snapshot(&mut tx, &actor, task_id, &dispatch_snapshot, department_id)
+                .await
+                .expect("create task snapshot");
+
+        let mismatched = create_run(
+            &mut tx,
+            &NewRun {
+                actor: &actor,
+                task_id,
+                snapshot_id,
+                idempotency_key: "workflow-mismatch",
+                attempt: 1,
+                task_revision: 1,
+                workflow_source: "repository",
+                workflow_version: "legacy-v1",
+                workflow_digest: &legacy_digest,
+                workflow_snapshot: &workflow_snapshot,
+                actor_type: "system",
+                parent_run_id: None,
+                parent_turn_id: None,
+                branch_name: None,
+                branch_expires_at: None,
+                cwd: "/tmp/devrail-workflow-identity",
+                policy: &policy,
+                startup_args: &startup_args,
+                model_id: None,
+                department_id,
+            },
+        )
+        .await
+        .expect("reject mismatched identity safely");
+        assert!(mismatched.is_none());
+
+        let inserted = create_run(
+            &mut tx,
+            &NewRun {
+                actor: &actor,
+                task_id,
+                snapshot_id,
+                idempotency_key: "workflow-match",
+                attempt: 1,
+                task_revision: 1,
+                workflow_source: "legacy",
+                workflow_version: "legacy-v1",
+                workflow_digest: &legacy_digest,
+                workflow_snapshot: &workflow_snapshot,
+                actor_type: "system",
+                parent_run_id: None,
+                parent_turn_id: None,
+                branch_name: None,
+                branch_expires_at: None,
+                cwd: "/tmp/devrail-workflow-identity",
+                policy: &policy,
+                startup_args: &startup_args,
+                model_id: None,
+                department_id,
+            },
+        )
+        .await
+        .expect("insert matching identity")
+        .expect("matching run created");
+        assert_eq!(inserted.workflow_source, "legacy");
+        assert_eq!(inserted.workflow_version, "legacy-v1");
+        assert_eq!(inserted.workflow_digest, "0".repeat(64));
+        assert_eq!(inserted.workflow_snapshot, workflow_snapshot);
+        tx.rollback().await.expect("rollback isolated fixture");
+    }
 }

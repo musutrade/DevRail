@@ -4,13 +4,12 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档版本 | 1.0.0 |
-| 文档状态 | 专项需求基线，待分阶段实现与验收 |
+| 文档版本 | 1.1.0 |
+| 文档状态 | 专项需求基线，分阶段实现与验收 |
 | 编写日期 | 2026-08-26 |
 | 适用产品 | DevRail（基于 Codex harness 的开发工作台） |
 | 上位需求 | [DevRail 产品与技术需求](requirements.md) |
 | 当前状态 | [DevRail 实现状态](devrail-implementation-status.md) |
-| 审计输入 | [Symphony 审计报告](symphony-audit-report.md) |
 
 本文件把 Symphony 的调度、工作流和恢复思想，以及 Harness Engineering 的可复现、可观测、自动验证思想，转化为 DevRail 可实现、可测试、可审计的产品需求。本文件是专项补充，不替代 `docs/requirements.md`；两者冲突时，较新的经评审版本和项目公约优先。
 
@@ -20,9 +19,7 @@
 
 ### 1.1 背景
 
-DevRail 已经具备项目、仓库、环境、任务、Harness Supervisor、run/thread/turn/event、审批、通知、质量门禁和外部代码审查等基础能力。当前的 `queued` 任务调度已经能按优先级轮询，并使用 PostgreSQL 租约避免多实例重复领取，但仍缺少完整的任务跟踪器抽象、工作流配置、状态 reconciliation、依赖编排和失败恢复闭环。
-
-审计报告中的部分结论来自较早的代码快照：调度器、外部评论同步和 GitHub/GitLab resolved 状态基础能力已经存在。因此，本文件以当前实现状态为事实基线，只把仍有代码、测试或运行证据缺口的内容列为待实现需求。
+DevRail 已经具备项目、仓库、环境、任务、Harness Supervisor、run/thread/turn/event、审批、通知、质量门禁和外部代码审查等基础能力。`queued` 调度的 P0 可靠性与 TaskTracker/WORKFLOW P1 基础已经实现；当前主要缺口是依赖编排、任务级隔离工作区、continuation 和自动修复闭环。
 
 ### 1.2 目标
 
@@ -50,14 +47,12 @@ DevRail 已经具备项目、仓库、环境、任务、Harness Supervisor、run
 
 实现和评审至少参考以下资料：
 
-- 本地官方页面快照：[Codex 编排的开源规范：Symphony](Codex%20编排的开源规范：Symphony%20_%20OpenAI.mhtml)。
-- 本地官方页面快照：[Harness 工程：在智慧體優先的世界中善用 Codex](Harness%20工程：在智慧體優先的世界中善用%20Codex%20_%20OpenAI.mhtml)。
 - OpenAI 文章：[Harness 工程：在智慧體優先的世界中善用 Codex](https://openai.com/zh-Hant/index/harness-engineering/)。
 - OpenAI 文章：[Codex 编排的开源规范：Symphony](https://openai.com/zh-Hans-CN/index/open-source-codex-orchestration-symphony/)。
 - Symphony 参考实现：[README](https://github.com/openai/symphony/blob/main/README.md) 和 [SPEC.md](https://github.com/openai/symphony/blob/main/SPEC.md)。
 - DevRail 项目公约、架构和 [审计与门禁](devrail-audit-and-gates.md)。
 
-若外部页面不可访问，以随仓库评审的 MHTML 和 `SPEC.md` 版本为依据，并在版本变更时记录差异。
+外部资料只用于设计参考；DevRail 的可执行事实以本仓库 ADR、OpenSpec、代码、迁移、测试和实现状态文档为准。
 
 ### 2.2 术语
 
@@ -154,20 +149,18 @@ CI、供应链、CodeQL 与外部审查
 - transactional outbox、站内通知、Web Push 设备管理、dispatcher、投递重试、永久失效和告警已实现基础闭环。
 - 任务评论、代码审查、补丁导出、GitHub/GitLab PR/MR 状态和外部评论归一化基础能力已实现，resolved 状态不再固定为 `false`。
 - `arc-flow` scope、审计、lint、编译、测试、构建和供应链检查已接入 CI。
+- `TaskTracker` PostgreSQL adapter、严格 `WORKFLOW.md` loader、入队快照、run 身份校验、动态 reload 和 last-known-good 已实现。
 
 ### 4.2 本专项尚待补齐
 
 以下项目是需求，不代表现状已完成：
 
-- 稳定的 `task_id + attempt` 幂等语义和 Scheduler/System Actor。
-- `TaskTracker` 抽象、仓库级 `WORKFLOW.md`、严格模板渲染和动态 reload。
-- 任务依赖/DAG、任务完成后创建后续任务、完整 reconciliation 和终态清理。
-- 退避、stall 检测、任务取消传播、并发恢复和运行验收证据。
+- 任务依赖/DAG、任务完成后创建后续任务。
 - Workspace 生命周期 hooks、跨运行可复现环境和终端清理保证。
 - 结构化日志/指标/Trace、测试产物、Playwright 截图/视频和失败诊断上下文。
 - 质量门禁失败后的受控修复 run，以及通知和外部供应商回调的完整端到端演练。
 
-审计报告中“调度器不存在”“resolved 状态硬编码”“16 项验收条件”等表述不得直接作为当前状态引用；验收数量以 [DevRail 总需求第 16 节](requirements.md#16-mvp-完成定义definition-of-done) 当前版本为准。
+验收数量以 [DevRail 总需求第 16 节](requirements.md#16-mvp-完成定义definition-of-done) 当前版本为准。
 
 ---
 
@@ -196,6 +189,19 @@ CI、供应链、CodeQL 与外部审查
 **SY-WORKFLOW-004**：worker 支持动态 reload。新配置合法时只影响新 run；非法配置保留上一次有效版本并产生告警和审计事件。
 
 **SY-WORKFLOW-005**：工作流中不得声明绕过组织权限、审批、脱敏、受控根目录和网络策略的选项。
+
+### 5.2.1 TaskTracker/Workflow 证据矩阵（2026-08-26）
+
+| Requirement ID | 状态 | 代码与验证证据 |
+| --- | --- | --- |
+| `SY-TRACK-001`–`SY-TRACK-004` | 已实现 | TaskTracker 领域端口与 PostgreSQL adapter、原子入队快照、状态历史触发器、mock tracker 和 PostgreSQL 并发/范围测试。 |
+| `SY-TRACK-005` | 部分实现 | queued、环境有效、无活动 run、退避、attempt 和优先级 aging 已在候选 SQL 中实现；DAG 依赖条件留待下一 change。 |
+| `SY-WORKFLOW-001`–`SY-WORKFLOW-002` | 已实现 | 严格 loader 覆盖 front matter、未知字段、枚举/范围、封闭变量/过滤器、受控路径、大小和 UTF-8 测试。 |
+| `SY-WORKFLOW-003` | 已实现 | task/run workflow 三元身份与规范化快照持久化，Service 与 Repository SQL 双层 fail-closed，API/OpenAPI/Angular 诊断字段。 |
+| `SY-WORKFLOW-004` | 已实现 | 抖动轮询、摘要短路、持久化 last-known-good、坏候选去重、恢复/删除文件/跨组织数据库回归测试。 |
+| `SY-WORKFLOW-005` | 已实现 | 平台与仓库工具、网络、审批、受控根目录及资源上限安全交集和脱敏诊断测试。 |
+
+详细运维和配置��式见 [Symphony Orchestrator 运行手册](symphony-orchestrator-operations.md) 与 [仓库工作流契约](workflow-contract.md)。
 
 ### 5.3 Orchestrator 调度循环（P0）
 
@@ -485,8 +491,8 @@ cargo flow verify --all
 
 ### P1：Symphony 核心兼容
 
-1. TaskTracker 抽象及 DevRail DB tracker。
-2. `WORKFLOW.md`、严格模板、动态 reload 和 workflow 快照。
+1. TaskTracker 抽象及 DevRail DB tracker（已完成）。
+2. `WORKFLOW.md`、严格模板、动态 reload 和 workflow 快照（已完成）。
 3. DAG 依赖、后续任务、确定性 workspace、hooks 和 continuation turns。
 4. 完善指标、trace、成本预算和前端调度/诊断视图。
 5. 质量门禁失败生成受控修复 run，并在达到上限后转人工。
@@ -518,7 +524,6 @@ cargo flow verify --all
 | --- | --- |
 | `docs/requirements.md` | 产品总需求、通用权限、数据模型、MVP DoD 和总体路线；本文件补充 Symphony/Harness 专项。 |
 | `docs/devrail-implementation-status.md` | 唯一实现状态口径；每次合并后更新已实现、部分实现和未实现。 |
-| `docs/symphony-audit-report.md` | 审计输入和历史问题清单；若与代码现状冲突，以代码、测试和实现状态文档复核。 |
 | `docs/architecture.md` | 分层、数据范围、配置和契约约束；本文件不得放宽其安全边界。 |
 | `docs/devrail-governance.md`、`docs/devrail-audit-and-gates.md` | 工程治理、审计规则和 CI 门禁；所有实现必须遵守。 |
 

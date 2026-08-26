@@ -8,6 +8,13 @@
   @if (loading()) {
     <div class="loading-wrap" role="status"><mat-progress-spinner diameter="32" /></div>
   } @else if (task(); as current) {
+    <section class="comments" aria-labelledby="workflow-identity-title">
+      <h2 id="workflow-identity-title">派发契约</h2>
+      <p>任务修订号：{{ current.revision }}</p>
+      <p>工作流来源：{{ current.workflowSource }}</p>
+      <p>工作流版本：{{ current.workflowVersion }}</p>
+      <p>工作流摘要：{{ current.workflowDigest }}</p>
+    </section>
     @if (current.status === 'queued' || current.schedulerLastError) {
       <section class="comments" aria-labelledby="scheduler-status-title">
         <h2 id="scheduler-status-title">调度状态</h2>

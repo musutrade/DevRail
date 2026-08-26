@@ -70,6 +70,18 @@
           ><strong>#{{ current.attempt }} · {{ actorLabel(current.actorType) }}</strong>
         </div>
         <div>
+          <span>任务修订号</span><strong>{{ current.taskRevision }}</strong>
+        </div>
+        <div>
+          <span>工作流来源</span><strong>{{ current.workflowSource }}</strong>
+        </div>
+        <div>
+          <span>工作流版本</span><strong>{{ current.workflowVersion }}</strong>
+        </div>
+        <div>
+          <span>工作流摘要</span><strong>{{ current.workflowDigest }}</strong>
+        </div>
+        <div>
           <span>清理状态</span
           ><strong>{{
             current.cleanupStatus === 'completed'

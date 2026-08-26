@@ -24,6 +24,16 @@ Service；这些规则与 SQL 写入位置一起由 auditor 强制检查。新�
 
 `backend/src/lib.rs` 暴露可复用的 `build_router`，生产进程和集成测试使用同一套路由。`backend/src/main.rs` 仅负责读取配置、连接数据库并启动监听。开发环境默认自动迁移；生产环境默认关闭，由独立 `migrate` 任务在应用副本启动前完成迁移。
 
+## Symphony 任务与工作流边界
+
+- `backend/src/orchestration/task_tracker.rs` 是调度器访问任务存储的领域端口；PostgreSQL adapter 复用 Repository，worker 不持有 SQLX 查询或表结构知识。
+- `backend/src/orchestration/workflow.rs` 只从受控仓库根目录读取 `WORKFLOW.md`，执行严格 schema、封闭模板、安全策略交集和规范化摘要计算。使用方式见 [仓库工作流契约](workflow-contract.md)。
+- `draft → queued` 是派发输入的原子快照边界。任务修订号、任务输入和 workflow 来源/版本/摘要/规范化内容在同一事务固化；排队后禁止原地修改。
+- run 创建在 Repository SQL 中再次比对 task 修订号及 workflow 三元身份，并复制完全相同的 workflow 快照。Harness 只接收持久化快照渲染出的输入，不重新读取磁盘文件。
+- workflow reloader 以有界抖动轮询校验候选版本，合法版本只供之后入队的任务使用；非法版本保留 PostgreSQL 中的 last-known-good，并产生去重审计和低基数指标。
+
+DAG、per-task workspace/worktree、continuation turns 和外部 tracker adapter 仍是后续独立能力，不得混入本基础边界。
+
 用户-角色和角色-权限写入由 Service 开启事务并把同一个连接传给 Repository，主记录与关联表要么同时成功，要么同时回滚。内置 `super_admin` 不能被停用或清空权限，最后一个有效超级管理员不能被停用、删除或移除角色。
 
 ## 组织与数据范围
