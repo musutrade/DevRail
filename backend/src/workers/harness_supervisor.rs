@@ -2,6 +2,7 @@
 //! this worker owns the controlled app-server process and its JSONL streams.
 
 use crate::repositories::devrail_runs;
+use crate::workers::task_scheduler::SchedulerPolicy;
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
@@ -25,6 +26,10 @@ pub struct RunLaunch {
     pub input: String,
     pub resume_thread_id: Option<String>,
     pub resume_turn_id: Option<String>,
+    pub attempt: i32,
+    pub max_attempts: i32,
+    pub automatic: bool,
+    pub scheduler_policy: SchedulerPolicy,
 }
 
 struct ProcessContext {
@@ -37,6 +42,8 @@ struct ProcessContext {
     controls: mpsc::Receiver<ControlMessage>,
     _slot: tokio::sync::OwnedSemaphorePermit,
 }
+
+pub(crate) struct RunReservation(tokio::sync::OwnedSemaphorePermit);
 
 #[derive(Debug, thiserror::Error)]
 pub enum SupervisorError {
@@ -52,8 +59,33 @@ pub enum SupervisorError {
 
 #[derive(Debug)]
 enum ControlMessage {
-    Interrupt,
+    Interrupt(InterruptCause),
     Approval { approval_id: i64, approved: bool },
+}
+
+#[derive(Debug, Clone, Copy)]
+enum InterruptCause {
+    User,
+    TaskCancelled,
+    EnvironmentInvalid,
+}
+
+impl InterruptCause {
+    const fn terminal(self) -> (&'static str, &'static str, &'static str) {
+        match self {
+            Self::User => ("cancelled", "interrupted", "运行已由用户中断"),
+            Self::TaskCancelled => (
+                "cancelled",
+                "task_cancelled",
+                "任务已取消；调度器已清理 Harness 进程",
+            ),
+            Self::EnvironmentInvalid => (
+                "failed",
+                "environment_invalid",
+                "运行环境在启动阶段失效；请修复环境后重试",
+            ),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -65,6 +97,7 @@ pub struct HarnessSupervisor {
     workspace_root: Arc<PathBuf>,
     slots: Arc<Semaphore>,
     controls: Arc<Mutex<HashMap<i64, mpsc::Sender<ControlMessage>>>>,
+    scheduler_policy: SchedulerPolicy,
 }
 
 impl HarnessSupervisor {
@@ -75,6 +108,7 @@ impl HarnessSupervisor {
         max_duration_secs: i64,
         workspace_root: String,
         graceful_interrupt_secs: i64,
+        scheduler_policy: SchedulerPolicy,
     ) -> Self {
         Self {
             pool,
@@ -84,6 +118,7 @@ impl HarnessSupervisor {
             workspace_root: Arc::new(PathBuf::from(workspace_root)),
             slots: Arc::new(Semaphore::new(max_concurrency)),
             controls: Arc::new(Mutex::new(HashMap::new())),
+            scheduler_policy,
         }
     }
 
@@ -92,14 +127,28 @@ impl HarnessSupervisor {
         launch: RunLaunch,
     ) -> Pin<Box<dyn Future<Output = Result<(), SupervisorError>> + Send + '_>> {
         Box::pin(async move {
+            let reservation = self.reserve()?;
+            self.launch_reserved(launch, reservation).await
+        })
+    }
+
+    pub(crate) fn reserve(&self) -> Result<RunReservation, SupervisorError> {
+        self.slots
+            .clone()
+            .try_acquire_owned()
+            .map(RunReservation)
+            .map_err(|_| SupervisorError::Capacity)
+    }
+
+    pub(crate) fn launch_reserved(
+        &self,
+        launch: RunLaunch,
+        reservation: RunReservation,
+    ) -> Pin<Box<dyn Future<Output = Result<(), SupervisorError>> + Send + '_>> {
+        Box::pin(async move {
             if !launch.cwd.starts_with(self.workspace_root.as_ref()) {
                 return Err(SupervisorError::Workspace);
             }
-            let slot = self
-                .slots
-                .clone()
-                .try_acquire_owned()
-                .map_err(|_| SupervisorError::Capacity)?;
             let (tx, rx) = mpsc::channel(2);
             self.controls.lock().await.insert(launch.run_id, tx);
 
@@ -151,7 +200,7 @@ impl HarnessSupervisor {
                     stdout,
                     stderr,
                     controls: rx,
-                    _slot: slot,
+                    _slot: reservation.0,
                 })
                 .await;
             });
@@ -160,6 +209,26 @@ impl HarnessSupervisor {
     }
 
     pub async fn interrupt(&self, run_id: i64) -> Result<(), SupervisorError> {
+        self.send_interrupt(run_id, InterruptCause::User).await
+    }
+
+    pub(crate) async fn interrupt_for_reconciliation(
+        &self,
+        run_id: i64,
+        reason: &str,
+    ) -> Result<(), SupervisorError> {
+        let cause = match reason {
+            "task_cancelled" => InterruptCause::TaskCancelled,
+            _ => InterruptCause::EnvironmentInvalid,
+        };
+        self.send_interrupt(run_id, cause).await
+    }
+
+    async fn send_interrupt(
+        &self,
+        run_id: i64,
+        cause: InterruptCause,
+    ) -> Result<(), SupervisorError> {
         let sender = self
             .controls
             .lock()
@@ -168,9 +237,25 @@ impl HarnessSupervisor {
             .cloned()
             .ok_or(SupervisorError::ControlUnavailable)?;
         sender
-            .send(ControlMessage::Interrupt)
+            .send(ControlMessage::Interrupt(cause))
             .await
             .map_err(|_| SupervisorError::ControlUnavailable)
+    }
+
+    pub async fn running_run_ids(&self) -> Vec<i64> {
+        let mut ids = self
+            .controls
+            .lock()
+            .await
+            .keys()
+            .copied()
+            .collect::<Vec<_>>();
+        ids.sort_unstable();
+        ids
+    }
+
+    pub const fn scheduler_policy(&self) -> SchedulerPolicy {
+        self.scheduler_policy
     }
 
     pub async fn resolve_approval(
@@ -221,6 +306,12 @@ impl HarnessSupervisor {
                 input,
                 resume_thread_id: run.thread_id,
                 resume_turn_id: run.turn_id,
+                attempt: run.attempt,
+                max_attempts: devrail_runs::scheduler_retry_policy(&self.pool, run.task_id)
+                    .await?
+                    .1,
+                automatic: run.actor_type == "system",
+                scheduler_policy: self.scheduler_policy,
             };
             if self.launch(launch).await.is_ok() {
                 recovered += 1;
@@ -261,11 +352,22 @@ impl HarnessSupervisor {
             input,
             resume_thread_id: run.thread_id,
             resume_turn_id: run.turn_id,
+            attempt: run.attempt,
+            max_attempts: devrail_runs::scheduler_retry_policy(&self.pool, run.task_id)
+                .await
+                .map_err(|error| SupervisorError::Spawn(error.to_string()))?
+                .1,
+            automatic: run.actor_type == "system",
+            scheduler_policy: self.scheduler_policy,
         })
         .await
     }
 
-    async fn recover_transport(&self, launch: &RunLaunch, reason: &str) {
+    async fn prepare_transport_recovery(
+        &self,
+        launch: &RunLaunch,
+        reason: &str,
+    ) -> Option<RunLaunch> {
         let Ok(true) =
             devrail_runs::prepare_transport_recovery(&self.pool, launch.run_id, reason).await
         else {
@@ -279,7 +381,7 @@ impl HarnessSupervisor {
                 Some("Harness 多次连接中断；自动恢复已达到上限，请人工重试"),
             )
             .await;
-            return;
+            return None;
         };
         let _ = persist_event(
             &self.pool,
@@ -290,19 +392,39 @@ impl HarnessSupervisor {
             Some("Harness 连接中断，正在自动恢复"),
         )
         .await;
-        self.controls.lock().await.remove(&launch.run_id);
-        if self.launch(launch.clone()).await.is_err() {
+        let run = match devrail_runs::find_for_recovery(&self.pool, launch.run_id).await {
+            Ok(Some(run)) => run,
+            _ => {
+                let _ = finish_run(
+                    &self.pool,
+                    launch,
+                    "failed",
+                    "recovery_state_missing",
+                    None,
+                    None,
+                    Some("Harness 断流后无法读取恢复状态；任务将按策略重试"),
+                )
+                .await;
+                return None;
+            }
+        };
+        let Some(thread_id) = run.thread_id else {
             let _ = finish_run(
                 &self.pool,
                 launch,
                 "failed",
-                "recovery_spawn_failed",
+                "transport_resume_unavailable",
                 None,
                 None,
-                Some("Harness 自动恢复启动失败；请人工重试"),
+                Some("Harness 断流前尚未持久化 thread；为避免重复 Agent，将进入下一 attempt"),
             )
             .await;
-        }
+            return None;
+        };
+        let mut recovery = launch.clone();
+        recovery.resume_thread_id = Some(thread_id);
+        recovery.resume_turn_id = run.turn_id;
+        Some(recovery)
     }
 }
 
@@ -315,7 +437,7 @@ async fn run_process(context: ProcessContext) {
         stdout,
         stderr,
         mut controls,
-        _slot,
+        _slot: slot,
     } = context;
     let pool = supervisor.pool.clone();
     let mut out_reader = BufReader::new(stdout);
@@ -393,17 +515,42 @@ async fn run_process(context: ProcessContext) {
     let mut stderr_summary = String::new();
     let mut protocol_failed = false;
     let mut timeout_sleep = Box::pin(tokio::time::sleep(supervisor.max_duration));
+    let mut heartbeat = tokio::time::interval(Duration::from_secs(15));
+    let mut stall_sleep = Box::pin(tokio::time::sleep(
+        supervisor.scheduler_policy.stall_timeout,
+    ));
+    let mut transport_recovery = None;
 
     loop {
         tokio::select! {
+            _ = heartbeat.tick() => {
+                let _ = devrail_runs::update_run_heartbeat(&pool, launch.run_id).await;
+            }
+            _ = &mut stall_sleep => {
+                let _ = child.start_kill();
+                let code = child.wait().await.ok().and_then(|status| status.code());
+                let _ = finish_run(
+                    &pool,
+                    &launch,
+                    "failed",
+                    "stall",
+                    code,
+                    Some(&stderr_summary),
+                    Some("运行在 stall 阈值内没有心跳或事件；已清理 Harness 进程，请检查日志后重试"),
+                )
+                .await;
+                crate::app_metrics::record_scheduler_stall();
+                break;
+            }
             command = controls.recv() => {
-                if matches!(command, Some(ControlMessage::Interrupt)) {
+                if let Some(ControlMessage::Interrupt(cause)) = command {
                     if let Err(error) = write_json(&mut stdin, json!({"method":"turn/interrupt","params":{}})).await {
                         append_summary(&mut stderr_summary, &format!("transport write error: {error}"));
                     }
                     let status = tokio::time::timeout(supervisor.graceful_interrupt, child.wait()).await;
                     let exit_code = match status { Ok(Ok(s)) => s.code(), _ => { let _ = child.start_kill(); child.wait().await.ok().and_then(|s| s.code()) } };
-                    let _ = finish_run(&pool, &launch, "cancelled", "interrupted", exit_code, Some(&stderr_summary), Some("运行已由用户中断")).await;
+                    let (terminal_status, reason, recovery) = cause.terminal();
+                    let _ = finish_run(&pool, &launch, terminal_status, reason, exit_code, Some(&stderr_summary), Some(recovery)).await;
                     break;
                 }
                 if let Some(ControlMessage::Approval { approval_id, approved }) = command {
@@ -418,6 +565,9 @@ async fn run_process(context: ProcessContext) {
                         let _ = child.start_kill();
                     },
                     Ok(_) => {
+                        stall_sleep
+                            .as_mut()
+                            .reset(tokio::time::Instant::now() + supervisor.scheduler_policy.stall_timeout);
                         let line = out_line.trim();
                         if !line.is_empty() && !handle_stdout(&pool, &launch, line).await { protocol_failed = true; let _ = child.start_kill(); }
                         out_line.clear();
@@ -432,7 +582,13 @@ async fn run_process(context: ProcessContext) {
             result = err_reader.read_line(&mut err_line) => {
                 match result {
                     Ok(0) => {},
-                    Ok(_) => { append_summary(&mut stderr_summary, err_line.trim()); err_line.clear(); }
+                    Ok(_) => {
+                        stall_sleep
+                            .as_mut()
+                            .reset(tokio::time::Instant::now() + supervisor.scheduler_policy.stall_timeout);
+                        append_summary(&mut stderr_summary, err_line.trim());
+                        err_line.clear();
+                    }
                     Err(error) => {
                         append_summary(&mut stderr_summary, &format!("transport stderr read error: {error}"));
                     }
@@ -448,7 +604,7 @@ async fn run_process(context: ProcessContext) {
                 let code = result.ok().and_then(|s| s.code());
                 let reason = classify_failure(protocol_failed, &stderr_summary);
                 if protocol_failed && matches!(reason, "transport_disconnect" | "transport_read_error" | "transport_write_error") {
-                    supervisor.recover_transport(&launch, reason).await;
+                    transport_recovery = supervisor.prepare_transport_recovery(&launch, reason).await;
                     break;
                 }
                 let (status, reason, recovery) = if protocol_failed || code != Some(0) {
@@ -460,6 +616,21 @@ async fn run_process(context: ProcessContext) {
         }
     }
     supervisor.controls.lock().await.remove(&launch.run_id);
+    drop(slot);
+    if let Some(recovery) = transport_recovery {
+        if supervisor.launch(recovery).await.is_err() {
+            let _ = finish_run(
+                &pool,
+                &launch,
+                "failed",
+                "recovery_spawn_failed",
+                None,
+                None,
+                Some("Harness 自动恢复启动失败；任务将按策略重试"),
+            )
+            .await;
+        }
+    }
 }
 
 fn classify_failure(protocol_failed: bool, stderr: &str) -> &'static str {
@@ -488,6 +659,24 @@ fn recovery_for_failure(protocol_failed: bool, stderr: &str) -> &'static str {
         "protocol_error" => "Harness 协议异常；请检查事件摘要后重试",
         _ => "检查 Harness stderr 摘要并重试",
     }
+}
+
+fn should_retry_automatically(launch: &RunLaunch, status: &str, reason: &str) -> bool {
+    launch.automatic
+        && status == "failed"
+        && launch.attempt < launch.max_attempts
+        && matches!(
+            reason,
+            "stall"
+                | "timeout"
+                | "process_exit"
+                | "transport_disconnect"
+                | "transport_read_error"
+                | "transport_write_error"
+                | "transport_resume_unavailable"
+                | "recovery_state_missing"
+                | "recovery_spawn_failed"
+        )
 }
 
 async fn write_json(stdin: &mut tokio::process::ChildStdin, value: Value) -> std::io::Result<()> {
@@ -738,6 +927,7 @@ async fn finish_run(
         (status, reason, recovery)
     };
     let trace = uuid::Uuid::new_v4().to_string();
+    let retryable = should_retry_automatically(launch, status, reason);
     let transitioned = devrail_runs::update_run_terminal(
         &mut tx,
         &devrail_runs::TerminalRunUpdate {
@@ -758,9 +948,17 @@ async fn finish_run(
     let task_status = match status {
         "completed" => "succeeded",
         "cancelled" => "cancelled",
+        _ if retryable => "queued",
         _ => "failed",
     };
-    devrail_runs::update_task_status(&mut tx, launch.task_id, task_status).await?;
+    if retryable {
+        let retry_at = chrono::Utc::now()
+            + crate::workers::task_scheduler::retry_delay(launch.attempt, launch.scheduler_policy);
+        devrail_runs::requeue_task_after_run(&mut tx, launch.task_id, retry_at, reason).await?;
+        crate::app_metrics::record_scheduler_retry();
+    } else {
+        devrail_runs::update_task_status(&mut tx, launch.task_id, task_status).await?;
+    }
     let event_idempotency = format!("terminal:{status}:{reason}");
     let event_payload = json!({"status":status,"exitReason":reason,"exitCode":code});
     devrail_runs::append_event(
@@ -778,10 +976,14 @@ async fn finish_run(
         },
     )
     .await?;
-    let (level, title) = if status == "completed" {
-        ("success", "运行已完成")
+    let (level, title, notification_event) = if status == "completed" {
+        ("success", "运行已完成", "run.completed")
+    } else if status == "cancelled" {
+        ("warning", "运行已取消", "run.cancelled")
+    } else if retryable {
+        ("warning", "运行失败，任务将自动重试", "run.failed")
     } else {
-        ("error", "运行失败")
+        ("error", "运行失败", "run.failed")
     };
     let source_key = format!("run:{}:{}", launch.run_id, reason);
     let deep_link = format!("/devrail/runs/{}", launch.run_id);
@@ -791,11 +993,7 @@ async fn finish_run(
             organization_id: launch.organization_id,
             department_id: launch.department_id,
             recipient_user_id: launch.owner_user_id,
-            event_type: if status == "completed" {
-                "run.completed"
-            } else {
-                "run.failed"
-            },
+            event_type: notification_event,
             level,
             title,
             summary: recovery.unwrap_or("运行状态已更新"),
@@ -821,6 +1019,16 @@ async fn finish_run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::access::{ActorContext, ActorType, DataScope};
+    use crate::repositories::devrail_runs;
+    use std::collections::BTreeSet;
+
+    async fn test_pool() -> Option<PgPool> {
+        let database_url = std::env::var("TEST_DATABASE_URL").ok()?;
+        let pool = crate::db::init_pool(&database_url).await.ok()?;
+        crate::db::run_migrations(&pool).await.ok()?;
+        Some(pool)
+    }
     #[test]
     fn sanitizer_removes_credentials_and_bounds_strings() {
         let value = json!({"token":"hidden","message":"ok","nested":{"password":"hidden"}});
@@ -861,5 +1069,390 @@ mod tests {
         assert!(!crate::repositories::devrail_runs::can_transport_recover(
             99
         ));
+    }
+
+    #[test]
+    fn automatic_retry_is_bounded_and_does_not_retry_policy_failures() {
+        let launch = RunLaunch {
+            run_id: 1,
+            task_id: 2,
+            organization_id: 3,
+            department_id: None,
+            owner_user_id: 4,
+            cwd: PathBuf::from("/tmp"),
+            input: "任务".to_string(),
+            resume_thread_id: None,
+            resume_turn_id: None,
+            attempt: 1,
+            max_attempts: 3,
+            automatic: true,
+            scheduler_policy: SchedulerPolicy::default(),
+        };
+        assert!(should_retry_automatically(&launch, "failed", "stall"));
+        assert!(!should_retry_automatically(
+            &launch,
+            "failed",
+            "quality_gate_failed"
+        ));
+        assert!(!should_retry_automatically(
+            &RunLaunch {
+                attempt: 3,
+                ..launch
+            },
+            "failed",
+            "timeout"
+        ));
+    }
+
+    #[tokio::test]
+    async fn stalled_and_disconnected_processes_recover_without_duplicate_runs() {
+        let Some(pool) = test_pool().await else {
+            return;
+        };
+        let suffix = uuid::Uuid::new_v4().simple().to_string();
+        let (owner_user_id, organization_id, department_id, task_id) =
+            devrail_runs::create_harness_test_task(&pool, &suffix)
+                .await
+                .expect("create Harness test task");
+        let workspace = std::env::temp_dir().join(format!("devrail-harness-stall-{suffix}"));
+        tokio::fs::create_dir_all(&workspace)
+            .await
+            .expect("create controlled workspace");
+        tokio::fs::write(
+            workspace.join("app-server"),
+            b"IFS= read -r line\nprintf '%s\\n' '{\"id\":\"initialize\",\"result\":{}}'\nsleep 30\n",
+        )
+        .await
+        .expect("write fake app-server");
+        let actor = ActorContext {
+            actor_type: ActorType::System,
+            user_id: owner_user_id,
+            session_id: 0,
+            organization_id,
+            department_id,
+            data_scope: DataScope::Organization,
+            permission_codes: BTreeSet::new(),
+        };
+        let mut tx = pool.begin().await.expect("begin run transaction");
+        let snapshot_id = devrail_runs::create_snapshot(
+            &mut tx,
+            &actor,
+            task_id,
+            &json!({"goal":"验证 stall 恢复"}),
+            department_id,
+        )
+        .await
+        .expect("create snapshot");
+        let idempotency_key = format!("scheduler:{task_id}:1");
+        let policy_value = json!({"version":"stall-test"});
+        let startup_args = json!(["app-server"]);
+        let run = devrail_runs::create_run(
+            &mut tx,
+            &devrail_runs::NewRun {
+                actor: &actor,
+                task_id,
+                snapshot_id,
+                idempotency_key: &idempotency_key,
+                attempt: 1,
+                actor_type: "system",
+                parent_run_id: None,
+                parent_turn_id: None,
+                branch_name: None,
+                branch_expires_at: None,
+                cwd: workspace.to_string_lossy().as_ref(),
+                policy: &policy_value,
+                startup_args: &startup_args,
+                model_id: None,
+                department_id,
+            },
+        )
+        .await
+        .expect("create run")
+        .expect("run inserted");
+        tx.commit().await.expect("commit run");
+
+        let scheduler_policy = SchedulerPolicy {
+            stall_timeout: Duration::from_secs(1),
+            ..SchedulerPolicy::default()
+        };
+        let supervisor = HarnessSupervisor::new(
+            pool.clone(),
+            "bash".to_string(),
+            1,
+            30,
+            workspace.to_string_lossy().into_owned(),
+            1,
+            scheduler_policy,
+        );
+        supervisor
+            .launch(RunLaunch {
+                run_id: run.id,
+                task_id,
+                organization_id,
+                department_id,
+                owner_user_id,
+                cwd: workspace.clone(),
+                input: "执行测试".to_string(),
+                resume_thread_id: None,
+                resume_turn_id: None,
+                attempt: 1,
+                max_attempts: 3,
+                automatic: true,
+                scheduler_policy,
+            })
+            .await
+            .expect("launch fake app-server");
+
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(8);
+        let terminal = loop {
+            let state = sqlx::query_as::<_, (String, Option<String>, String)>(
+                "SELECT status, exit_reason, cleanup_status FROM devrail_runs WHERE id=$1",
+            )
+            .bind(run.id)
+            .fetch_one(&pool)
+            .await
+            .expect("read run state");
+            if state.0 == "failed" {
+                break state;
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "stalled run did not reach a terminal state"
+            );
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        };
+        assert_eq!(terminal.1.as_deref(), Some("stall"));
+        assert_eq!(terminal.2, "completed");
+        let task_state = sqlx::query_as::<_, (String, i32, Option<String>)>(
+            "SELECT status, scheduler_retry_count, scheduler_last_error
+             FROM devrail_tasks WHERE id=$1",
+        )
+        .bind(task_id)
+        .fetch_one(&pool)
+        .await
+        .expect("read retried task");
+        assert_eq!(task_state.0, "queued");
+        assert_eq!(task_state.1, 1);
+        assert_eq!(task_state.2.as_deref(), Some("stall"));
+        let notifications = sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM devrail_notifications
+             WHERE recipient_user_id=$1 AND source_key=$2",
+        )
+        .bind(owner_user_id)
+        .bind(format!("run:{}:stall", run.id))
+        .fetch_one(&pool)
+        .await
+        .expect("count stall notifications");
+        assert_eq!(notifications, 1);
+
+        tokio::fs::write(
+            workspace.join("app-server"),
+            br#"IFS= read -r initialize
+printf '%s\n' '{"id":"initialize","result":{}}'
+IFS= read -r thread_command
+IFS= read -r turn_command
+if [ ! -f transport-recovered ]; then
+  : > transport-recovered
+  printf '%s\n' '{"event_id":"thread-known","type":"agent_message","thread_id":"thread-transport","turn_id":"turn-transport"}'
+  exec 1>&-
+  sleep 30
+fi
+printf '%s\n' "$thread_command" > recovery-command.log
+sleep 30
+"#,
+        )
+        .await
+        .expect("write disconnecting app-server");
+        devrail_runs::prepare_harness_test_attempt(&pool, task_id, 2)
+            .await
+            .expect("prepare transport recovery attempt");
+        let second_key = format!("scheduler:{task_id}:2");
+        let mut tx = pool.begin().await.expect("begin recovery run");
+        let recovery_run = devrail_runs::create_run(
+            &mut tx,
+            &devrail_runs::NewRun {
+                actor: &actor,
+                task_id,
+                snapshot_id,
+                idempotency_key: &second_key,
+                attempt: 2,
+                actor_type: "system",
+                parent_run_id: Some(run.id),
+                parent_turn_id: None,
+                branch_name: None,
+                branch_expires_at: None,
+                cwd: workspace.to_string_lossy().as_ref(),
+                policy: &policy_value,
+                startup_args: &startup_args,
+                model_id: None,
+                department_id,
+            },
+        )
+        .await
+        .expect("create transport recovery run")
+        .expect("transport recovery run inserted");
+        tx.commit().await.expect("commit transport recovery run");
+        let recovery_policy = SchedulerPolicy {
+            stall_timeout: Duration::from_secs(10),
+            ..SchedulerPolicy::default()
+        };
+        let recovery_supervisor = HarnessSupervisor::new(
+            pool.clone(),
+            "bash".to_string(),
+            1,
+            30,
+            workspace.to_string_lossy().into_owned(),
+            1,
+            recovery_policy,
+        );
+        recovery_supervisor
+            .launch(RunLaunch {
+                run_id: recovery_run.id,
+                task_id,
+                organization_id,
+                department_id,
+                owner_user_id,
+                cwd: workspace.clone(),
+                input: "验证断流恢复".to_string(),
+                resume_thread_id: None,
+                resume_turn_id: None,
+                attempt: 2,
+                max_attempts: 3,
+                automatic: true,
+                scheduler_policy: recovery_policy,
+            })
+            .await
+            .expect("launch disconnecting app-server");
+        let recovery_log = workspace.join("recovery-command.log");
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(8);
+        while !recovery_log.exists() {
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "transport recovery did not start"
+            );
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        let recovery_command = tokio::fs::read_to_string(&recovery_log)
+            .await
+            .expect("read recovery command");
+        assert!(recovery_command.contains("thread/resume"));
+        assert!(recovery_command.contains("thread-transport"));
+        assert_eq!(
+            recovery_supervisor.running_run_ids().await,
+            vec![recovery_run.id]
+        );
+        recovery_supervisor
+            .interrupt(recovery_run.id)
+            .await
+            .expect("recovered run remains controllable");
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let state = sqlx::query_as::<_, (String, i32)>(
+                "SELECT status, recovery_attempts FROM devrail_runs WHERE id=$1",
+            )
+            .bind(recovery_run.id)
+            .fetch_one(&pool)
+            .await
+            .expect("read recovered run state");
+            if state.0 == "cancelled" {
+                assert_eq!(state.1, 1);
+                break;
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "recovered run did not stop after interrupt"
+            );
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        tokio::fs::write(
+            workspace.join("app-server"),
+            b"IFS= read -r line\nprintf '%s\\n' '{\"id\":\"initialize\",\"result\":{}}'\nsleep 30\n",
+        )
+        .await
+        .expect("write timing-out app-server");
+        devrail_runs::prepare_harness_test_attempt(&pool, task_id, 3)
+            .await
+            .expect("prepare timeout attempt");
+        let timeout_key = format!("scheduler:{task_id}:3");
+        let mut tx = pool.begin().await.expect("begin timeout run");
+        let timeout_run = devrail_runs::create_run(
+            &mut tx,
+            &devrail_runs::NewRun {
+                actor: &actor,
+                task_id,
+                snapshot_id,
+                idempotency_key: &timeout_key,
+                attempt: 3,
+                actor_type: "system",
+                parent_run_id: Some(recovery_run.id),
+                parent_turn_id: Some("turn-transport"),
+                branch_name: None,
+                branch_expires_at: None,
+                cwd: workspace.to_string_lossy().as_ref(),
+                policy: &policy_value,
+                startup_args: &startup_args,
+                model_id: None,
+                department_id,
+            },
+        )
+        .await
+        .expect("create timeout run")
+        .expect("timeout run inserted");
+        tx.commit().await.expect("commit timeout run");
+        let timeout_policy = SchedulerPolicy {
+            stall_timeout: Duration::from_secs(10),
+            ..SchedulerPolicy::default()
+        };
+        let timeout_supervisor = HarnessSupervisor::new(
+            pool.clone(),
+            "bash".to_string(),
+            1,
+            1,
+            workspace.to_string_lossy().into_owned(),
+            1,
+            timeout_policy,
+        );
+        timeout_supervisor
+            .launch(RunLaunch {
+                run_id: timeout_run.id,
+                task_id,
+                organization_id,
+                department_id,
+                owner_user_id,
+                cwd: workspace.clone(),
+                input: "验证超时清理".to_string(),
+                resume_thread_id: None,
+                resume_turn_id: None,
+                attempt: 3,
+                max_attempts: 3,
+                automatic: true,
+                scheduler_policy: timeout_policy,
+            })
+            .await
+            .expect("launch timing-out app-server");
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let state = sqlx::query_as::<_, (String, Option<String>, String)>(
+                "SELECT status, exit_reason, cleanup_status FROM devrail_runs WHERE id=$1",
+            )
+            .bind(timeout_run.id)
+            .fetch_one(&pool)
+            .await
+            .expect("read timeout state");
+            if state.0 == "failed" {
+                assert_eq!(state.1.as_deref(), Some("timeout"));
+                assert_eq!(state.2, "completed");
+                break;
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "timeout run did not stop"
+            );
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        tokio::fs::remove_dir_all(&workspace)
+            .await
+            .expect("remove controlled test workspace");
     }
 }

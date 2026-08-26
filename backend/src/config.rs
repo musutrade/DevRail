@@ -79,6 +79,13 @@ pub struct AppConfig {
     pub run_max_duration_secs: i64,
     pub run_workspace_root: String,
     pub run_graceful_interrupt_secs: i64,
+    pub scheduler_poll_secs: i64,
+    pub scheduler_claim_lease_secs: i64,
+    pub scheduler_retry_base_secs: i64,
+    pub scheduler_retry_max_secs: i64,
+    pub scheduler_retry_jitter_percent: i64,
+    pub scheduler_stall_secs: i64,
+    pub scheduler_priority_aging_secs: i64,
     pub web_push_public_key: Option<String>,
     pub web_push_private_key: Option<String>,
     pub web_push_subject: Option<String>,
@@ -121,6 +128,13 @@ struct ConfigValues {
     run_max_duration_secs: Option<String>,
     run_workspace_root: Option<String>,
     run_graceful_interrupt_secs: Option<String>,
+    scheduler_poll_secs: Option<String>,
+    scheduler_claim_lease_secs: Option<String>,
+    scheduler_retry_base_secs: Option<String>,
+    scheduler_retry_max_secs: Option<String>,
+    scheduler_retry_jitter_percent: Option<String>,
+    scheduler_stall_secs: Option<String>,
+    scheduler_priority_aging_secs: Option<String>,
     web_push_public_key: Option<String>,
     web_push_private_key: Option<String>,
     web_push_subject: Option<String>,
@@ -166,6 +180,15 @@ impl AppConfig {
             run_max_duration_secs: std::env::var("DEVRAIL_RUN_MAX_DURATION_SECS").ok(),
             run_workspace_root: std::env::var("DEVRAIL_RUN_WORKSPACE_ROOT").ok(),
             run_graceful_interrupt_secs: std::env::var("DEVRAIL_RUN_GRACEFUL_INTERRUPT_SECS").ok(),
+            scheduler_poll_secs: std::env::var("DEVRAIL_SCHEDULER_POLL_SECS").ok(),
+            scheduler_claim_lease_secs: std::env::var("DEVRAIL_SCHEDULER_CLAIM_LEASE_SECS").ok(),
+            scheduler_retry_base_secs: std::env::var("DEVRAIL_SCHEDULER_RETRY_BASE_SECS").ok(),
+            scheduler_retry_max_secs: std::env::var("DEVRAIL_SCHEDULER_RETRY_MAX_SECS").ok(),
+            scheduler_retry_jitter_percent: std::env::var("DEVRAIL_SCHEDULER_RETRY_JITTER_PERCENT")
+                .ok(),
+            scheduler_stall_secs: std::env::var("DEVRAIL_SCHEDULER_STALL_SECS").ok(),
+            scheduler_priority_aging_secs: std::env::var("DEVRAIL_SCHEDULER_PRIORITY_AGING_SECS")
+                .ok(),
             web_push_public_key: std::env::var("WEB_PUSH_VAPID_PUBLIC_KEY").ok(),
             web_push_private_key: std::env::var("WEB_PUSH_VAPID_PRIVATE_KEY").ok(),
             web_push_subject: std::env::var("WEB_PUSH_SUBJECT").ok(),
@@ -208,6 +231,13 @@ impl AppConfig {
             run_max_duration_secs,
             run_workspace_root,
             run_graceful_interrupt_secs,
+            scheduler_poll_secs,
+            scheduler_claim_lease_secs,
+            scheduler_retry_base_secs,
+            scheduler_retry_max_secs,
+            scheduler_retry_jitter_percent,
+            scheduler_stall_secs,
+            scheduler_priority_aging_secs,
             web_push_public_key,
             web_push_private_key,
             web_push_subject,
@@ -341,6 +371,64 @@ impl AppConfig {
             run_graceful_interrupt_secs,
             10,
         )?;
+        let scheduler_poll_secs = bounded_i64(
+            "DEVRAIL_SCHEDULER_POLL_SECS",
+            scheduler_poll_secs,
+            10,
+            1,
+            3_600,
+        )?;
+        let scheduler_claim_lease_secs = bounded_i64(
+            "DEVRAIL_SCHEDULER_CLAIM_LEASE_SECS",
+            scheduler_claim_lease_secs,
+            60,
+            2,
+            86_400,
+        )?;
+        let scheduler_retry_base_secs = bounded_i64(
+            "DEVRAIL_SCHEDULER_RETRY_BASE_SECS",
+            scheduler_retry_base_secs,
+            1,
+            1,
+            86_400,
+        )?;
+        let scheduler_retry_max_secs = bounded_i64(
+            "DEVRAIL_SCHEDULER_RETRY_MAX_SECS",
+            scheduler_retry_max_secs,
+            300,
+            1,
+            604_800,
+        )?;
+        let scheduler_retry_jitter_percent = bounded_i64(
+            "DEVRAIL_SCHEDULER_RETRY_JITTER_PERCENT",
+            scheduler_retry_jitter_percent,
+            20,
+            0,
+            100,
+        )?;
+        let scheduler_stall_secs = bounded_i64(
+            "DEVRAIL_SCHEDULER_STALL_SECS",
+            scheduler_stall_secs,
+            120,
+            2,
+            86_400,
+        )?;
+        let scheduler_priority_aging_secs = bounded_i64(
+            "DEVRAIL_SCHEDULER_PRIORITY_AGING_SECS",
+            scheduler_priority_aging_secs,
+            3_600,
+            60,
+            604_800,
+        )?;
+        if scheduler_claim_lease_secs <= scheduler_poll_secs {
+            bail!("DEVRAIL_SCHEDULER_CLAIM_LEASE_SECS must exceed DEVRAIL_SCHEDULER_POLL_SECS");
+        }
+        if scheduler_retry_max_secs < scheduler_retry_base_secs {
+            bail!("DEVRAIL_SCHEDULER_RETRY_MAX_SECS cannot be less than DEVRAIL_SCHEDULER_RETRY_BASE_SECS");
+        }
+        if scheduler_stall_secs <= scheduler_poll_secs {
+            bail!("DEVRAIL_SCHEDULER_STALL_SECS must exceed DEVRAIL_SCHEDULER_POLL_SECS");
+        }
         let run_workspace_root =
             run_workspace_root.unwrap_or_else(|| "/tmp/devrail-workspaces".to_string());
         if !run_workspace_root.starts_with('/')
@@ -390,6 +478,13 @@ impl AppConfig {
             run_max_duration_secs,
             run_workspace_root,
             run_graceful_interrupt_secs,
+            scheduler_poll_secs,
+            scheduler_claim_lease_secs,
+            scheduler_retry_base_secs,
+            scheduler_retry_max_secs,
+            scheduler_retry_jitter_percent,
+            scheduler_stall_secs,
+            scheduler_priority_aging_secs,
             web_push_public_key,
             web_push_private_key,
             web_push_subject,
@@ -426,6 +521,25 @@ fn positive_i64(name: &str, value: Option<String>, default: i64) -> anyhow::Resu
         .unwrap_or(default);
     if value <= 0 {
         bail!("{name} must be a positive integer");
+    }
+    Ok(value)
+}
+
+fn bounded_i64(
+    name: &str,
+    value: Option<String>,
+    default: i64,
+    minimum: i64,
+    maximum: i64,
+) -> anyhow::Result<i64> {
+    let value = value
+        .as_deref()
+        .map(str::parse::<i64>)
+        .transpose()
+        .with_context(|| format!("{name} must be an integer"))?
+        .unwrap_or(default);
+    if !(minimum..=maximum).contains(&value) {
+        bail!("{name} must be between {minimum} and {maximum}");
     }
     Ok(value)
 }
@@ -530,6 +644,10 @@ mod tests {
         assert_eq!(config.session_ttl_secs, 28_800);
         assert_eq!(config.login_max_failures, 5);
         assert_eq!(config.login_ip_max_failures, 50);
+        assert_eq!(config.scheduler_poll_secs, 10);
+        assert_eq!(config.scheduler_claim_lease_secs, 60);
+        assert_eq!(config.scheduler_retry_jitter_percent, 20);
+        assert_eq!(config.scheduler_priority_aging_secs, 3_600);
         assert!(config.auto_migrate);
         assert!(config.trusted_proxy_cidrs.is_empty());
     }
@@ -600,5 +718,43 @@ mod tests {
         .err()
         .expect("invalid trusted proxy CIDR must fail");
         assert!(error.to_string().contains("trusted proxy CIDR"));
+    }
+
+    #[test]
+    fn scheduler_policy_is_validated_at_startup() {
+        let invalid_lease = AppConfig::from_values(ConfigValues {
+            database_url: Some("postgres://localhost/test".to_string()),
+            scheduler_poll_secs: Some("10".to_string()),
+            scheduler_claim_lease_secs: Some("10".to_string()),
+            ..ConfigValues::default()
+        })
+        .err()
+        .expect("claim lease must exceed poll interval");
+        assert!(invalid_lease
+            .to_string()
+            .contains("DEVRAIL_SCHEDULER_CLAIM_LEASE_SECS"));
+
+        let invalid_jitter = AppConfig::from_values(ConfigValues {
+            database_url: Some("postgres://localhost/test".to_string()),
+            scheduler_retry_jitter_percent: Some("101".to_string()),
+            ..ConfigValues::default()
+        })
+        .err()
+        .expect("jitter must be bounded");
+        assert!(invalid_jitter
+            .to_string()
+            .contains("DEVRAIL_SCHEDULER_RETRY_JITTER_PERCENT"));
+
+        let invalid_retry = AppConfig::from_values(ConfigValues {
+            database_url: Some("postgres://localhost/test".to_string()),
+            scheduler_retry_base_secs: Some("30".to_string()),
+            scheduler_retry_max_secs: Some("10".to_string()),
+            ..ConfigValues::default()
+        })
+        .err()
+        .expect("retry maximum must cover base delay");
+        assert!(invalid_retry
+            .to_string()
+            .contains("DEVRAIL_SCHEDULER_RETRY_MAX_SECS"));
     }
 }

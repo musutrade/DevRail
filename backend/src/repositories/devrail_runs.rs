@@ -5,7 +5,7 @@ use crate::models::{DevRailRunEventRow, DevRailRunRow};
 use serde_json::Value;
 use sqlx::{AssertSqlSafe, PgConnection, PgPool};
 
-const RUN_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, branch_name, branch_expires_at, status, thread_id, turn_id, harness_version, model_id, cwd, policy, startup_args_summary, exit_reason, exit_code, stderr_summary, trace_id, recovery_suggestion, recovery_attempts, started_at, completed_at, created_at, updated_at";
+const RUN_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, attempt, actor_type, last_heartbeat_at, last_event_at, retry_reason, parent_run_id, parent_turn_id, cleanup_status, branch_name, branch_expires_at, status, thread_id, turn_id, harness_version, model_id, cwd, policy, startup_args_summary, exit_reason, exit_code, stderr_summary, trace_id, recovery_suggestion, recovery_attempts, started_at, completed_at, created_at, updated_at";
 const EVENT_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, run_id, cursor, event_type, source_event_id, idempotency_key, payload, summary, occurred_at";
 const MAX_TRANSPORT_RECOVERY_ATTEMPTS: i32 = 2;
 
@@ -24,6 +24,10 @@ pub(crate) struct NewRun<'a> {
     pub task_id: i64,
     pub snapshot_id: i64,
     pub idempotency_key: &'a str,
+    pub attempt: i32,
+    pub actor_type: &'a str,
+    pub parent_run_id: Option<i64>,
+    pub parent_turn_id: Option<&'a str>,
     pub branch_name: Option<&'a str>,
     pub branch_expires_at: Option<chrono::DateTime<chrono::Utc>>,
     pub cwd: &'a str,
@@ -70,8 +74,8 @@ pub(crate) async fn create_snapshot(
 pub(crate) async fn create_run(
     c: &mut PgConnection,
     input: &NewRun<'_>,
-) -> Result<DevRailRunRow, sqlx::Error> {
-    let sql = format!("INSERT INTO devrail_runs (organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, branch_name, branch_expires_at, status, cwd, policy, startup_args_summary, model_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'starting',$9,$10,$11,$12) ON CONFLICT (organization_id, task_id, idempotency_key) DO UPDATE SET updated_at=devrail_runs.updated_at RETURNING {RUN_COLUMNS}");
+) -> Result<Option<DevRailRunRow>, sqlx::Error> {
+    let sql = format!("INSERT INTO devrail_runs (organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, attempt, actor_type, parent_run_id, parent_turn_id, branch_name, branch_expires_at, status, cwd, policy, startup_args_summary, model_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'starting',$13,$14,$15,$16) ON CONFLICT DO NOTHING RETURNING {RUN_COLUMNS}");
     sqlx::query_as::<_, DevRailRunRow>(AssertSqlSafe(sql))
         .bind(input.actor.organization_id)
         .bind(input.department_id)
@@ -79,12 +83,23 @@ pub(crate) async fn create_run(
         .bind(input.task_id)
         .bind(input.snapshot_id)
         .bind(input.idempotency_key)
+        .bind(input.attempt)
+        .bind(input.actor_type)
+        .bind(input.parent_run_id)
+        .bind(input.parent_turn_id)
         .bind(input.branch_name)
         .bind(input.branch_expires_at)
         .bind(input.cwd)
         .bind(input.policy)
         .bind(input.startup_args)
         .bind(input.model_id)
+        .fetch_optional(c)
+        .await
+}
+
+pub(crate) async fn next_attempt(c: &mut PgConnection, task_id: i64) -> Result<i32, sqlx::Error> {
+    sqlx::query_scalar("SELECT COALESCE(MAX(attempt), 0) + 1 FROM devrail_runs WHERE task_id = $1")
+        .bind(task_id)
         .fetch_one(c)
         .await
 }
@@ -118,15 +133,27 @@ pub(crate) async fn update_run_started(
     turn_id: Option<&str>,
     harness_version: Option<&str>,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE devrail_runs SET status='active', thread_id=COALESCE($2,thread_id), turn_id=COALESCE($3,turn_id), harness_version=COALESCE($4,harness_version), started_at=COALESCE(started_at,now()), updated_at=now() WHERE id=$1")
+    sqlx::query("UPDATE devrail_runs SET status='active', thread_id=COALESCE($2,thread_id), turn_id=COALESCE($3,turn_id), harness_version=COALESCE($4,harness_version), started_at=COALESCE(started_at,now()), last_heartbeat_at=now(), updated_at=now() WHERE id=$1 AND status IN ('created','starting','active')")
         .bind(run_id).bind(thread_id).bind(turn_id).bind(harness_version).execute(c).await.map(|_| ())
+}
+
+pub(crate) async fn update_run_heartbeat(pool: &PgPool, run_id: i64) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query(
+        "UPDATE devrail_runs
+         SET last_heartbeat_at = now(), updated_at = now()
+         WHERE id = $1 AND status IN ('starting', 'active')",
+    )
+    .bind(run_id)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() == 1)
 }
 
 pub(crate) async fn update_run_terminal(
     c: &mut PgConnection,
     input: &TerminalRunUpdate<'_>,
 ) -> Result<bool, sqlx::Error> {
-    sqlx::query("UPDATE devrail_runs SET status=$2, exit_reason=$3, exit_code=$4, stderr_summary=$5, trace_id=$6, recovery_suggestion=$7, completed_at=COALESCE(completed_at,now()), updated_at=now() WHERE id=$1 AND status NOT IN ('completed','failed','cancelled')")
+    sqlx::query("UPDATE devrail_runs SET status=$2, exit_reason=$3, retry_reason=CASE WHEN $2='failed' THEN $3 ELSE retry_reason END, exit_code=$4, stderr_summary=$5, trace_id=$6, recovery_suggestion=$7, completed_at=COALESCE(completed_at,now()), last_heartbeat_at=now(), cleanup_status=CASE WHEN $2 IN ('completed','failed','cancelled') THEN 'completed' ELSE cleanup_status END, updated_at=now() WHERE id=$1 AND status NOT IN ('completed','failed','cancelled')")
         .bind(input.run_id).bind(input.status).bind(input.exit_reason).bind(input.exit_code).bind(input.stderr_summary).bind(input.trace_id).bind(input.recovery_suggestion).execute(c).await.map(|result| result.rows_affected() == 1)
 }
 
@@ -154,7 +181,7 @@ pub(crate) async fn update_task_status(
     task_id: i64,
     status: &str,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE devrail_tasks SET status=$2, scheduler_claim_token=NULL, scheduler_claimed_at=NULL, updated_at=now() WHERE id=$1")
+    sqlx::query("UPDATE devrail_tasks SET status=$2, scheduler_claim_token=NULL, scheduler_claimed_at=NULL, scheduler_retry_at=CASE WHEN $2='queued' THEN scheduler_retry_at ELSE NULL END, scheduler_last_error=CASE WHEN $2='queued' THEN scheduler_last_error ELSE NULL END, updated_at=now() WHERE id=$1")
         .bind(task_id)
         .bind(status)
         .execute(c)
@@ -194,11 +221,154 @@ pub(crate) async fn find_for_recovery(
     .await
 }
 
+pub(crate) async fn scheduler_retry_policy(
+    pool: &PgPool,
+    task_id: i64,
+) -> Result<(i32, i32), sqlx::Error> {
+    sqlx::query_as(
+        "SELECT scheduler_attempt, scheduler_max_attempts
+         FROM devrail_tasks WHERE id = $1",
+    )
+    .bind(task_id)
+    .fetch_one(pool)
+    .await
+}
+
+pub(crate) async fn requeue_task_after_run(
+    c: &mut PgConnection,
+    task_id: i64,
+    retry_at: chrono::DateTime<chrono::Utc>,
+    reason: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE devrail_tasks
+         SET status='queued', scheduler_claim_token=NULL, scheduler_claimed_at=NULL,
+             scheduler_retry_count=scheduler_retry_count+1,
+             scheduler_retry_at=$2, scheduler_last_error=$3, updated_at=now()
+         WHERE id=$1",
+    )
+    .bind(task_id)
+    .bind(retry_at)
+    .bind(reason.chars().take(500).collect::<String>())
+    .execute(c)
+    .await?;
+    Ok(())
+}
+
 pub(crate) async fn mark_unrecoverable_runs(pool: &PgPool) -> Result<u64, sqlx::Error> {
-    let result = sqlx::query("UPDATE devrail_runs SET status='failed', exit_reason='supervisor_restart', recovery_suggestion='服务重启后运行无法自动恢复；请使用相同快照重试', completed_at=COALESCE(completed_at,now()), updated_at=now() WHERE status IN ('starting','active') AND thread_id IS NULL")
-        .execute(pool)
+    let mut tx = pool.begin().await?;
+    let rows = sqlx::query_as::<_, (i64,)>("UPDATE devrail_runs SET status='failed', exit_reason='supervisor_restart', retry_reason='服务重启后缺少可恢复 thread', recovery_suggestion='服务重启后运行无法自动恢复；请使用相同快照重试', completed_at=COALESCE(completed_at,now()), cleanup_status='completed', updated_at=now() WHERE status IN ('starting','active') AND thread_id IS NULL RETURNING id")
+        .fetch_all(&mut *tx)
         .await?;
-    Ok(result.rows_affected())
+    if !rows.is_empty() {
+        let run_ids = rows.iter().map(|row| row.0).collect::<Vec<_>>();
+        sqlx::query("UPDATE devrail_tasks t SET status='failed', scheduler_claim_token=NULL, scheduler_claimed_at=NULL, updated_at=now() WHERE t.status='running' AND EXISTS (SELECT 1 FROM devrail_runs r WHERE r.task_id=t.id AND r.status='failed' AND r.exit_reason='supervisor_restart')")
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query(
+            "INSERT INTO devrail_notifications
+                 (organization_id, department_id, recipient_user_id, event_type,
+                  level, title, summary, resource_type, resource_id, deep_link, source_key)
+             SELECT r.organization_id, r.department_id, r.owner_user_id,
+                    'run.failed', 'error', '运行恢复失败',
+                    '服务重启后缺少可恢复 thread，请检查日志后重试',
+                    'devrail_run', r.id, '/devrail/runs/' || r.id,
+                    'run:' || r.id || ':supervisor_restart'
+             FROM devrail_runs r
+             WHERE r.status='failed' AND r.exit_reason='supervisor_restart'
+             ON CONFLICT (recipient_user_id, source_key) DO NOTHING",
+        )
+        .execute(&mut *tx)
+        .await?;
+        let trace = uuid::Uuid::new_v4().to_string();
+        sqlx::query(
+            "INSERT INTO audit_logs
+                 (actor_user_id, action, target_type, target_id, details, trace_id,
+                  organization_id, department_id)
+             SELECT NULL, 'devrail.run.reconcile_restart', 'devrail_run', r.id,
+                    jsonb_build_object(
+                        'actorType', 'system',
+                        'reason', 'supervisor_restart',
+                        'policyVersion', 'devrail-policy-v1'
+                    ), $2, r.organization_id, r.department_id
+             FROM devrail_runs r WHERE r.id=ANY($1::bigint[])",
+        )
+        .bind(&run_ids)
+        .bind(trace)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            "INSERT INTO devrail_outbox_events
+                 (organization_id, event_type, aggregate_type, aggregate_id, payload)
+             SELECT r.organization_id, 'notification.created', 'devrail_run', r.id,
+                    jsonb_build_object(
+                        'notificationSource', 'run:' || r.id || ':supervisor_restart'
+                    )
+             FROM devrail_runs r
+             WHERE r.status='failed' AND r.exit_reason='supervisor_restart'
+             ON CONFLICT DO NOTHING",
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
+    tx.commit().await?;
+    Ok(rows.len() as u64)
+}
+
+#[cfg(test)]
+pub(crate) async fn create_harness_test_task(
+    pool: &PgPool,
+    suffix: &str,
+) -> Result<(i64, i64, Option<i64>, i64), sqlx::Error> {
+    let (owner_user_id, organization_id, department_id) =
+        sqlx::query_as::<_, (i64, i64, Option<i64>)>(
+            "SELECT id, organization_id, department_id FROM users ORDER BY id LIMIT 1",
+        )
+        .fetch_one(pool)
+        .await?;
+    let project_id = sqlx::query_scalar::<_, i64>(
+        "INSERT INTO devrail_projects
+             (organization_id, department_id, owner_user_id, slug, name)
+         VALUES ($1,$2,$3,$4,'Harness 故障测试') RETURNING id",
+    )
+    .bind(organization_id)
+    .bind(department_id)
+    .bind(owner_user_id)
+    .bind(format!("harness-fault-{suffix}"))
+    .fetch_one(pool)
+    .await?;
+    let task_id = sqlx::query_scalar::<_, i64>(
+        "INSERT INTO devrail_tasks
+             (organization_id, department_id, owner_user_id, project_id,
+              title, goal, status, scheduler_attempt, scheduler_max_attempts)
+         VALUES ($1,$2,$3,$4,'Harness 故障测试','验证恢复闭环','running',1,3)
+         RETURNING id",
+    )
+    .bind(organization_id)
+    .bind(department_id)
+    .bind(owner_user_id)
+    .bind(project_id)
+    .fetch_one(pool)
+    .await?;
+    Ok((owner_user_id, organization_id, department_id, task_id))
+}
+
+#[cfg(test)]
+pub(crate) async fn prepare_harness_test_attempt(
+    pool: &PgPool,
+    task_id: i64,
+    attempt: i32,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE devrail_tasks
+         SET status='running', scheduler_attempt=$2, scheduler_retry_at=NULL
+         WHERE id=$1",
+    )
+    .bind(task_id)
+    .bind(attempt)
+    .execute(pool)
+    .await?;
+    Ok(())
 }
 
 pub async fn find_run(
@@ -312,6 +482,10 @@ pub(crate) async fn append_event(
     input: &NewRunEvent<'_>,
 ) -> Result<DevRailRunEventRow, sqlx::Error> {
     sqlx::query("SELECT id FROM devrail_runs WHERE id=$1 FOR UPDATE")
+        .bind(input.run_id)
+        .execute(&mut *c)
+        .await?;
+    sqlx::query("UPDATE devrail_runs SET last_event_at=now(), last_heartbeat_at=now(), updated_at=now() WHERE id=$1 AND status IN ('starting','active','awaiting_approval')")
         .bind(input.run_id)
         .execute(&mut *c)
         .await?;

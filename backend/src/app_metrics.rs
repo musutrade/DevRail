@@ -41,7 +41,85 @@ pub fn initialize() {
             "devrail_push_invalid_devices",
             "永久失败的 Web Push 设备数量"
         );
+        describe_gauge!("devrail_scheduler_queue_depth", "DevRail 调度队列深度");
+        describe_counter!(
+            "devrail_scheduler_dispatch_total",
+            "DevRail 调度派发结果总数"
+        );
+        describe_counter!(
+            "devrail_scheduler_claim_conflict_total",
+            "DevRail 调度 claim 冲突总数"
+        );
+        describe_histogram!(
+            "devrail_scheduler_dispatch_latency_seconds",
+            "DevRail 任务入队到派发延迟（秒）"
+        );
+        describe_counter!("devrail_scheduler_retry_total", "DevRail 调度重试总数");
+        describe_counter!("devrail_scheduler_stall_total", "DevRail 调度 stall 总数");
+        describe_gauge!("devrail_run_active", "DevRail 活动运行数");
+        describe_counter!(
+            "devrail_run_reconciliation_total",
+            "DevRail 运行对账修正总数"
+        );
     });
+}
+
+pub fn record_scheduler_dispatch(outcome: &str) {
+    counter!("devrail_scheduler_dispatch_total", "outcome" => scheduler_dispatch_outcome(outcome))
+        .increment(1);
+}
+
+pub fn record_scheduler_retry() {
+    counter!("devrail_scheduler_retry_total").increment(1);
+}
+
+pub fn record_scheduler_claim_conflict() {
+    counter!("devrail_scheduler_claim_conflict_total").increment(1);
+}
+
+pub fn record_scheduler_stall() {
+    counter!("devrail_scheduler_stall_total").increment(1);
+}
+
+pub fn record_reconciliation(outcome: &str) {
+    counter!("devrail_run_reconciliation_total", "outcome" => reconciliation_outcome(outcome))
+        .increment(1);
+}
+
+fn scheduler_dispatch_outcome(outcome: &str) -> &'static str {
+    match outcome {
+        "empty" => "empty",
+        "stale_claim" => "stale_claim",
+        "capacity" => "capacity",
+        "failed" => "failed",
+        "permanent_failure" => "permanent_failure",
+        "started" => "started",
+        _ => "other",
+    }
+}
+
+fn reconciliation_outcome(outcome: &str) -> &'static str {
+    match outcome {
+        "released_claim" => "released_claim",
+        "stale_run" => "stale_run",
+        "retry_exhausted" => "retry_exhausted",
+        "task_cancelled" => "task_cancelled",
+        "environment_invalid" => "environment_invalid",
+        "ok" => "ok",
+        _ => "other",
+    }
+}
+
+pub fn record_scheduler_dispatch_latency(seconds: f64) {
+    histogram!("devrail_scheduler_dispatch_latency_seconds").record(seconds.max(0.0));
+}
+
+pub fn record_scheduler_queue_depth(depth: i64) {
+    gauge!("devrail_scheduler_queue_depth").set(depth.max(0) as f64);
+}
+
+pub fn record_active_runs(count: i64) {
+    gauge!("devrail_run_active").set(count.max(0) as f64);
 }
 
 pub fn record_push_delivery(outcome: &str) {
@@ -88,4 +166,17 @@ pub async fn record_http_request(request: Request, next: Next) -> Response {
     histogram!("arc_admin_http_request_duration_seconds", &labels)
         .record(started.elapsed().as_secs_f64());
     response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scheduler_metric_labels_are_low_cardinality() {
+        assert_eq!(scheduler_dispatch_outcome("started"), "started");
+        assert_eq!(scheduler_dispatch_outcome("task-123"), "other");
+        assert_eq!(reconciliation_outcome("task_cancelled"), "task_cancelled");
+        assert_eq!(reconciliation_outcome("run-456"), "other");
+    }
 }

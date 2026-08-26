@@ -65,7 +65,7 @@
                   ><small>{{ task.goal }}</small></a
                 >
               </td>
-              <td>{{ task.status }}</td>
+              <td>{{ statusLabel(task.status) }}</td>
               <td>{{ task.priority }}</td>
               <td>{{ task.assigneeUserId || '未分配' }}</td>
               <td>{{ task.updatedAt | date: 'yyyy-MM-dd HH:mm' }}</td>

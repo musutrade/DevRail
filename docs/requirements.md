@@ -14,6 +14,8 @@
 | Agent 运行时 | OpenAI Codex harness（优先 `codex app-server`，兼容 SDK/CLI） |
 | 目标用户 | 使用 AI 辅助开发的个人开发者、团队和平台管理员 |
 
+Symphony 编排与 Harness Engineering 专项需求见 [symphony-devrail-requirements.md](symphony-devrail-requirements.md)。该文档补充任务调度、工作流、恢复、隔离和自动验证要求，不替代本文件的产品总需求与 MVP 完成定义。
+
 本文件是 DevRail 的第一版产品、架构和验收基线。实现时应继续遵循 arc-admin 的项目公约：
 
 > 实现状态声明：本文件描述的是完整 Codex Harness 开发系统的目标，不是当前已交付能力清单。截至 2026-08-24，仓库已完成 arc-admin 基线、`arc-flow` 审计工具生产化、治理文档、Phase 0 项目/仓库/环境 CRUD API、任务与项目仓库/环境关联、仓库/环境创建入口、成员与项目策略 API/页面、任务列表筛选（含负责人和标签）、任务详情页、仓库/环境列表与详情页、仓库远端 HEAD/默认分支/分支数量/分支列表/提交摘要同步、受控环境工作树状态检查和环境健康检查，以及 Phase 1 的 Harness Supervisor 基础闭环（受控 app-server、run 快照/事件、SSE、中断、thread/resume）、审批持久化/决策 API、审批中心 UI、审批撤回、审批过期 worker、changeset/质量门禁查询、受限命令质量门禁执行、结构化门禁元数据、稳定 log_ref 脱敏分页日志读取和终态 run 重试；Phase 2 已完成站内通知事实表、transactional outbox、run 终态通知、审批请求/批准/拒绝/撤回/过期通知、通知 API、用户通知偏好 API/页面、通知中心/设置页面、Web Push VAPID 配置校验/公开接口、Service Worker 订阅初始化、设备注册/列表/撤销，以及异步 dispatcher、投递审计、临时失败重试、永久失败设备失效和 Grafana 投递告警；完整自动化验收仍未完成。详见 [DevRail 实现状态](devrail-implementation-status.md)。
@@ -596,7 +598,7 @@ backend/src/
 
 ### 9.4 配置项
 
-建议新增环境变量：
+已实现的 Harness/Symphony 环境变量及后续规划变量：
 
 | 变量 | 说明 |
 | --- | --- |
@@ -604,6 +606,14 @@ backend/src/
 | `DEVRAIL_HARNESS_MAX_CONCURRENCY` | 每个 API 副本最大 Agent 并发数 |
 | `DEVRAIL_RUN_MAX_DURATION_SECS` | 单次 run 最大时长 |
 | `DEVRAIL_RUN_WORKSPACE_ROOT` | 工作区根目录，必须是受控绝对路径 |
+| `DEVRAIL_RUN_GRACEFUL_INTERRUPT_SECS` | 优雅中断等待秒数 |
+| `DEVRAIL_SCHEDULER_POLL_SECS` | reconciliation/dispatch 轮询间隔秒数 |
+| `DEVRAIL_SCHEDULER_CLAIM_LEASE_SECS` | 待启动任务 claim 租约秒数，必须大于轮询间隔 |
+| `DEVRAIL_SCHEDULER_RETRY_BASE_SECS` | 自动重试基础退避秒数 |
+| `DEVRAIL_SCHEDULER_RETRY_MAX_SECS` | 自动重试最大退避秒数 |
+| `DEVRAIL_SCHEDULER_RETRY_JITTER_PERCENT` | 重试抖动百分比，范围 0–100 |
+| `DEVRAIL_SCHEDULER_STALL_SECS` | 无有效事件的 stall 判定阈值秒数 |
+| `DEVRAIL_SCHEDULER_PRIORITY_AGING_SECS` | 等待任务提升一级有效优先级所需秒数 |
 | `DEVRAIL_OUTBOX_BATCH_SIZE` | outbox worker 每批领取数量 |
 | `DEVRAIL_OUTBOX_POLL_INTERVAL_MS` | outbox 轮询间隔 |
 | `WEB_PUSH_VAPID_PUBLIC_KEY` | 对前端公开的 VAPID public key |

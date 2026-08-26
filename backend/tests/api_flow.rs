@@ -490,6 +490,7 @@ async fn login_and_user_crud_flow() {
             60,
             "/tmp/devrail-test".to_string(),
             1,
+            Default::default(),
         )),
         run_workspace_root: Arc::new(std::path::PathBuf::from("/tmp/devrail-workspaces")),
         web_push_public_key: None,

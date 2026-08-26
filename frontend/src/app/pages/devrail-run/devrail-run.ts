@@ -4,6 +4,7 @@ import {
   Component,
   OnDestroy,
   OnInit,
+  computed,
   inject,
   signal,
 } from '@angular/core';
@@ -12,7 +13,9 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { apiErrorMessage } from '../../core/api-error';
+import { AuthService } from '../../core/auth.service';
 import { DevRailApiService } from '../../features/devrail/data-access/devrail-api.service';
+import { DEVRAIL_PERMISSIONS } from '../../features/devrail/devrail.permissions';
 import type {
   DevRailChangeFileResponse,
   DevRailQualityGateResponse,
@@ -49,7 +52,11 @@ export class DevRailRunPage implements OnInit, OnDestroy {
   readonly loading = signal(true);
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
+  readonly canExecute = computed(() => this.auth.hasPermission(DEVRAIL_PERMISSIONS.runExecute));
+  readonly canInterrupt = computed(() => this.auth.hasPermission(DEVRAIL_PERMISSIONS.runInterrupt));
+  readonly canRetry = computed(() => this.auth.hasPermission(DEVRAIL_PERMISSIONS.runRetry));
   private readonly route = inject(ActivatedRoute);
+  private readonly auth = inject(AuthService);
   private readonly api = inject(DevRailApiService);
   private readonly snack = inject(MatSnackBar);
   private eventSource?: EventSource;
@@ -248,6 +255,24 @@ export class DevRailRunPage implements OnInit, OnDestroy {
 
   eventPayload(event: DevRailRunEventResponse): string {
     return event.summary || JSON.stringify(event.payload);
+  }
+
+  statusLabel(status: string): string {
+    return (
+      {
+        created: '已创建',
+        starting: '启动中',
+        active: '运行中',
+        awaiting_approval: '等待审批',
+        completed: '已完成',
+        failed: '失败',
+        cancelled: '已取消',
+      }[status] ?? status
+    );
+  }
+
+  actorLabel(actorType: string): string {
+    return actorType === 'system' ? '系统调度器' : '用户';
   }
 
   private async load(): Promise<void> {

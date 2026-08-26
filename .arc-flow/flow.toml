@@ -187,6 +187,8 @@ patterns = [
   ".arc-framework/**",
   ".arc-project.json",
   "docs/**",
+  ".agents/**",
+  "openspec/**",
   "extracted/**",
   "codex-audit-pipeline/README.md",
   "codex-audit-pipeline/docs/**",
