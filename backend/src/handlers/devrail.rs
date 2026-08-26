@@ -453,6 +453,27 @@ pub async fn get_task(
         .await
         .map(Json)
 }
+
+pub async fn get_task_dependencies(
+    State(s): State<AppState>,
+    auth: RequirePermission<TaskDependencyRead>,
+    Path((project_id, id)): Path<(i64, i64)>,
+) -> Result<Json<DevRailTaskRelationsResponse>, ApiError> {
+    services::devrail::get_task_relations(&s.pool, &auth, project_id, id)
+        .await
+        .map(Json)
+}
+
+pub async fn replace_task_dependencies(
+    State(s): State<AppState>,
+    auth: RequirePermission<TaskDependencyWrite>,
+    Path((project_id, id)): Path<(i64, i64)>,
+    Json(request): Json<ReplaceDevRailTaskDependenciesRequest>,
+) -> Result<Json<DevRailTaskRelationsResponse>, ApiError> {
+    services::devrail::replace_task_dependencies(&s.pool, &auth, project_id, id, &request)
+        .await
+        .map(Json)
+}
 pub async fn create_task(
     State(s): State<AppState>,
     auth: RequirePermission<TaskWrite>,
@@ -751,10 +772,69 @@ pub async fn execute_run_quality_gates(
         .map(Json)
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct RunEventQuery {
     pub after_cursor: Option<i64>,
     pub limit: Option<i64>,
+}
+
+pub async fn list_task_events(
+    State(s): State<AppState>,
+    auth: RequirePermission<TaskDependencyRead>,
+    Path(task_id): Path<i64>,
+    Query(query): Query<RunEventQuery>,
+) -> Result<Json<DevRailTaskEventPage>, ApiError> {
+    services::devrail::list_task_events(
+        &s.pool,
+        &auth,
+        task_id,
+        query.after_cursor.unwrap_or(0).max(0),
+        query.limit.unwrap_or(100),
+    )
+    .await
+    .map(Json)
+}
+
+pub async fn stream_task_events(
+    State(s): State<AppState>,
+    auth: RequirePermission<TaskDependencyRead>,
+    Path(task_id): Path<i64>,
+    headers: HeaderMap,
+    Query(query): Query<RunEventQuery>,
+) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
+    let _ = services::devrail::get_task_relations_by_id(&s.pool, &auth, task_id).await?;
+    let pool = s.pool.clone();
+    let actor = auth.actor.clone();
+    let header_cursor = headers
+        .get("last-event-id")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(0);
+    let initial_cursor = query.after_cursor.unwrap_or(header_cursor).max(0);
+    let stream = async_stream::stream! {
+        let mut cursor = initial_cursor;
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
+        loop {
+            interval.tick().await;
+            match services::devrail::list_task_events(&pool, &actor, task_id, cursor, 100).await {
+                Ok(page) => {
+                    for event in page.items {
+                        cursor = event.cursor;
+                        if let Ok(data) = serde_json::to_string(&event) {
+                            yield Ok(Event::default().id(cursor.to_string()).event(event.event_type).data(data));
+                        }
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    };
+    Ok(Sse::new(stream).keep_alive(
+        KeepAlive::new()
+            .interval(Duration::from_secs(10))
+            .text("heartbeat"),
+    ))
 }
 
 pub async fn stream_run_events(

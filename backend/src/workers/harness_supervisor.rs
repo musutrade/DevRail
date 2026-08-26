@@ -1,13 +1,21 @@
 //! The only component allowed to start Codex.  The browser talks to the API;
 //! this worker owns the controlled app-server process and its JSONL streams.
 
+use crate::access::{ActorContext, ActorType, DataScope};
+use crate::models::CreateDevRailFollowupTaskRequest;
 use crate::repositories::devrail_runs;
+use crate::services;
 use crate::workers::task_scheduler::SchedulerPolicy;
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use std::{
-    collections::HashMap, future::Future, path::PathBuf, pin::Pin, sync::Arc, time::Duration,
+    collections::{BTreeSet, HashMap},
+    future::Future,
+    path::PathBuf,
+    pin::Pin,
+    sync::Arc,
+    time::Duration,
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -727,6 +735,10 @@ async fn handle_stdout(pool: &PgPool, launch: &RunLaunch, line: &str) -> bool {
             let _ = tx.commit().await;
         }
     }
+    if followup_proposal(&value).is_some() {
+        handle_followup_proposal(pool, launch, &value).await;
+        return true;
+    }
     let _ = persist_event(
         pool,
         launch,
@@ -766,6 +778,169 @@ async fn handle_stdout(pool: &PgPool, launch: &RunLaunch, line: &str) -> bool {
         .await;
     }
     true
+}
+
+fn followup_proposal(value: &Value) -> Option<Result<CreateDevRailFollowupTaskRequest, ()>> {
+    let method = value
+        .get("method")
+        .or_else(|| value.get("type"))
+        .or_else(|| value.get("name"))
+        .and_then(Value::as_str);
+    let is_followup = method.is_some_and(|name| {
+        matches!(
+            name,
+            "devrail/followup.create" | "devrail.followup.create" | "devrail_followup_create"
+        )
+    }) || value
+        .get("tool")
+        .and_then(Value::as_str)
+        .is_some_and(|name| name == "devrail/followup.create")
+        || value
+            .pointer("/item/name")
+            .and_then(Value::as_str)
+            .is_some_and(|name| name == "devrail_followup_create");
+    if !is_followup {
+        return None;
+    }
+    let params = value
+        .get("params")
+        .or_else(|| value.get("arguments"))
+        .or_else(|| value.pointer("/item/arguments"))
+        .or_else(|| value.pointer("/item/params"));
+    Some(params.cloned().ok_or(()).and_then(|params| {
+        if let Value::String(encoded) = params {
+            serde_json::from_str(&encoded).map_err(|_| ())
+        } else {
+            serde_json::from_value(params).map_err(|_| ())
+        }
+    }))
+}
+
+fn followup_actor(launch: &RunLaunch) -> ActorContext {
+    ActorContext {
+        actor_type: ActorType::System,
+        user_id: launch.owner_user_id,
+        session_id: 0,
+        organization_id: launch.organization_id,
+        department_id: launch.department_id,
+        data_scope: DataScope::Organization,
+        permission_codes: BTreeSet::from([
+            "devrail:task:read".to_string(),
+            "devrail:followup:create".to_string(),
+        ]),
+    }
+}
+
+fn followup_event_source(value: &Value) -> Option<String> {
+    value
+        .get("id")
+        .and_then(Value::as_str)
+        .filter(|id| {
+            !id.is_empty()
+                && id.len() <= 256
+                && !id
+                    .bytes()
+                    .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
+        })
+        .map(str::to_string)
+}
+
+async fn handle_followup_proposal(pool: &PgPool, launch: &RunLaunch, value: &Value) {
+    let actor = followup_actor(launch);
+    let source_event_id = followup_event_source(value);
+    match followup_proposal(value) {
+        Some(Ok(request)) => {
+            match services::devrail::create_followup_task(pool, &actor, launch.run_id, &request)
+                .await
+            {
+                Ok(response) => {
+                    crate::app_metrics::record_agent_followup(if response.replayed {
+                        "replayed"
+                    } else {
+                        "accepted"
+                    });
+                    let _ = persist_event(
+                        pool,
+                        launch,
+                        "followup_accepted",
+                        source_event_id.as_deref(),
+                        json!({
+                            "requestId": response.request_id,
+                            "resultTaskId": response.task.id,
+                            "replayed": response.replayed,
+                        }),
+                        Some("受控 Agent 后续任务提议已处理"),
+                    )
+                    .await;
+                }
+                Err(error) => {
+                    let reason = followup_rejection_reason(&error);
+                    crate::app_metrics::record_agent_followup(reason.metric_outcome());
+                    let _ = services::devrail::record_followup_rejection(
+                        pool,
+                        &actor,
+                        launch.run_id,
+                        reason.audit_code(),
+                    )
+                    .await;
+                    let _ = persist_event(
+                        pool,
+                        launch,
+                        "followup_rejected",
+                        source_event_id.as_deref(),
+                        json!({"reason": reason.audit_code()}),
+                        Some("受控 Agent 后续任务提议被拒绝"),
+                    )
+                    .await;
+                }
+            }
+        }
+        Some(Err(())) => {
+            crate::app_metrics::record_agent_followup("rejected_schema");
+            let _ =
+                services::devrail::record_followup_rejection(pool, &actor, launch.run_id, "schema")
+                    .await;
+            let _ = persist_event(
+                pool,
+                launch,
+                "followup_rejected",
+                source_event_id.as_deref(),
+                json!({"reason":"schema"}),
+                Some("受控 Agent 后续任务提议字段无效"),
+            )
+            .await;
+        }
+        None => {}
+    }
+}
+
+#[derive(Clone, Copy)]
+enum FollowupRejection {
+    Policy,
+    Unavailable,
+}
+
+impl FollowupRejection {
+    const fn audit_code(self) -> &'static str {
+        match self {
+            Self::Policy => "policy",
+            Self::Unavailable => "unavailable",
+        }
+    }
+
+    const fn metric_outcome(self) -> &'static str {
+        match self {
+            Self::Policy => "rejected_policy",
+            Self::Unavailable => "unavailable",
+        }
+    }
+}
+
+fn followup_rejection_reason(error: &crate::error::ApiError) -> FollowupRejection {
+    match error {
+        crate::error::ApiError::Internal(_) => FollowupRejection::Unavailable,
+        _ => FollowupRejection::Policy,
+    }
 }
 
 fn classify_event(value: &Value) -> (String, Option<String>, Option<String>, Value) {
@@ -1046,6 +1221,27 @@ mod tests {
             classify_event(&json!({"type":"reasoning_summary","summary":"private"}));
         assert_eq!(kind, "reasoning_summary");
         assert_eq!(payload, json!({"summary":"private"}));
+    }
+
+    #[test]
+    fn followup_tool_parser_accepts_only_the_fixed_tool_and_closed_payload() {
+        let valid = json!({
+            "method": "devrail/followup.create",
+            "params": {"idempotencyKey":"evt-1","title":"后续","goal":"验证"}
+        });
+        assert!(matches!(followup_proposal(&valid), Some(Ok(_))));
+        let nested = json!({
+            "type": "item/completed",
+            "item": {"name":"devrail_followup_create","arguments":"{\"idempotencyKey\":\"evt-2\",\"title\":\"后续\",\"goal\":\"验证\"}"}
+        });
+        assert!(matches!(followup_proposal(&nested), Some(Ok(_))));
+        assert!(followup_proposal(&json!({"method":"database.query","params":{}})).is_none());
+        assert!(matches!(
+            followup_proposal(
+                &json!({"method":"devrail/followup.create","params":{"idempotencyKey":"x","title":"后续","goal":"验证","organizationId":1}})
+            ),
+            Some(Err(()))
+        ));
     }
 
     #[test]

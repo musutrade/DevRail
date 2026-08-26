@@ -30,6 +30,101 @@
         }
       </section>
     }
+    <section class="comments" aria-labelledby="dependency-title">
+      <h2 id="dependency-title">任务依赖</h2>
+      @if (current.blockedReason) {
+        <p class="blocked-reason" role="status">{{ current.blockedReason }}</p>
+      }
+      <h3>前置任务</h3>
+      @if (current.prerequisites.length) {
+        <ul class="dependency-list">
+          @for (dependency of current.prerequisites; track dependency.id) {
+            <li>
+              <span>{{ dependency.prerequisiteTitle }}</span>
+              <span>{{ dependency.prerequisiteStatus }}</span>
+              <small
+                >失败：{{ dependency.failureAction }}，取消：{{
+                  dependency.cancelledAction
+                }}，超时：{{ dependency.timeoutAction }}</small
+              >
+            </li>
+          }
+        </ul>
+      } @else {
+        <p class="empty">暂无前置任务</p>
+      }
+      <h3>下游任务</h3>
+      @if (current.dependents.length) {
+        <ul class="dependency-list">
+          @for (dependent of current.dependents; track dependent.id) {
+            <li>
+              <span>{{ dependent.taskTitle }}</span
+              ><span>{{ dependent.taskStatus }}</span>
+            </li>
+          }
+        </ul>
+      } @else {
+        <p class="empty">暂无下游任务</p>
+      }
+      <p>创建来源：{{ current.creationSource }}；后续任务层级：{{ current.followupDepth }}</p>
+      @if (canEditDependencies()) {
+        <div class="dependency-editor" aria-labelledby="dependency-editor-title">
+          <h3 id="dependency-editor-title">编辑前置任务</h3>
+          <div class="dependency-add-row">
+            <label
+              >选择前置任务<select
+                [value]="dependencyCandidateId() ?? ''"
+                (change)="
+                  dependencyCandidateId.set(
+                    $any($event.target).value ? +$any($event.target).value : null
+                  )
+                "
+              >
+                <option value="">请选择任务</option>
+                @for (candidate of dependencyCandidates(); track candidate.id) {
+                  <option [value]="candidate.id">{{ candidate.title }}</option>
+                }
+              </select></label
+            >
+            <button type="button" (click)="addDependency()" [disabled]="dependencyBusy()">
+              添加前置任务
+            </button>
+          </div>
+          @if (dependencyDraft().length) {
+            <ul class="dependency-edit-list">
+              @for (dependency of dependencyDraft(); track dependency.prerequisiteTaskId) {
+                <li>
+                  <span>{{
+                    dependencyCandidates().find((item) => item.id === dependency.prerequisiteTaskId)
+                      ?.title || '前置任务 #' + dependency.prerequisiteTaskId
+                  }}</span>
+                  <span
+                    >失败：{{ dependency.failureAction }}，取消：{{
+                      dependency.cancelledAction
+                    }}，超时：{{ dependency.timeoutAction }}</span
+                  >
+                  <button
+                    type="button"
+                    (click)="removeDependency(dependency.prerequisiteTaskId)"
+                    [disabled]="dependencyBusy()"
+                  >
+                    删除
+                  </button>
+                </li>
+              }
+            </ul>
+          }
+          <button
+            type="button"
+            class="btn-primary"
+            (click)="saveDependencies()"
+            [disabled]="dependencyBusy()"
+          >
+            保存依赖
+          </button>
+        </div>
+      }
+    </section>
     <form class="task-form" #taskForm (submit)="$event.preventDefault(); save(taskForm)">
       <label>标题<input name="title" [value]="current.title" required /></label>
       <label
@@ -45,6 +140,7 @@
             <option value="succeeded">已完成</option>
             <option value="failed">失败</option>
             <option value="cancelled">已取消</option>
+            <option value="skipped">已跳过</option>
           </select></label
         ><label
           >优先级<select name="priority" [value]="current.priority">

@@ -2,7 +2,7 @@
 
 更新日期：2026-08-26
 
-本文覆盖 OpenSpec change `symphony-orchestrator-reconciliation` 与 `tasktracker-workflow-foundation` 已实现的 TaskTracker、调度控制循环、仓库 workflow 和 Harness 恢复能力。外部 tracker、DAG 和独立 workspace manager 不在本手册范围内。
+本文覆盖 OpenSpec change `symphony-orchestrator-reconciliation`、`tasktracker-workflow-foundation` 与 `task-dependency-dag-and-followups` 已实现的 TaskTracker、调度控制循环、任务依赖传播、受控 follow-up、仓库 workflow 和 Harness 恢复能力。外部 tracker、独立 workspace manager 和 continuation turn 不在本手册范围内。
 
 ## 启动配置
 
@@ -43,6 +43,10 @@ workflow 在任务进入 `queued` 时锁定。文件后续变化不会改变已�
 | `devrail_scheduler_stall_total` | stall 和进程缺失修正数 | 任意持续增长均应调查 Harness 日志 |
 | `devrail_run_active` | starting/active/awaiting approval 数量 | 长期等于并发上限且队列增长 |
 | `devrail_run_reconciliation_total{outcome}` | claim、stale、取消、环境失效和重启修正 | `stale_run`、`retry_exhausted` 出现即告警 |
+| `devrail_task_dependency_propagation_total{outcome}` | 依赖终态传播结果（固定标签） | `applied` 持续增长且下游失败率异常时调查依赖配置 |
+| `devrail_task_dependency_conflict_total{outcome}` | 环、版本或幂等冲突次数 | `cycle`/`revision` 突增时检查并发编辑 |
+| `devrail_task_dependency_query_duration_seconds` | 任务关系查询耗时 | P95 超过 API SLO 时检查图规模和索引 |
+| `devrail_agent_followup_total{outcome}` | 受控 follow-up 接受、重放和拒绝结果 | `rejected_policy` 或 `unavailable` 突增时检查 Agent 工具调用 |
 | `devrail_workflow_reload_total{outcome}` | accepted、unchanged、rejected、fallback 等固定结果 | `rejected`/`fallback` 持续增长 |
 | `devrail_workflow_reload_duration_seconds` | 单轮 workflow 对账耗时 | P95 接近轮询间隔 |
 | `devrail_workflow_reload_healthy` | 最近一轮对账是否成功 | 连续为 0 |
@@ -83,6 +87,23 @@ workflow 在任务进入 `queued` 时锁定。文件后续变化不会改变已�
 2. 相同坏候选只创建一条失败证据并累加次数，last-known-good 继续服务新入队任务；不要手工清空版本表。
 3. 修复文件后等待下一轮对账。删除文件会发布安全默认 workflow，不会修改既有 task/run。
 4. 在任务与 run 详情核对 workflow 来源、版本和摘要；三元身份不一致时 run 创建会 fail closed。
+
+### 任务依赖与受控 follow-up
+
+- 依赖关系在同组织范围内由 PostgreSQL 保存；每条边的失败、取消和超时动作固定为 `wait`、`skip` 或 `fail`，默认 `wait`。
+- 调度器每轮 dispatch 前先执行依赖 reconciliation。全部前置任务成功后下游恢复为可派发；终态动作按 `fail > skip > wait` 处理，跳过任务显示 `skipped`。
+- 依赖修改只允许草稿/排队任务，并要求 revision 与幂等键；环冲突或范围外节点不会写入部分结果。
+- Agent 不能调用浏览器 HTTP 接口创建后续任务。只有受控 app-server JSONL 事件 `devrail/followup.create` 会由 Supervisor 绑定当前 run/task、组织、部门、所有者、仓库、环境和权限后调用内部 Service。
+- 单个 run 最多 8 个 follow-up，单任务深度最多 8 层；断流、EOF 或进程重启重放同一幂等键只返回原任务，不重复占额、事件或通知。
+
+验证证据：`dependency_claim_and_terminal_propagation_are_deterministic`、
+`dependency_replace_rejects_cycles_atomically`、
+`dependency_relation_queries_hide_out_of_scope_prerequisites` 和
+`followup_replay_is_idempotent_and_does_not_consume_quota` 使用隔离 PostgreSQL
+数据库执行；`cargo flow verify --components backend` 与
+`cargo flow verify --components frontend` 是发布前必须通过的范围门禁。
+
+发布/回滚：先应用 `20260905100000_add_task_dependency_dag_and_followups.sql`，确认历史任务的 `legacy` 来源和空依赖可查询，再滚动部署后端与前端。回滚应用版本时关闭依赖写入、传播和 follow-up 工具入口，保留新增表、审计和事件；不得直接删除 `skipped` 历史或幂等记录。
 
 ## 发布与回滚
 

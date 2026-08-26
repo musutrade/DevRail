@@ -3603,6 +3603,104 @@
         ]
       }
     },
+    "/projects/{project_id}/tasks/{id}/dependencies": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "getDevRailTaskDependencies",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailTaskRelationsResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "replaceDevRailTaskDependencies",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceDevRailTaskDependenciesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailTaskRelationsResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/push/config": {
       "get": {
         "tags": [
@@ -5196,6 +5294,107 @@
                 }
               }
             }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/tasks/{task_id}/events": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "listDevRailTaskEvents",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "after_cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailTaskEventPage"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/tasks/{task_id}/events/stream": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "streamDevRailTaskEvents",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "after_cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "任务事件 SSE 流"
           }
         },
         "security": [
@@ -6994,6 +7193,14 @@
           }
         }
       },
+      "DevRailDependencyAction": {
+        "type": "string",
+        "enum": [
+          "wait",
+          "skip",
+          "fail"
+        ]
+      },
       "DevRailEnvironmentHealthResponse": {
         "type": "object",
         "required": [
@@ -8566,6 +8773,196 @@
           }
         }
       },
+      "DevRailTaskDependencyInput": {
+        "type": "object",
+        "required": [
+          "prerequisiteTaskId"
+        ],
+        "properties": {
+          "cancelledAction": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DevRailDependencyAction"
+              }
+            ]
+          },
+          "failureAction": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DevRailDependencyAction"
+              }
+            ]
+          },
+          "prerequisiteTaskId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "timeoutAction": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DevRailDependencyAction"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "DevRailTaskDependencyResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "taskId",
+          "prerequisiteTaskId",
+          "prerequisiteTitle",
+          "prerequisiteStatus",
+          "failureAction",
+          "cancelledAction",
+          "timeoutAction",
+          "creationSource",
+          "createdAt"
+        ],
+        "properties": {
+          "cancelledAction": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "creationSource": {
+            "type": "string"
+          },
+          "failureAction": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "prerequisiteStatus": {
+            "type": "string"
+          },
+          "prerequisiteTaskId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "prerequisiteTitle": {
+            "type": "string"
+          },
+          "taskId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "timeoutAction": {
+            "type": "string"
+          }
+        }
+      },
+      "DevRailTaskDependentResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "taskId",
+          "taskTitle",
+          "taskStatus",
+          "failureAction",
+          "cancelledAction",
+          "timeoutAction",
+          "creationSource",
+          "createdAt"
+        ],
+        "properties": {
+          "cancelledAction": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "creationSource": {
+            "type": "string"
+          },
+          "failureAction": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "taskId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "taskStatus": {
+            "type": "string"
+          },
+          "taskTitle": {
+            "type": "string"
+          },
+          "timeoutAction": {
+            "type": "string"
+          }
+        }
+      },
+      "DevRailTaskEventPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DevRailTaskEventResponse"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "DevRailTaskEventResponse": {
+        "type": "object",
+        "required": [
+          "cursor",
+          "eventType",
+          "payload",
+          "occurredAt"
+        ],
+        "properties": {
+          "cursor": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "payload": {},
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "DevRailTaskPage": {
         "type": "object",
         "required": [
@@ -8595,6 +8992,43 @@
           }
         }
       },
+      "DevRailTaskRelationsResponse": {
+        "type": "object",
+        "required": [
+          "taskId",
+          "revision",
+          "prerequisites",
+          "dependents"
+        ],
+        "properties": {
+          "blockedReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dependents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DevRailTaskDependentResponse"
+            }
+          },
+          "prerequisites": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DevRailTaskDependencyResponse"
+            }
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "taskId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "DevRailTaskResponse": {
         "type": "object",
         "required": [
@@ -8613,6 +9047,10 @@
           "schedulerAttempt",
           "schedulerRetryCount",
           "schedulerMaxAttempts",
+          "creationSource",
+          "followupDepth",
+          "prerequisites",
+          "dependents",
           "labels",
           "createdAt",
           "updatedAt"
@@ -8644,6 +9082,12 @@
               "null"
             ]
           },
+          "blockedReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "constraints": {
             "type": [
               "string",
@@ -8654,12 +9098,21 @@
             "type": "string",
             "format": "date-time"
           },
+          "creationSource": {
+            "type": "string"
+          },
           "departmentId": {
             "type": [
               "integer",
               "null"
             ],
             "format": "int64"
+          },
+          "dependents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DevRailTaskDependentResponse"
+            }
           },
           "dueAt": {
             "type": [
@@ -8674,6 +9127,10 @@
               "null"
             ],
             "format": "int64"
+          },
+          "followupDepth": {
+            "type": "integer",
+            "format": "int32"
           },
           "goal": {
             "type": "string"
@@ -8690,6 +9147,12 @@
           "ownerUserId": {
             "type": "integer",
             "format": "int64"
+          },
+          "prerequisites": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DevRailTaskDependencyResponse"
+            }
           },
           "priority": {
             "type": "string"
@@ -8733,6 +9196,20 @@
           "schedulerRetryCount": {
             "type": "integer",
             "format": "int32"
+          },
+          "sourceRunId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "sourceTaskId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
           },
           "status": {
             "type": "string"
@@ -9399,6 +9876,30 @@
             ]
           }
         }
+      },
+      "ReplaceDevRailTaskDependenciesRequest": {
+        "type": "object",
+        "required": [
+          "revision",
+          "idempotencyKey",
+          "dependencies"
+        ],
+        "properties": {
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DevRailTaskDependencyInput"
+            }
+          },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
       },
       "RetryDevRailRunRequest": {
         "type": "object",

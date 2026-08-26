@@ -62,6 +62,22 @@ pub fn initialize() {
             "DevRail 运行对账修正总数"
         );
         describe_counter!(
+            "devrail_task_dependency_propagation_total",
+            "DevRail 任务依赖终态传播总数"
+        );
+        describe_counter!(
+            "devrail_task_dependency_conflict_total",
+            "DevRail 任务依赖写入冲突总数"
+        );
+        describe_histogram!(
+            "devrail_task_dependency_query_duration_seconds",
+            "DevRail 任务依赖查询耗时（秒）"
+        );
+        describe_counter!(
+            "devrail_agent_followup_total",
+            "DevRail Agent 后续任务提议结果总数"
+        );
+        describe_counter!(
             "devrail_workflow_reload_total",
             "DevRail workflow 动态加载结果总数"
         );
@@ -98,6 +114,30 @@ pub fn record_reconciliation(outcome: &str) {
         .increment(1);
 }
 
+pub fn record_dependency_propagation(outcome: &str, count: u64) {
+    counter!(
+        "devrail_task_dependency_propagation_total",
+        "outcome" => dependency_propagation_outcome(outcome)
+    )
+    .increment(count);
+}
+
+pub fn record_dependency_conflict(outcome: &str) {
+    counter!(
+        "devrail_task_dependency_conflict_total",
+        "outcome" => dependency_conflict_outcome(outcome)
+    )
+    .increment(1);
+}
+
+pub fn record_dependency_query_duration(seconds: f64) {
+    histogram!("devrail_task_dependency_query_duration_seconds").record(seconds.max(0.0));
+}
+
+pub fn record_agent_followup(outcome: &str) {
+    counter!("devrail_agent_followup_total", "outcome" => followup_outcome(outcome)).increment(1);
+}
+
 fn scheduler_dispatch_outcome(outcome: &str) -> &'static str {
     match outcome {
         "empty" => "empty",
@@ -118,6 +158,34 @@ fn reconciliation_outcome(outcome: &str) -> &'static str {
         "task_cancelled" => "task_cancelled",
         "environment_invalid" => "environment_invalid",
         "ok" => "ok",
+        _ => "other",
+    }
+}
+
+fn dependency_propagation_outcome(outcome: &str) -> &'static str {
+    match outcome {
+        "applied" => "applied",
+        "noop" => "noop",
+        _ => "other",
+    }
+}
+
+fn dependency_conflict_outcome(outcome: &str) -> &'static str {
+    match outcome {
+        "cycle" => "cycle",
+        "revision" => "revision",
+        "idempotency" => "idempotency",
+        _ => "other",
+    }
+}
+
+fn followup_outcome(outcome: &str) -> &'static str {
+    match outcome {
+        "accepted" => "accepted",
+        "replayed" => "replayed",
+        "rejected_schema" => "rejected_schema",
+        "rejected_policy" => "rejected_policy",
+        "unavailable" => "unavailable",
         _ => "other",
     }
 }
@@ -215,5 +283,8 @@ mod tests {
         assert_eq!(reconciliation_outcome("run-456"), "other");
         assert_eq!(workflow_reload_outcome("accepted"), "accepted");
         assert_eq!(workflow_reload_outcome("environment-42"), "other");
+        assert_eq!(dependency_propagation_outcome("applied"), "applied");
+        assert_eq!(dependency_conflict_outcome("task-123"), "other");
+        assert_eq!(followup_outcome("source-run-42"), "other");
     }
 }

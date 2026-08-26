@@ -87,6 +87,10 @@ const DEVRAIL_ENVIRONMENT_HEALTH_PATH: &str =
     "/api/v1/projects/{project_id}/environments/{id}/health-check";
 const DEVRAIL_TASKS_PATH: &str = "/api/v1/projects/{project_id}/tasks";
 const DEVRAIL_TASK_PATH: &str = "/api/v1/projects/{project_id}/tasks/{id}";
+const DEVRAIL_TASK_DEPENDENCIES_PATH: &str =
+    "/api/v1/projects/{project_id}/tasks/{id}/dependencies";
+const DEVRAIL_TASK_EVENTS_PATH: &str = "/api/v1/tasks/{task_id}/events";
+const DEVRAIL_TASK_EVENTS_STREAM_PATH: &str = "/api/v1/tasks/{task_id}/events/stream";
 const DEVRAIL_TASK_RUNS_PATH: &str = "/api/v1/tasks/{task_id}/runs";
 const DEVRAIL_TASK_COMMENTS_PATH: &str = "/api/v1/tasks/{task_id}/comments";
 const DEVRAIL_TASK_COMMENT_PATH: &str = "/api/v1/task-comments/{id}";
@@ -175,6 +179,9 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_ENVIRONMENT_HEALTH_PATH, &["post"]),
     (DEVRAIL_TASKS_PATH, &["get", "post"]),
     (DEVRAIL_TASK_PATH, &["get", "patch"]),
+    (DEVRAIL_TASK_DEPENDENCIES_PATH, &["get", "put"]),
+    (DEVRAIL_TASK_EVENTS_PATH, &["get"]),
+    (DEVRAIL_TASK_EVENTS_STREAM_PATH, &["get"]),
     (DEVRAIL_TASK_RUNS_PATH, &["get", "post"]),
     (DEVRAIL_TASK_COMMENTS_PATH, &["get", "post"]),
     (DEVRAIL_TASK_COMMENT_PATH, &["patch", "delete"]),
@@ -414,6 +421,19 @@ fn base_router(state: AppState) -> Router {
         .route(
             DEVRAIL_TASK_PATH,
             get(handlers::devrail::get_task).patch(handlers::devrail::update_task),
+        )
+        .route(
+            DEVRAIL_TASK_DEPENDENCIES_PATH,
+            get(handlers::devrail::get_task_dependencies)
+                .put(handlers::devrail::replace_task_dependencies),
+        )
+        .route(
+            DEVRAIL_TASK_EVENTS_PATH,
+            get(handlers::devrail::list_task_events),
+        )
+        .route(
+            DEVRAIL_TASK_EVENTS_STREAM_PATH,
+            get(handlers::devrail::stream_task_events),
         )
         .route(
             DEVRAIL_TASK_RUNS_PATH,

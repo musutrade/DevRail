@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 import { vi } from 'vitest';
+import { AuthService } from '../../core/auth.service';
 import { DevRailApiService } from '../../features/devrail/data-access/devrail-api.service';
 import type { DevRailTaskResponse } from '../../generated/api/models';
 import { DevRailTaskDetailPage } from './devrail-task-detail';
@@ -24,6 +25,10 @@ const TASK: DevRailTaskResponse = {
   workflowSource: 'repository',
   workflowVersion: '1',
   workflowDigest: 'b'.repeat(64),
+  creationSource: 'manual',
+  followupDepth: 0,
+  prerequisites: [],
+  dependents: [],
   createdAt: '2026-08-26T00:00:00Z',
   updatedAt: '2026-08-26T00:01:00Z',
 };
@@ -37,6 +42,8 @@ describe('DevRailTaskDetailPage', () => {
       listRepositories: vi.fn(async () => ({ items: [], total: 0, page: 1, pageSize: 20 })),
       listEnvironments: vi.fn(async () => ({ items: [], total: 0, page: 1, pageSize: 20 })),
       listTaskComments: vi.fn(async () => ({ items: [], total: 0, page: 1, pageSize: 50 })),
+      listTaskEvents: vi.fn(async () => ({ items: [], nextCursor: null })),
+      listTasks: vi.fn(async () => ({ items: [], total: 0, page: 1, pageSize: 100 })),
     };
 
     await TestBed.configureTestingModule({
@@ -53,6 +60,7 @@ describe('DevRailTaskDetailPage', () => {
           },
         },
         { provide: DevRailApiService, useValue: apiStub },
+        { provide: AuthService, useValue: { hasPermission: () => false } },
         { provide: MatSnackBar, useValue: { open: vi.fn() } },
       ],
     }).compileComponents();
@@ -69,5 +77,22 @@ describe('DevRailTaskDetailPage', () => {
     expect(text).toContain('工作流来源：repository');
     expect(text).toContain('工作流版本：1');
     expect(text).toContain(`工作流摘要：${'b'.repeat(64)}`);
+  });
+
+  it('无依赖写权限时只显示关系且不显示编辑器', () => {
+    expect(fixture.nativeElement.textContent).toContain('暂无前置任务');
+    expect(fixture.nativeElement.textContent).not.toContain('编辑前置任务');
+  });
+
+  it('依赖编辑器拒绝自依赖和重复依赖', () => {
+    const page = fixture.componentInstance;
+    page.dependencyCandidateId.set(7);
+    page.addDependency();
+    expect(page.dependencyDraft()).toEqual([]);
+    page.dependencyCandidateId.set(8);
+    page.addDependency();
+    page.dependencyCandidateId.set(8);
+    page.addDependency();
+    expect(page.dependencyDraft().map((item) => item.prerequisiteTaskId)).toEqual([8]);
   });
 });
