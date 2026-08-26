@@ -3,6 +3,7 @@
 FROM rust:1.97.1-bookworm AS builder
 WORKDIR /build
 COPY rust-toolchain.toml ./
+COPY WORKFLOW.md ./
 COPY backend ./backend
 RUN cargo build --locked --release --manifest-path backend/Cargo.toml --bins
 
