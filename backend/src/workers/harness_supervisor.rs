@@ -1020,6 +1020,7 @@ async fn finish_run(
 mod tests {
     use super::*;
     use crate::access::{ActorContext, ActorType, DataScope};
+    use crate::db::DATABASE_TEST_LOCK;
     use crate::repositories::devrail_runs;
     use std::collections::BTreeSet;
 
@@ -1106,6 +1107,7 @@ mod tests {
 
     #[tokio::test]
     async fn stalled_and_disconnected_processes_recover_without_duplicate_runs() {
+        let _guard = DATABASE_TEST_LOCK.lock().await;
         let Some(pool) = test_pool().await else {
             return;
         };

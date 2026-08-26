@@ -918,12 +918,11 @@ pub(crate) async fn update_task(
 mod scheduler_integration_tests {
     use super::*;
     use crate::access::{ActorType, DataScope};
+    use crate::db::DATABASE_TEST_LOCK;
     use crate::repositories::devrail_runs;
     use serde_json::json;
     use std::collections::BTreeSet;
     use uuid::Uuid;
-
-    static DATABASE_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
     async fn test_pool() -> Option<PgPool> {
         let database_url = std::env::var("TEST_DATABASE_URL").ok()?;
@@ -1276,12 +1275,13 @@ mod scheduler_integration_tests {
         let cancellation = reconcile_scheduler_state(&pool, &[run_id], 30)
             .await
             .expect("cancellation reconciliation");
-        assert_eq!(cancellation.pending_interruptions.len(), 1);
-        assert_eq!(cancellation.pending_interruptions[0].run_id, run_id);
-        assert_eq!(
-            cancellation.pending_interruptions[0].reason,
-            "task_cancelled"
-        );
+        let run_interruptions = cancellation
+            .pending_interruptions
+            .iter()
+            .filter(|pending| pending.run_id == run_id)
+            .collect::<Vec<_>>();
+        assert_eq!(run_interruptions.len(), 1);
+        assert_eq!(run_interruptions[0].reason, "task_cancelled");
         assert_eq!(cancellation.stale_runs, 0);
         let interruption_audit = sqlx::query_as::<_, (i64, Option<String>)>(
             "SELECT count(*), max(trace_id) FROM audit_logs

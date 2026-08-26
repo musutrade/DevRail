@@ -7,6 +7,9 @@ use std::time::Duration;
 
 static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 
+#[cfg(test)]
+pub(crate) static DATABASE_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 pub struct MigrationStatus {
     pub applied: i64,
     pub embedded: usize,
