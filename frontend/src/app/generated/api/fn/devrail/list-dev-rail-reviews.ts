@@ -17,6 +17,8 @@ export interface ListDevRailReviews$Params {
   projectId?: number;
   assigneeUserId?: number;
   label?: string;
+  taskId?: number;
+  runId?: number;
 }
 
 export function listDevRailReviews(http: HttpClient, rootUrl: string, params?: ListDevRailReviews$Params, context?: HttpContext): Observable<StrictHttpResponse<DevRailReviewPage>> {
@@ -29,6 +31,8 @@ export function listDevRailReviews(http: HttpClient, rootUrl: string, params?: L
     rb.query('projectId', params.projectId, {});
     rb.query('assigneeUserId', params.assigneeUserId, {});
     rb.query('label', params.label, {});
+    rb.query('taskId', params.taskId, {});
+    rb.query('runId', params.runId, {});
   }
 
   return http.request(

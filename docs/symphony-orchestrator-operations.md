@@ -1,8 +1,8 @@
 # Symphony Orchestrator 运行手册
 
-更新日期：2026-08-26
+更新日期：2026-08-27
 
-本文覆盖 OpenSpec change `symphony-orchestrator-reconciliation`、`tasktracker-workflow-foundation` 与 `task-dependency-dag-and-followups` 已实现的 TaskTracker、调度控制循环、任务依赖传播、受控 follow-up、仓库 workflow 和 Harness 恢复能力。外部 tracker、独立 workspace manager 和 continuation turn 不在本手册范围内。
+本文覆盖 OpenSpec change `symphony-orchestrator-reconciliation`、`tasktracker-workflow-foundation`、`task-dependency-dag-and-followups`、`task-workspace-manager` 与 `continuation-turns` 已实现的 TaskTracker、调度控制循环、任务依赖传播、受控 follow-up、continuation turn、仓库 workflow、Harness 恢复和 workspace 对账能力。workspace 详细运维见 [Symphony 任务工作区运维](symphony-task-workspace-operations.md)。
 
 ## 启动配置
 
@@ -47,11 +47,29 @@ workflow 在任务进入 `queued` 时锁定。文件后续变化不会改变已�
 | `devrail_task_dependency_conflict_total{outcome}` | 环、版本或幂等冲突次数 | `cycle`/`revision` 突增时检查并发编辑 |
 | `devrail_task_dependency_query_duration_seconds` | 任务关系查询耗时 | P95 超过 API SLO 时检查图规模和索引 |
 | `devrail_agent_followup_total{outcome}` | 受控 follow-up 接受、重放和拒绝结果 | `rejected_policy` 或 `unavailable` 突增时检查 Agent 工具调用 |
+| `arc_admin_continuation_requests_total{event,status,trigger}` | continuation 创建、领取、派发、取消、拒绝、恢复和终态 | `rejected`、`recovered` 或单一 trigger 突增时检查策略、证据和 worker |
+| `arc_admin_continuation_pending` | pending/claimed continuation 请求深度 | 持续大于 0 且派发延迟上升时检查容量和 handoff |
+| `arc_admin_continuation_dispatch_latency_seconds` | continuation 请求创建到派发的延迟 | P95 超过任务 SLO 或持续上升时检查 workspace/Git |
+| `arc_admin_continuation_claim_conflict_total` | continuation claim token 冲突次数 | 多 worker 竞争或旧 worker 恢复异常时告警 |
+| `arc_admin_continuation_replay_total` | 幂等重放次数 | 短时间突增时检查 webhook/客户端重试 |
+| `arc_admin_continuation_child_result_total{result}` | child run completed/failed/cancelled/interrupted 结果 | `failed` 或 `interrupted` 突增时检查 Harness 和 handoff |
 | `devrail_workflow_reload_total{outcome}` | accepted、unchanged、rejected、fallback 等固定结果 | `rejected`/`fallback` 持续增长 |
 | `devrail_workflow_reload_duration_seconds` | 单轮 workflow 对账耗时 | P95 接近轮询间隔 |
 | `devrail_workflow_reload_healthy` | 最近一轮对账是否成功 | 连续为 0 |
 
 指标标签由代码白名单归一化，未知值统一记为 `other`，不得把 task、run、组织或错误文本写入标签。
+
+## Continuation turn 运维
+
+continuation 策略默认关闭，策略在任务 workflow 快照中固化。启用后默认最多 3 次、最大链深 3、追加上下文最多 16 KiB；同一任务同时只能有一个活动 run 或未终结请求。用户、质量门禁和审查触发分别使用 `user_context`、`quality_gate`、`review_changes`，自动触发必须提供可验证证据和当前 changeset 摘要。
+
+每轮 reconciliation 按以下顺序处理：释放过期 claim 并刷新 pending 深度，领取 continuation，再恢复已派发但尚未启动的 child，最后处理普通 queued task。workspace 准备在事务外执行；只有 child run、workspace、请求状态和任务投影绑定事务提交后，Supervisor 才能启动 Agent。handoff 缺失、证据过期/漂移、任务取消或活动 run 冲突会确定性拒绝；容量、Git 或临时数据库错误释放 claim 并按策略退避。
+
+建议告警：`arc_admin_continuation_pending` 持续堆积、`arc_admin_continuation_dispatch_latency_seconds` P95 超过 SLO、claim conflict/replay 短时突增、`event="rejected"` 持续出现，或 child result 的 `failed`/`interrupted` 比例上升。日志和指标只保留低基数原因、策略版本、request/source/child/workspace trace 关联，不记录完整上下文、证据正文或路径。
+
+分阶段启用：先部署并执行上述 additive migrations，保持策略关闭；观察 handoff、claim 过期和 workspace 清理指标后，按组织或 workflow 逐步启用用户触发；稳定后再分别启用质量门禁和审查触发。历史 run 若没有可验证 handoff，只能显示 continuation 不可用，不得从残留目录猜测输入。
+
+回滚时先关闭所有 continuation 策略和新触发入口，停止领取 worker；已派发 child run 按普通终态流程完成，未派发请求取消并恢复请求前任务状态。保留 continuation/handoff 表、审计、事件和 outbox，不执行破坏性 down migration。
 
 ## 故障处理
 
@@ -77,9 +95,10 @@ workflow 在任务进入 `queued` 时锁定。文件后续变化不会改变已�
 ### 后端进程重启
 
 1. 启动阶段扫描 starting/active run；有 thread 的 run 使用原 thread/turn 恢复。
-2. 没有 thread 的 run 原子标记 `supervisor_restart` 失败，并创建一次站内通知/outbox 和 System Actor 审计。
-3. 周期 reconciliation 会处理数据库 active 但 Supervisor 无进程的 stale run，避免无限期 active。
-4. 通过 run 详情核对 `exitReason`、`traceId`、`recoverySuggestion` 和 `cleanupStatus`。
+2. 扫描 continuation `dispatched` 且 child 尚未启动的请求；若 child 已存在则复用稳定 start key，否则按 claim/reconciliation 继续处理。
+3. 没有 thread 的 run 原子标记 `supervisor_restart` 失败；continuation child 同时完成请求、TaskTracker 投影和一次站内通知/outbox 与 System Actor 审计。
+4. 周期 reconciliation 会处理数据库 active 但 Supervisor 无进程的 stale run，避免无限期 active。
+5. 通过 run 详情核对 `exitReason`、`traceId`、`recoverySuggestion` 和 `cleanupStatus`。
 
 ### WORKFLOW.md 非法或删除
 
@@ -107,14 +126,14 @@ workflow 在任务进入 `queued` 时锁定。文件后续变化不会改变已�
 
 ## 发布与回滚
 
-迁移 `20260826030000_add_symphony_scheduler_reliability.sql` 与 `20260904100000_add_tasktracker_workflow_foundation.sql` 均为添加式迁移。后者为历史 queued/active task 和 run 回填明确的 `legacy/default` 身份，并保留旧 INSERT 默认值；回滚时保留新增快照、版本、失败证据和状态历史表。
+迁移 `20260826030000_add_symphony_scheduler_reliability.sql`、`20260904100000_add_tasktracker_workflow_foundation.sql`、`20260907100000_add_continuation_turns.sql`、`20260907110000_add_devrail_continuation_permissions.sql`、`20260907120000_add_continuation_task_history_context.sql` 和 `20260907130000_add_harness_started_token.sql` 均为添加式迁移。continuation 迁移为历史 task/run 保留兼容默认值，并以独立表保存请求与 handoff；回滚时保留新增列、快照、版本、失败证据、状态历史、审计和 outbox 表。
 
 发布顺序：
 
 1. 备份 PostgreSQL 并执行 migration job。
 2. 滚动部署新后端，确认启动配置校验通过。
-3. 观察 queue、claim conflict、stall 和 reconciliation 指标。
-4. 再部署前端生成契约。
+3. 保持 continuation 策略关闭，观察 queue、claim conflict、stall、handoff 和 continuation reconciliation 指标。
+4. 再部署前端生成契约，按组织或 workflow 分阶段启用 continuation。
 
 应用回滚时先停止新 worker，再回滚后端镜像；保留新增列、索引、触发器、审计和通知，不执行 DROP。旧版本可依赖兼容触发器继续创建 run。数据库结构回退属于破坏性操作，必须另立迁移并经过数据备份、停机和专项评审；常规故障优先向前修复。
 
@@ -124,6 +143,7 @@ workflow 在任务进入 `queued` 时锁定。文件后续变化不会改变已�
 export PATH="/home/gem/.npm-global/bin:$PATH"
 openspec validate symphony-orchestrator-reconciliation --strict
 openspec validate tasktracker-workflow-foundation --strict
+openspec validate continuation-turns --strict
 cargo flow scope
 cargo flow verify --all
 ```

@@ -13,10 +13,19 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration as StdDuration;
 
-pub(crate) struct MaterializedWorkspace {
+pub struct MaterializedWorkspace {
     pub path: PathBuf,
     pub base_commit: Option<String>,
 }
+
+pub struct HandoffEvidence {
+    pub base_commit: String,
+    pub head_commit: String,
+    pub changeset_ref: String,
+    pub changeset_digest: String,
+}
+
+const MAX_HANDOFF_PATCH_BYTES: usize = 1024 * 1024;
 
 fn db_error(error: sqlx::Error) -> ApiError {
     ApiError::internal(error)
@@ -58,6 +67,19 @@ pub fn workspace_key(task_id: i64, attempt: i32) -> Result<String, ApiError> {
     let suffix = hex::encode(digest.finalize());
     Ok(format!(
         "task-{task_id}-attempt-{attempt}-{}",
+        &suffix[..12]
+    ))
+}
+
+pub fn continuation_workspace_key(task_id: i64, sequence: i16) -> Result<String, ApiError> {
+    if task_id <= 0 || sequence <= 0 {
+        return Err(ApiError::validation("任务或 continuation 序号无效"));
+    }
+    let suffix = hex::encode(Sha256::digest(
+        format!("continuation:{task_id}:{sequence}").as_bytes(),
+    ));
+    Ok(format!(
+        "task-{task_id}-continuation-{sequence}-{}",
         &suffix[..12]
     ))
 }
@@ -229,6 +251,271 @@ async fn git_output(source: &Path, args: &[&str]) -> Result<String, ApiError> {
         return Err(ApiError::conflict("无法创建 Git worktree"));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+async fn git_bytes(source: &Path, args: &[&str]) -> Result<Vec<u8>, ApiError> {
+    let output = tokio::time::timeout(
+        StdDuration::from_secs(60),
+        tokio::process::Command::new("git")
+            .arg("-C")
+            .arg(source)
+            .args(args)
+            .env_clear()
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .output(),
+    )
+    .await
+    .map_err(|_| ApiError::conflict("Git 证据操作超时"))?
+    .map_err(ApiError::internal)?;
+    if !output.status.success() {
+        return Err(ApiError::conflict("无法读取 Git 证据"));
+    }
+    Ok(output.stdout)
+}
+
+fn safe_handoff_patch(content: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(content);
+    let lower = text.to_ascii_lowercase();
+    let contains_secret = [
+        "authorization:",
+        "cookie:",
+        "password=",
+        "passwd=",
+        "token=",
+        "database_url=",
+        "begin rsa private key",
+        "begin openssh private key",
+    ]
+    .iter()
+    .any(|marker| lower.contains(marker));
+    let contains_sensitive_path = text.lines().any(|line| {
+        let Some(path) = line
+            .strip_prefix("+++ b/")
+            .or_else(|| line.strip_prefix("--- a/"))
+        else {
+            return false;
+        };
+        let path = path.to_ascii_lowercase();
+        path.contains("/.env")
+            || path.ends_with(".pem")
+            || path.ends_with(".key")
+            || path.contains("id_rsa")
+            || path.contains("credentials")
+    });
+    !contains_secret && !contains_sensitive_path
+}
+
+pub async fn capture_handoff_evidence(
+    root: &Path,
+    run_id: i64,
+    workspace_relative_path: &str,
+    recorded_base_commit: Option<&str>,
+) -> Result<HandoffEvidence, ApiError> {
+    let workspace = controlled_path(root, workspace_relative_path).await?;
+    let head_commit = git_output(&workspace, &["rev-parse", "HEAD"]).await?;
+    let base_commit = recorded_base_commit.unwrap_or(&head_commit).to_string();
+    let patch = git_bytes(
+        &workspace,
+        &[
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--binary",
+            &base_commit,
+            "--",
+        ],
+    )
+    .await?;
+    if patch.len() > MAX_HANDOFF_PATCH_BYTES {
+        return Err(ApiError::conflict("continuation 交接补丁超过 1MB 限制"));
+    }
+    if !safe_handoff_patch(&patch) {
+        return Err(ApiError::conflict("continuation 交接证据包含敏感内容"));
+    }
+    let changeset_digest = hex::encode(Sha256::digest(&patch));
+    let relative_dir = format!(".handoffs/run-{run_id}");
+    let evidence_dir = materialize(root, &relative_dir).await?;
+    let file_name = format!("{changeset_digest}.patch");
+    let evidence_path = evidence_dir.join(&file_name);
+    tokio::fs::write(&evidence_path, &patch)
+        .await
+        .map_err(ApiError::internal)?;
+    Ok(HandoffEvidence {
+        base_commit,
+        head_commit,
+        changeset_ref: format!("{relative_dir}/{file_name}"),
+        changeset_digest,
+    })
+}
+
+pub struct HandoffMaterialization<'a> {
+    pub root: &'a Path,
+    pub source_repository: &'a Path,
+    pub relative: &'a str,
+    pub repository_identity: &'a str,
+    pub repository_identity_digest: &'a str,
+    pub repository_remote_url: &'a str,
+    pub base_commit: &'a str,
+    pub changeset_ref: &'a str,
+    pub changeset_digest: &'a str,
+}
+
+pub async fn materialize_from_handoff(
+    input: &HandoffMaterialization<'_>,
+) -> Result<MaterializedWorkspace, ApiError> {
+    let root = tokio::fs::canonicalize(input.root)
+        .await
+        .map_err(|_| ApiError::validation("受控工作区根目录不存在或不可访问"))?;
+    let source_repository = tokio::fs::canonicalize(input.source_repository)
+        .await
+        .map_err(|_| ApiError::conflict("handoff 仓库源不存在或不可访问"))?;
+    if !source_repository.starts_with(&root) || source_repository == root {
+        return Err(ApiError::validation("handoff 仓库源不在受控根目录内"));
+    }
+    let actual_repository_identity_digest =
+        hex::encode(Sha256::digest(input.repository_identity.as_bytes()));
+    if actual_repository_identity_digest != input.repository_identity_digest {
+        return Err(ApiError::conflict("handoff 仓库身份摘要不匹配"));
+    }
+    let actual_remote = git_output(&source_repository, &["remote", "get-url", "origin"]).await?;
+    if actual_remote.trim() != input.repository_remote_url.trim() {
+        return Err(ApiError::conflict("handoff 仓库远端身份不匹配"));
+    }
+    git_output(
+        &source_repository,
+        &[
+            "rev-parse",
+            "--verify",
+            &format!("{}^{{commit}}", input.base_commit),
+        ],
+    )
+    .await?;
+    let evidence_path = controlled_path(&root, input.changeset_ref).await?;
+    let patch = tokio::fs::read(evidence_path)
+        .await
+        .map_err(|_| ApiError::conflict("continuation 交接补丁不存在或不可读"))?;
+    let actual_digest = hex::encode(Sha256::digest(&patch));
+    if actual_digest != input.changeset_digest || !safe_handoff_patch(&patch) {
+        return Err(ApiError::conflict("continuation 交接补丁完整性校验失败"));
+    }
+    let target = controlled_path(&root, input.relative).await?;
+    if tokio::fs::try_exists(&target).await.unwrap_or(false) {
+        return Err(ApiError::conflict("continuation 工作区已存在，拒绝复用"));
+    }
+    git_output(
+        &source_repository,
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            target.to_string_lossy().as_ref(),
+            input.base_commit,
+        ],
+    )
+    .await?;
+    let reconstruction = async {
+        if !patch.is_empty() {
+            let mut command = tokio::process::Command::new("git");
+            command
+                .arg("-C")
+                .arg(&target)
+                .args(["apply", "--binary", "--whitespace=nowarn", "-"])
+                .env_clear()
+                .env("GIT_CONFIG_NOSYSTEM", "1")
+                .stdin(Stdio::piped())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            let mut child = command.spawn().map_err(ApiError::internal)?;
+            let mut stdin = child
+                .stdin
+                .take()
+                .ok_or_else(|| ApiError::conflict("Git 补丁输入通道不可用"))?;
+            use tokio::io::AsyncWriteExt;
+            stdin.write_all(&patch).await.map_err(ApiError::internal)?;
+            drop(stdin);
+            if !child.wait().await.map_err(ApiError::internal)?.success() {
+                return Err(ApiError::conflict("无法应用 continuation 交接补丁"));
+            }
+        }
+        let rebuilt_base = git_output(&target, &["rev-parse", "HEAD"]).await?;
+        if rebuilt_base != input.base_commit {
+            return Err(ApiError::conflict("continuation 工作区基础提交不匹配"));
+        }
+        let rebuilt_patch = git_bytes(
+            &target,
+            &[
+                "diff",
+                "--no-ext-diff",
+                "--no-textconv",
+                "--binary",
+                input.base_commit,
+                "--",
+            ],
+        )
+        .await?;
+        if hex::encode(Sha256::digest(&rebuilt_patch)) != input.changeset_digest {
+            return Err(ApiError::conflict("continuation 工作区重建摘要不匹配"));
+        }
+        Ok::<(), ApiError>(())
+    }
+    .await;
+    if let Err(error) = reconstruction {
+        let _ = git_output(
+            &source_repository,
+            &[
+                "worktree",
+                "remove",
+                "--force",
+                target.to_string_lossy().as_ref(),
+            ],
+        )
+        .await;
+        return Err(error);
+    }
+    Ok(MaterializedWorkspace {
+        path: tokio::fs::canonicalize(target)
+            .await
+            .map_err(ApiError::internal)?,
+        base_commit: Some(input.base_commit.to_string()),
+    })
+}
+
+pub async fn cleanup_handoff_workspace(
+    root: &Path,
+    source_repository: &Path,
+    relative: &str,
+) -> Result<(), ApiError> {
+    let root = tokio::fs::canonicalize(root)
+        .await
+        .map_err(|_| ApiError::validation("受控工作区根目录不存在或不可访问"))?;
+    let source_repository = tokio::fs::canonicalize(source_repository)
+        .await
+        .map_err(|_| ApiError::conflict("handoff 仓库源不存在或不可访问"))?;
+    if !source_repository.starts_with(&root) || source_repository == root {
+        return Err(ApiError::validation("handoff 仓库源不在受控根目录内"));
+    }
+    let target = controlled_path(&root, relative).await?;
+    if !tokio::fs::try_exists(&target)
+        .await
+        .map_err(ApiError::internal)?
+    {
+        return Ok(());
+    }
+    git_output(
+        &source_repository,
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            target.to_string_lossy().as_ref(),
+        ],
+    )
+    .await?;
+    Ok(())
 }
 
 pub(crate) async fn materialize_from_source(
@@ -571,6 +858,24 @@ pub async fn reconcile_cleanup(pool: &PgPool, root: &Path) -> Result<usize, sqlx
 mod tests {
     use super::*;
 
+    async fn git_test(root: &Path, args: &[&str]) -> String {
+        let output = tokio::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .env_clear()
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .output()
+            .await
+            .expect("run test git command");
+        assert!(
+            output.status.success(),
+            "git command failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
     #[test]
     fn workspace_keys_are_deterministic_and_attempt_scoped() {
         let first = workspace_key(42, 1).expect("key");
@@ -612,6 +917,130 @@ mod tests {
                 .expect("canonical root")
         ));
         tokio::fs::remove_dir_all(&root).await.expect("cleanup");
+    }
+
+    #[tokio::test]
+    async fn handoff_rebuild_survives_source_cleanup_and_rejects_tampering() {
+        let root =
+            PathBuf::from("/tmp").join(format!("devrail-handoff-test-{}", uuid::Uuid::new_v4()));
+        let repository = root.join("repository");
+        let source = root.join("source-run");
+        tokio::fs::create_dir_all(&repository)
+            .await
+            .expect("create test repository");
+        git_test(&repository, &["init"]).await;
+        git_test(
+            &repository,
+            &["config", "user.email", "devrail@example.test"],
+        )
+        .await;
+        git_test(&repository, &["config", "user.name", "DevRail Test"]).await;
+        tokio::fs::write(repository.join("tracked.txt"), "初始内容\n")
+            .await
+            .expect("write tracked file");
+        git_test(&repository, &["add", "tracked.txt"]).await;
+        git_test(&repository, &["commit", "-m", "initial"]).await;
+        git_test(
+            &repository,
+            &[
+                "remote",
+                "add",
+                "origin",
+                "https://example.invalid/handoff.git",
+            ],
+        )
+        .await;
+        let base_commit = git_test(&repository, &["rev-parse", "HEAD"]).await;
+        git_test(
+            &repository,
+            &[
+                "worktree",
+                "add",
+                "--detach",
+                source.to_string_lossy().as_ref(),
+                &base_commit,
+            ],
+        )
+        .await;
+        tokio::fs::write(source.join("tracked.txt"), "追加执行后的内容\n")
+            .await
+            .expect("modify source worktree");
+
+        let evidence = capture_handoff_evidence(&root, 77, "source-run", Some(&base_commit))
+            .await
+            .expect("capture handoff evidence");
+        git_test(
+            &repository,
+            &[
+                "worktree",
+                "remove",
+                "--force",
+                source.to_string_lossy().as_ref(),
+            ],
+        )
+        .await;
+        assert!(!source.exists());
+
+        let repository_identity = "repository:77:handoff-test";
+        let repository_identity_digest =
+            hex::encode(Sha256::digest(repository_identity.as_bytes()));
+        let rebuilt = materialize_from_handoff(&HandoffMaterialization {
+            root: &root,
+            source_repository: &repository,
+            relative: "continuation-child",
+            repository_identity,
+            repository_identity_digest: &repository_identity_digest,
+            repository_remote_url: "https://example.invalid/handoff.git",
+            base_commit: &evidence.base_commit,
+            changeset_ref: &evidence.changeset_ref,
+            changeset_digest: &evidence.changeset_digest,
+        })
+        .await
+        .expect("rebuild child workspace");
+        assert_eq!(
+            tokio::fs::read_to_string(rebuilt.path.join("tracked.txt"))
+                .await
+                .expect("read rebuilt content"),
+            "追加执行后的内容\n"
+        );
+        cleanup_handoff_workspace(&root, &repository, "continuation-child")
+            .await
+            .expect("cleanup rebuilt workspace");
+
+        let evidence_path = controlled_path(&root, &evidence.changeset_ref)
+            .await
+            .expect("resolve evidence path");
+        tokio::fs::write(&evidence_path, "tampered")
+            .await
+            .expect("tamper evidence");
+        assert!(materialize_from_handoff(&HandoffMaterialization {
+            root: &root,
+            source_repository: &repository,
+            relative: "continuation-tampered",
+            repository_identity,
+            repository_identity_digest: &repository_identity_digest,
+            repository_remote_url: "https://example.invalid/handoff.git",
+            base_commit: &evidence.base_commit,
+            changeset_ref: &evidence.changeset_ref,
+            changeset_digest: &evidence.changeset_digest,
+        })
+        .await
+        .is_err());
+        assert!(!root.join("continuation-tampered").exists());
+
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink("/tmp", root.join("continuation-link"))
+                .expect("create escaping symlink");
+            assert!(controlled_path(&root, "continuation-link").await.is_err());
+        }
+        assert!(!safe_handoff_patch(
+            b"diff --git a/.env b/.env\n--- a/.env\n+++ b/.env\n+token=hidden\n"
+        ));
+
+        tokio::fs::remove_dir_all(&root)
+            .await
+            .expect("cleanup handoff test root");
     }
 
     #[tokio::test]

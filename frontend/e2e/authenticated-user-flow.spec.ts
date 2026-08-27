@@ -351,7 +351,13 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   if (process.env['VISUAL_REVIEW']) {
     await page.screenshot({ path: testInfo.outputPath('account-menu.png') });
   }
+  const mfaStatusResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/v1/auth/me/mfa' &&
+      response.request().method() === 'GET',
+  );
   await page.getByRole('menuitem', { name: '修改密码' }).click();
+  await mfaStatusResponse;
 
   const completeStepUp = async (title: string) => {
     const stepUpDialog = page.getByRole('dialog');
@@ -373,6 +379,7 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   const newPassword = changePasswordDialog.locator('#new-password');
   const confirmPassword = changePasswordDialog.locator('#confirm-password');
   const totpCode = changePasswordDialog.locator('#totp-code');
+  await expect(totpCode).toBeVisible();
   await currentPassword.fill('safe-password');
   await newPassword.fill('updated-safe-password');
   await confirmPassword.fill('updated-safe-password');

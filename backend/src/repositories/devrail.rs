@@ -1761,12 +1761,25 @@ mod scheduler_integration_tests {
             .expect("claim with priority aging");
         assert_eq!(aging_claim.len(), 1);
         assert_eq!(aging_claim[0].id, aged_low);
+
+        let continuation_pending_task = queued_task(&pool, fixture, 3).await;
+        sqlx::query("UPDATE devrail_tasks SET status='continuation_pending' WHERE id=$1")
+            .bind(continuation_pending_task)
+            .execute(&pool)
+            .await
+            .expect("mark continuation task pending");
+        let isolation_claim = claim_scheduler_tasks(&pool, Uuid::new_v4(), 100, 60, 3_600)
+            .await
+            .expect("claim excludes continuation pending task");
+        assert!(!isolation_claim
+            .iter()
+            .any(|task| task.id == continuation_pending_task));
         sqlx::query(
             "UPDATE devrail_tasks
              SET status='cancelled', scheduler_claim_token=NULL, scheduler_claimed_at=NULL
              WHERE id = ANY($1::bigint[])",
         )
-        .bind(vec![aged_low, fresh_urgent])
+        .bind(vec![aged_low, fresh_urgent, continuation_pending_task])
         .execute(&pool)
         .await
         .expect("clean priority aging tasks");

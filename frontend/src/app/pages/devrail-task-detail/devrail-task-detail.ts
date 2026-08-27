@@ -23,6 +23,8 @@ import type {
   DevRailTaskDependencyInput,
   DevRailTaskResponse,
   DevRailTaskWorkspaceResponse,
+  DevRailContinuationResponse,
+  DevRailRunResponse,
 } from '../../generated/api/models';
 import type { DevRailTaskCommentResponse } from '../../generated/api/models';
 
@@ -42,6 +44,21 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
   readonly comments = signal<DevRailTaskCommentResponse[]>([]);
   readonly taskEvents = signal<import('../../generated/api/models').DevRailTaskEventResponse[]>([]);
   readonly workspace = signal<DevRailTaskWorkspaceResponse | null>(null);
+  readonly continuations = signal<DevRailContinuationResponse[]>([]);
+  readonly runs = signal<DevRailRunResponse[]>([]);
+  readonly continuationInput = signal('');
+  readonly continuationBusy = signal(false);
+  readonly continuationByteLimit = computed(
+    () => this.task()?.continuationPolicy.max_context_bytes ?? 16_384,
+  );
+  readonly continuationBytes = computed(
+    () => new TextEncoder().encode(this.continuationInput()).length,
+  );
+  readonly continuationInputValid = computed(
+    () =>
+      this.continuationInput().trim().length > 0 &&
+      this.continuationBytes() <= this.continuationByteLimit(),
+  );
   readonly dependencyDraft = signal<DevRailTaskDependencyInput[]>([]);
   readonly dependencyCandidates = signal<DevRailTaskResponse[]>([]);
   readonly dependencyCandidateId = signal<number | null>(null);
@@ -53,6 +70,24 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
   );
   readonly canManageWorkspace = computed(() =>
     this.auth.hasPermission(DEVRAIL_PERMISSIONS.workspaceWrite),
+  );
+  readonly continuationSourceRun = computed(
+    () =>
+      this.runs().find((run) => ['completed', 'failed'].includes(run.status) && !!run.turnId) ??
+      null,
+  );
+  readonly canCreateContinuation = computed(
+    () =>
+      this.auth.hasPermission(DEVRAIL_PERMISSIONS.continuationCreate) &&
+      this.task()?.continuationCapabilities.canCreate === true &&
+      this.task()?.continuationPolicy.enabled === true &&
+      !!this.continuationSourceRun() &&
+      ['succeeded', 'failed'].includes(this.task()?.status ?? ''),
+  );
+  readonly canCancelContinuation = computed(
+    () =>
+      this.auth.hasPermission(DEVRAIL_PERMISSIONS.continuationCancel) &&
+      this.task()?.continuationCapabilities.canCancel === true,
   );
   readonly editingCommentId = signal<number | null>(null);
   private readonly route = inject(ActivatedRoute);
@@ -107,6 +142,77 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
       this.snack.open(apiErrorMessage(error, '准备任务工作区失败'), '关闭', { duration: 5000 });
     } finally {
       this.busy.set(false);
+    }
+  }
+
+  continuationStatusLabel(status: string): string {
+    return (
+      {
+        pending: '待派发',
+        claimed: '已领取',
+        dispatched: '已派发',
+        completed: '已完成',
+        cancelled: '已取消',
+        rejected: '已拒绝',
+      }[status] ?? status
+    );
+  }
+
+  continuationTriggerLabel(trigger: string): string {
+    return (
+      {
+        user_context: '用户追加',
+        quality_gate: '质量门禁',
+        review_changes: '审查修改',
+      }[trigger] ?? trigger
+    );
+  }
+
+  onContinuationInput(event: Event): void {
+    this.continuationInput.set((event.target as HTMLTextAreaElement).value);
+  }
+
+  async createContinuation(form: HTMLFormElement): Promise<void> {
+    const source = this.continuationSourceRun();
+    const input = this.continuationInput().trim();
+    if (
+      !source ||
+      !this.continuationInputValid() ||
+      this.continuationBusy() ||
+      !this.canCreateContinuation()
+    )
+      return;
+    this.continuationBusy.set(true);
+    try {
+      const created = await this.api.createContinuation(source.id, {
+        input,
+        idempotencyKey: `ui-continuation-${source.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      });
+      this.continuations.update((items) => [created, ...items]);
+      this.continuationInput.set('');
+      form.reset();
+      this.snack.open('追加执行请求已提交', '关闭', { duration: 3000 });
+      window.setTimeout(() => form.querySelector<HTMLTextAreaElement>('textarea')?.focus(), 0);
+    } catch (error) {
+      this.snack.open(apiErrorMessage(error, '提交追加执行请求失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.continuationBusy.set(false);
+    }
+  }
+
+  async cancelContinuation(item: DevRailContinuationResponse): Promise<void> {
+    if (this.continuationBusy() || !['pending', 'claimed'].includes(item.status)) return;
+    this.continuationBusy.set(true);
+    try {
+      const cancelled = await this.api.cancelContinuation(item.id);
+      this.continuations.update((items) =>
+        items.map((current) => (current.id === cancelled.id ? cancelled : current)),
+      );
+      this.snack.open('追加执行请求已取消', '关闭', { duration: 2500 });
+    } catch (error) {
+      this.snack.open(apiErrorMessage(error, '取消追加执行请求失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.continuationBusy.set(false);
     }
   }
 
@@ -231,22 +337,47 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
         typeof this.api.getTaskWorkspace === 'function'
           ? this.api.getTaskWorkspace(this.taskId).catch(() => null)
           : Promise.resolve(null);
-      const [task, repositories, environments, comments, events, candidates, workspace] =
-        await Promise.all([
-          this.api.getTask(this.projectId, this.taskId),
-          this.api.listRepositories(this.projectId),
-          this.api.listEnvironments(this.projectId),
-          this.api.listTaskComments(this.taskId),
-          this.api.listTaskEvents(this.taskId),
-          this.api.listTasks(this.projectId, 1, 100),
-          workspacePromise,
-        ]);
+      const runsPromise =
+        typeof this.api.listRuns === 'function'
+          ? this.api
+              .listRuns(this.taskId, 1, 100)
+              .catch(() => ({ items: [], total: 0, page: 1, pageSize: 100 }))
+          : Promise.resolve({ items: [], total: 0, page: 1, pageSize: 100 });
+      const continuationsPromise =
+        typeof this.api.listContinuations === 'function'
+          ? this.api
+              .listContinuations(this.taskId, undefined, 1, 100)
+              .catch(() => ({ items: [], total: 0, page: 1, pageSize: 100 }))
+          : Promise.resolve({ items: [], total: 0, page: 1, pageSize: 100 });
+      const [
+        task,
+        repositories,
+        environments,
+        comments,
+        events,
+        candidates,
+        workspace,
+        runs,
+        continuations,
+      ] = await Promise.all([
+        this.api.getTask(this.projectId, this.taskId),
+        this.api.listRepositories(this.projectId),
+        this.api.listEnvironments(this.projectId),
+        this.api.listTaskComments(this.taskId),
+        this.api.listTaskEvents(this.taskId),
+        this.api.listTasks(this.projectId, 1, 100),
+        workspacePromise,
+        runsPromise,
+        continuationsPromise,
+      ]);
       this.task.set(task);
       this.repositories.set(repositories.items);
       this.environments.set(environments.items);
       this.comments.set(comments.items);
       this.taskEvents.set(events.items);
       this.workspace.set(workspace);
+      this.runs.set(runs.items);
+      this.continuations.set(continuations.items);
       this.dependencyDraft.set(
         task.prerequisites.map((dependency) => ({
           prerequisiteTaskId: dependency.prerequisiteTaskId,
@@ -282,8 +413,28 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
       'task.dependency.propagated',
       'task.followup.created',
       'task.created.from_followup',
+      'continuation.created',
+      'continuation.claimed',
+      'continuation.dispatched',
+      'continuation.cancelled',
+      'continuation.rejected',
+      'continuation.completed',
     ]) {
-      source.addEventListener(eventType, refresh);
+      source.addEventListener(eventType, () => {
+        refresh();
+        if (typeof this.api.listRuns === 'function') {
+          void this.api
+            .listRuns(this.taskId, 1, 100)
+            .then((page) => this.runs.set(page.items))
+            .catch(() => undefined);
+        }
+        if (typeof this.api.listContinuations === 'function') {
+          void this.api
+            .listContinuations(this.taskId, undefined, 1, 100)
+            .then((page) => this.continuations.set(page.items))
+            .catch(() => undefined);
+        }
+      });
     }
     source.onerror = () => {
       source.close();

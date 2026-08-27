@@ -4,6 +4,7 @@ use crate::auth::PermissionRequirement;
 
 pub mod departments;
 pub mod devrail;
+pub mod devrail_continuation;
 
 macro_rules! define_permission {
     ($name:ident, $code:literal) => {

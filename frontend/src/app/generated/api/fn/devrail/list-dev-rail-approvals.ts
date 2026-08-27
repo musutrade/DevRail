@@ -17,6 +17,8 @@ export interface ListDevRailApprovals$Params {
   projectId?: number;
   assigneeUserId?: number;
   label?: string;
+  taskId?: number;
+  runId?: number;
 }
 
 export function listDevRailApprovals(http: HttpClient, rootUrl: string, params?: ListDevRailApprovals$Params, context?: HttpContext): Observable<StrictHttpResponse<DevRailApprovalPage>> {
@@ -29,6 +31,8 @@ export function listDevRailApprovals(http: HttpClient, rootUrl: string, params?:
     rb.query('projectId', params.projectId, {});
     rb.query('assigneeUserId', params.assigneeUserId, {});
     rb.query('label', params.label, {});
+    rb.query('taskId', params.taskId, {});
+    rb.query('runId', params.runId, {});
   }
 
   return http.request(

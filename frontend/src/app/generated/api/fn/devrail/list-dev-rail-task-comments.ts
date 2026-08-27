@@ -18,6 +18,8 @@ export interface ListDevRailTaskComments$Params {
   projectId?: number;
   assigneeUserId?: number;
   label?: string;
+  taskId?: number;
+  runId?: number;
 }
 
 export function listDevRailTaskComments(http: HttpClient, rootUrl: string, params: ListDevRailTaskComments$Params, context?: HttpContext): Observable<StrictHttpResponse<DevRailTaskCommentPage>> {
@@ -31,6 +33,8 @@ export function listDevRailTaskComments(http: HttpClient, rootUrl: string, param
     rb.query('projectId', params.projectId, {});
     rb.query('assigneeUserId', params.assigneeUserId, {});
     rb.query('label', params.label, {});
+    rb.query('taskId', params.taskId, {});
+    rb.query('runId', params.runId, {});
   }
 
   return http.request(

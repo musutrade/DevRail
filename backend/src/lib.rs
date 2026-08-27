@@ -92,6 +92,10 @@ const DEVRAIL_TASK_DEPENDENCIES_PATH: &str =
 const DEVRAIL_TASK_EVENTS_PATH: &str = "/api/v1/tasks/{task_id}/events";
 const DEVRAIL_TASK_EVENTS_STREAM_PATH: &str = "/api/v1/tasks/{task_id}/events/stream";
 const DEVRAIL_TASK_RUNS_PATH: &str = "/api/v1/tasks/{task_id}/runs";
+const DEVRAIL_CONTINUATIONS_PATH: &str = "/api/v1/continuations";
+const DEVRAIL_CONTINUATION_PATH: &str = "/api/v1/continuations/{id}";
+const DEVRAIL_CONTINUATION_CANCEL_PATH: &str = "/api/v1/continuations/{id}/cancel";
+const DEVRAIL_RUN_CONTINUATIONS_PATH: &str = "/api/v1/runs/{id}/continuations";
 const DEVRAIL_TASK_WORKSPACE_PATH: &str = "/api/v1/tasks/{task_id}/workspace";
 const DEVRAIL_TASK_WORKSPACE_REBUILD_PATH: &str = "/api/v1/tasks/{task_id}/workspace/rebuild";
 const DEVRAIL_TASK_COMMENTS_PATH: &str = "/api/v1/tasks/{task_id}/comments";
@@ -187,6 +191,10 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_TASK_EVENTS_PATH, &["get"]),
     (DEVRAIL_TASK_EVENTS_STREAM_PATH, &["get"]),
     (DEVRAIL_TASK_RUNS_PATH, &["get", "post"]),
+    (DEVRAIL_CONTINUATIONS_PATH, &["get"]),
+    (DEVRAIL_CONTINUATION_PATH, &["get"]),
+    (DEVRAIL_CONTINUATION_CANCEL_PATH, &["post"]),
+    (DEVRAIL_RUN_CONTINUATIONS_PATH, &["post"]),
     (DEVRAIL_TASK_WORKSPACE_PATH, &["get"]),
     (DEVRAIL_TASK_WORKSPACE_REBUILD_PATH, &["post"]),
     (DEVRAIL_TASK_COMMENTS_PATH, &["get", "post"]),
@@ -446,6 +454,22 @@ fn base_router(state: AppState) -> Router {
         .route(
             DEVRAIL_TASK_RUNS_PATH,
             get(handlers::devrail::list_runs).post(handlers::devrail::create_run),
+        )
+        .route(
+            DEVRAIL_CONTINUATIONS_PATH,
+            get(handlers::devrail::list_continuations),
+        )
+        .route(
+            DEVRAIL_CONTINUATION_PATH,
+            get(handlers::devrail::get_continuation),
+        )
+        .route(
+            DEVRAIL_CONTINUATION_CANCEL_PATH,
+            post(handlers::devrail::cancel_continuation),
+        )
+        .route(
+            DEVRAIL_RUN_CONTINUATIONS_PATH,
+            post(handlers::devrail::create_continuation),
         )
         .route(
             DEVRAIL_TASK_WORKSPACE_PATH,

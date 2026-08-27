@@ -93,6 +93,30 @@ pub fn initialize() {
             "devrail_workspace_event_total",
             "DevRail 任务工作区生命周期事件总数"
         );
+        describe_counter!(
+            "arc_admin_continuation_requests_total",
+            "DevRail continuation 请求生命周期事件总数"
+        );
+        describe_gauge!(
+            "arc_admin_continuation_pending",
+            "DevRail continuation 待处理请求数量"
+        );
+        describe_histogram!(
+            "arc_admin_continuation_dispatch_latency_seconds",
+            "DevRail continuation 请求创建到派发延迟（秒）"
+        );
+        describe_counter!(
+            "arc_admin_continuation_claim_conflict_total",
+            "DevRail continuation claim 冲突总数"
+        );
+        describe_counter!(
+            "arc_admin_continuation_replay_total",
+            "DevRail continuation 幂等重放总数"
+        );
+        describe_counter!(
+            "arc_admin_continuation_child_result_total",
+            "DevRail continuation child 终态结果总数"
+        );
     });
 }
 
@@ -228,6 +252,84 @@ pub fn record_workspace_event(operation: &str, outcome: &str) {
     .increment(1);
 }
 
+pub fn record_continuation_event(event: &str, status: &str, trigger: &str) {
+    counter!(
+        "arc_admin_continuation_requests_total",
+        "event" => continuation_event(event),
+        "status" => continuation_status(status),
+        "trigger" => continuation_trigger(trigger)
+    )
+    .increment(1);
+}
+
+pub fn record_continuation_pending(depth: i64) {
+    gauge!("arc_admin_continuation_pending").set(depth.max(0) as f64);
+}
+
+pub fn record_continuation_dispatch_latency(seconds: f64) {
+    histogram!("arc_admin_continuation_dispatch_latency_seconds").record(seconds.max(0.0));
+}
+
+pub fn record_continuation_claim_conflict() {
+    counter!("arc_admin_continuation_claim_conflict_total").increment(1);
+}
+
+pub fn record_continuation_replay() {
+    counter!("arc_admin_continuation_replay_total").increment(1);
+}
+
+pub fn record_continuation_child_result(result: &str) {
+    counter!(
+        "arc_admin_continuation_child_result_total",
+        "result" => continuation_result(result)
+    )
+    .increment(1);
+}
+
+fn continuation_event(event: &str) -> &'static str {
+    match event {
+        "created" => "created",
+        "claimed" => "claimed",
+        "dispatched" => "dispatched",
+        "cancelled" => "cancelled",
+        "rejected" => "rejected",
+        "completed" => "completed",
+        "recovered" => "recovered",
+        _ => "other",
+    }
+}
+
+fn continuation_status(status: &str) -> &'static str {
+    match status {
+        "pending" => "pending",
+        "claimed" => "claimed",
+        "dispatched" => "dispatched",
+        "completed" => "completed",
+        "cancelled" => "cancelled",
+        "rejected" => "rejected",
+        _ => "other",
+    }
+}
+
+fn continuation_trigger(trigger: &str) -> &'static str {
+    match trigger {
+        "user_context" => "user_context",
+        "quality_gate" => "quality_gate",
+        "review_changes" => "review_changes",
+        _ => "other",
+    }
+}
+
+fn continuation_result(result: &str) -> &'static str {
+    match result {
+        "completed" => "completed",
+        "failed" => "failed",
+        "cancelled" => "cancelled",
+        "interrupted" => "interrupted",
+        _ => "other",
+    }
+}
+
 fn workspace_operation(operation: &str) -> &'static str {
     match operation {
         "create" => "create",
@@ -324,5 +426,10 @@ mod tests {
         assert_eq!(workspace_operation("workspace-42"), "other");
         assert_eq!(workspace_outcome("retry"), "retry");
         assert_eq!(workspace_outcome("path-/tmp"), "other");
+        assert_eq!(continuation_event("created"), "created");
+        assert_eq!(continuation_event("request-42"), "other");
+        assert_eq!(continuation_status("pending"), "pending");
+        assert_eq!(continuation_trigger("quality_gate"), "quality_gate");
+        assert_eq!(continuation_result("run-42"), "other");
     }
 }

@@ -6,11 +6,14 @@
 
 use crate::access::{ActorContext, ActorType, DataScope};
 use crate::error::ApiError;
-use crate::models::{CreateDevRailRunRequest, DevRailTaskRow};
+use crate::models::{
+    ContinuationPolicy, CreateDevRailRunRequest, DevRailContinuationTrigger, DevRailTaskRow,
+};
 use crate::orchestration::task_tracker::{PostgresTaskTracker, TaskTracker, TrackerError};
+use crate::repositories;
 use crate::services::devrail_runs;
 use crate::services::devrail_workspaces;
-use crate::workers::harness_supervisor::HarnessSupervisor;
+use crate::workers::harness_supervisor::{HarnessSupervisor, RunLaunch};
 use chrono::{Duration as ChronoDuration, Utc};
 use sqlx::PgPool;
 use std::collections::BTreeSet;
@@ -53,10 +56,23 @@ enum TickPhase {
     ReapMetrics,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DispatchPhase {
+    Continuations,
+    DispatchedContinuationRecovery,
+    QueuedTasks,
+}
+
 const TICK_PHASES: [TickPhase; 3] = [
     TickPhase::Reconcile,
     TickPhase::Dispatch,
     TickPhase::ReapMetrics,
+];
+
+const DISPATCH_PHASES: [DispatchPhase; 3] = [
+    DispatchPhase::Continuations,
+    DispatchPhase::DispatchedContinuationRecovery,
+    DispatchPhase::QueuedTasks,
 ];
 
 pub fn spawn(
@@ -145,6 +161,20 @@ async fn run_tick(
     if reconciliation.exhausted_tasks > 0 {
         crate::app_metrics::record_reconciliation("retry_exhausted");
     }
+    match repositories::devrail_continuations::release_expired_claims(pool, 500).await {
+        Ok(released) if released > 0 => {
+            crate::app_metrics::record_reconciliation("continuation_claim_released");
+            crate::app_metrics::record_continuation_event("recovered", "pending", "other");
+        }
+        Ok(_) => {}
+        Err(error) => {
+            tracing::warn!(error = %error, "continuation claim expiry reconciliation failed");
+            crate::app_metrics::record_reconciliation("continuation_claim_release_failed");
+        }
+    }
+    if let Ok(depth) = repositories::devrail_continuations::pending_depth(pool).await {
+        crate::app_metrics::record_continuation_pending(depth);
+    }
     crate::app_metrics::record_reconciliation("ok");
     if let Err(error) =
         devrail_workspaces::reconcile_cleanup(pool, &supervisor.workspace_root()).await
@@ -152,6 +182,14 @@ async fn run_tick(
         tracing::warn!(error = %error, "workspace cleanup reconciliation failed");
         crate::app_metrics::record_reconciliation("workspace_cleanup_failed");
     }
+    debug_assert_eq!(DISPATCH_PHASES[0], DispatchPhase::Continuations);
+    dispatch_continuations(pool, supervisor).await;
+    debug_assert_eq!(
+        DISPATCH_PHASES[1],
+        DispatchPhase::DispatchedContinuationRecovery
+    );
+    reconcile_dispatched_continuations(pool, supervisor).await;
+    debug_assert_eq!(DISPATCH_PHASES[2], DispatchPhase::QueuedTasks);
     let claim_token = Uuid::new_v4();
     let tasks = tracker
         .claim_dispatch_candidates(
@@ -228,6 +266,460 @@ async fn run_tick(
     }
     debug_assert_eq!(TICK_PHASES[2], TickPhase::ReapMetrics);
     Ok(())
+}
+
+async fn reconcile_dispatched_continuations(pool: &PgPool, supervisor: &HarnessSupervisor) {
+    let requests =
+        match repositories::devrail_continuations::list_dispatched_unstarted(pool, 100).await {
+            Ok(requests) => requests,
+            Err(error) => {
+                tracing::warn!(error = %error, "continuation dispatch reconciliation failed");
+                crate::app_metrics::record_reconciliation("continuation_dispatch_reconcile_failed");
+                return;
+            }
+        };
+    for request in requests {
+        let Some(child_run_id) = request.child_run_id else {
+            continue;
+        };
+        if supervisor.running_run_ids().await.contains(&child_run_id) {
+            continue;
+        }
+        let Some(child) = repositories::devrail_runs::find_for_recovery(pool, child_run_id)
+            .await
+            .ok()
+            .flatten()
+        else {
+            continue;
+        };
+        let Some(source) =
+            repositories::devrail_runs::find_for_recovery(pool, request.source_run_id)
+                .await
+                .ok()
+                .flatten()
+        else {
+            continue;
+        };
+        let launch = RunLaunch {
+            run_id: child.id,
+            task_id: child.task_id,
+            organization_id: child.organization_id,
+            department_id: child.department_id,
+            owner_user_id: child.owner_user_id,
+            cwd: std::path::PathBuf::from(&child.cwd),
+            input: request.redacted_context,
+            resume_thread_id: source.thread_id,
+            resume_turn_id: source.turn_id,
+            attempt: child.attempt,
+            max_attempts: child.attempt.saturating_add(1),
+            automatic: true,
+            scheduler_policy: supervisor.scheduler_policy(),
+        };
+        if let Err(error) = supervisor.launch(launch).await {
+            tracing::warn!(child_run_id, error = %error, "continuation child launch reconciliation failed");
+            crate::app_metrics::record_reconciliation("continuation_launch_failed");
+        } else {
+            crate::app_metrics::record_reconciliation("continuation_launch_recovered");
+        }
+    }
+}
+
+async fn dispatch_continuations(pool: &PgPool, supervisor: &HarnessSupervisor) {
+    let worker_id = format!("scheduler:{}", Uuid::new_v4().simple());
+    let claim_token = Uuid::new_v4();
+    let requests = match repositories::devrail_continuations::claim_pending(
+        pool,
+        &worker_id,
+        claim_token,
+        CLAIM_BATCH_SIZE,
+        supervisor.scheduler_policy().claim_lease_seconds,
+    )
+    .await
+    {
+        Ok(requests) => requests,
+        Err(error) => {
+            tracing::warn!(error = %error, "continuation claim failed");
+            crate::app_metrics::record_scheduler_dispatch("continuation_claim_failed");
+            return;
+        }
+    };
+    for request in requests {
+        let request_id = request.id;
+        let dispatch_attempts = request.dispatch_attempts;
+        let dispatch_started = request.created_at;
+        let trigger_type = request.trigger_type.clone();
+        crate::app_metrics::record_continuation_event("claimed", "claimed", &trigger_type);
+        let rejection_actor = scheduler_actor_for_request(&request);
+        if let Err(error) =
+            dispatch_continuation(pool, supervisor, &worker_id, claim_token, request).await
+        {
+            tracing::warn!(error = %error, "continuation dispatch failed");
+            if continuation_dispatch_is_deterministic(&error) {
+                if let Ok(mut tx) = pool.begin().await {
+                    if repositories::devrail_continuations::reject_claim(
+                        &mut tx,
+                        &rejection_actor,
+                        request_id,
+                        &worker_id,
+                        claim_token,
+                        continuation_dispatch_reason(&error),
+                    )
+                    .await
+                    .is_ok()
+                    {
+                        let _ = tx.commit().await;
+                        crate::app_metrics::record_continuation_event(
+                            "rejected",
+                            "rejected",
+                            &trigger_type,
+                        );
+                    }
+                }
+            } else {
+                let backoff_seconds =
+                    retry_delay(dispatch_attempts, supervisor.scheduler_policy()).num_seconds();
+                let _ = repositories::devrail_continuations::release_claim(
+                    pool,
+                    request_id,
+                    &worker_id,
+                    claim_token,
+                    backoff_seconds,
+                )
+                .await;
+                crate::app_metrics::record_continuation_event(
+                    "recovered",
+                    "pending",
+                    &trigger_type,
+                );
+            }
+            crate::app_metrics::record_scheduler_dispatch("continuation_failed");
+        } else {
+            crate::app_metrics::record_continuation_event(
+                "dispatched",
+                "dispatched",
+                &trigger_type,
+            );
+            crate::app_metrics::record_continuation_dispatch_latency(
+                Utc::now()
+                    .signed_duration_since(dispatch_started)
+                    .num_milliseconds()
+                    .max(0) as f64
+                    / 1000.0,
+            );
+        }
+    }
+}
+
+fn continuation_dispatch_is_deterministic(error: &ApiError) -> bool {
+    match error {
+        ApiError::NotFound(_) | ApiError::Validation(_) | ApiError::Forbidden(_) => true,
+        ApiError::Conflict(message) => {
+            message.contains("不存在")
+                || message.contains("不匹配")
+                || message.contains("缺少")
+                || message.contains("已禁用")
+                || message.contains("不允许")
+                || message.contains("已过期")
+                || message.contains("超过")
+        }
+        _ => false,
+    }
+}
+
+fn continuation_dispatch_reason(error: &ApiError) -> &'static str {
+    match error {
+        ApiError::NotFound(_) => "source_missing",
+        ApiError::Validation(_) => "validation_rejected",
+        ApiError::Forbidden(_) => "policy_rejected",
+        ApiError::Conflict(message) if message.contains("摘要") => "evidence_mismatch",
+        ApiError::Conflict(message) if message.contains("过期") => "evidence_expired",
+        ApiError::Conflict(message) if message.contains("次数") => "dispatch_attempt_limit",
+        ApiError::Conflict(message) if message.contains("缺少") => "evidence_missing",
+        ApiError::Conflict(message) if message.contains("已禁用") => "environment_disabled",
+        ApiError::Conflict(_) => "dispatch_prerequisite_invalid",
+        _ => "dispatch_prerequisite_invalid",
+    }
+}
+
+async fn dispatch_continuation(
+    pool: &PgPool,
+    supervisor: &HarnessSupervisor,
+    worker_id: &str,
+    claim_token: Uuid,
+    request: crate::models::DevRailContinuationRequestRow,
+) -> Result<(), ApiError> {
+    if request
+        .evidence_expires_at
+        .is_some_and(|expires_at| expires_at <= Utc::now())
+    {
+        return Err(ApiError::conflict("continuation 触发证据已过期"));
+    }
+    let policy = serde_json::from_value::<ContinuationPolicy>(request.policy_snapshot.clone())
+        .map_err(|_| ApiError::conflict("continuation 固化策略不可用"))?;
+    let trigger = match request.trigger_type.as_str() {
+        "user_context" => DevRailContinuationTrigger::UserContext,
+        "quality_gate" => DevRailContinuationTrigger::QualityGate,
+        "review_changes" => DevRailContinuationTrigger::ReviewChanges,
+        _ => return Err(ApiError::conflict("continuation 触发类型不允许")),
+    };
+    if !policy.enabled || !policy.allowed_triggers.contains(&trigger) {
+        return Err(ApiError::conflict("continuation 固化策略不允许派发"));
+    }
+    if request.dispatch_attempts > policy.max_dispatch_attempts {
+        return Err(ApiError::conflict("continuation 派发次数超过固化策略"));
+    }
+    let source = repositories::devrail_runs::find_for_recovery(pool, request.source_run_id)
+        .await
+        .map_err(crate::error::db_error)?
+        .ok_or_else(|| ApiError::not_found("来源运行不存在"))?;
+    if !matches!(source.status.as_str(), "completed" | "failed")
+        || source.root_run_id != Some(request.root_run_id)
+        || source.turn_id.as_deref() != Some(request.source_turn_id.as_str())
+    {
+        return Err(ApiError::conflict("continuation 来源状态或谱系不匹配"));
+    }
+    if source.thread_id.is_none() || source.turn_id.is_none() {
+        let actor = scheduler_actor_for_request(&request);
+        let mut tx = pool.begin().await.map_err(crate::error::db_error)?;
+        repositories::devrail_continuations::reject_claim(
+            &mut tx,
+            &actor,
+            request.id,
+            worker_id,
+            claim_token,
+            "source_thread_missing",
+        )
+        .await
+        .map_err(crate::error::db_error)?;
+        tx.commit().await.map_err(crate::error::db_error)?;
+        return Err(ApiError::conflict("来源运行缺少可恢复 thread"));
+    }
+    let handoff =
+        repositories::devrail_continuations::find_handoff_by_request(pool, request.id, claim_token)
+            .await
+            .map_err(crate::error::db_error)?
+            .ok_or_else(|| ApiError::conflict("来源运行缺少有效 handoff"))?;
+    let task = repositories::devrail::find_task_by_id(
+        pool,
+        &scheduler_actor_for_request(&request),
+        request.task_id,
+    )
+    .await
+    .map_err(crate::error::db_error)?
+    .ok_or_else(|| ApiError::not_found("任务不存在"))?;
+    if task.status != "continuation_pending" || task.project_id != request.project_id {
+        return Err(ApiError::conflict("continuation 任务状态或范围不匹配"));
+    }
+    if task.repository_id != Some(handoff.repository_id) {
+        return Err(ApiError::conflict("handoff 仓库身份与任务不一致"));
+    }
+    let repository = repositories::devrail::find_repository(
+        pool,
+        &scheduler_actor_for_request(&request),
+        request.project_id,
+        handoff.repository_id,
+    )
+    .await
+    .map_err(crate::error::db_error)?
+    .ok_or_else(|| ApiError::conflict("handoff 仓库不存在或不可用"))?;
+    let environment_id = handoff
+        .environment_id
+        .ok_or_else(|| ApiError::conflict("handoff 缺少运行环境"))?;
+    if task.environment_id != Some(environment_id) {
+        return Err(ApiError::conflict("handoff 运行环境与任务不一致"));
+    }
+    let environment = repositories::devrail::find_environment(
+        pool,
+        &scheduler_actor_for_request(&request),
+        request.project_id,
+        environment_id,
+    )
+    .await
+    .map_err(crate::error::db_error)?
+    .ok_or_else(|| ApiError::conflict("handoff 运行环境不存在或不可用"))?;
+    if !environment.enabled {
+        return Err(ApiError::conflict("handoff 运行环境已禁用"));
+    }
+    let reservation = supervisor
+        .reserve()
+        .map_err(|error| ApiError::conflict(error.to_string()))?;
+    let relative = devrail_workspaces::continuation_workspace_key(
+        request.task_id,
+        request.continuation_sequence,
+    )?;
+    let workspace_root = supervisor.workspace_root();
+    let source_repository = std::path::Path::new(&environment.workspace_root);
+    let materialized =
+        devrail_workspaces::materialize_from_handoff(&devrail_workspaces::HandoffMaterialization {
+            root: &workspace_root,
+            source_repository,
+            relative: &relative,
+            repository_identity: &handoff.repository_identity,
+            repository_identity_digest: &handoff.repository_identity_digest,
+            repository_remote_url: &repository.remote_url,
+            base_commit: &handoff.base_commit,
+            changeset_ref: handoff
+                .changeset_ref
+                .as_deref()
+                .ok_or_else(|| ApiError::conflict("handoff 缺少变更引用"))?,
+            changeset_digest: &handoff.changeset_digest,
+        })
+        .await?;
+    let actor = scheduler_actor_for_request(&request);
+    let child = match persist_continuation_dispatch(ContinuationDispatchContext {
+        pool,
+        actor: &actor,
+        request: &request,
+        source: &source,
+        task: &task,
+        handoff: &handoff,
+        worker_id,
+        claim_token,
+        relative: &relative,
+        cwd: &materialized.path,
+    })
+    .await
+    {
+        Ok(child) => child,
+        Err(error) => {
+            let _ = devrail_workspaces::cleanup_handoff_workspace(
+                &workspace_root,
+                source_repository,
+                &relative,
+            )
+            .await;
+            return Err(error);
+        }
+    };
+    let launch = RunLaunch {
+        run_id: child.id,
+        task_id: request.task_id,
+        organization_id: request.organization_id,
+        department_id: request.department_id,
+        owner_user_id: request.owner_user_id,
+        cwd: materialized.path,
+        input: request.redacted_context,
+        resume_thread_id: source.thread_id,
+        resume_turn_id: source.turn_id,
+        attempt: child.attempt,
+        max_attempts: task.scheduler_max_attempts,
+        automatic: true,
+        scheduler_policy: supervisor.scheduler_policy(),
+    };
+    supervisor
+        .launch_reserved(launch, reservation)
+        .await
+        .map_err(|error| ApiError::conflict(error.to_string()))?;
+    Ok(())
+}
+
+struct ContinuationDispatchContext<'a> {
+    pool: &'a PgPool,
+    actor: &'a ActorContext,
+    request: &'a crate::models::DevRailContinuationRequestRow,
+    source: &'a crate::models::DevRailRunRow,
+    task: &'a DevRailTaskRow,
+    handoff: &'a crate::models::DevRailRunHandoffRow,
+    worker_id: &'a str,
+    claim_token: Uuid,
+    relative: &'a str,
+    cwd: &'a std::path::Path,
+}
+
+async fn persist_continuation_dispatch(
+    context: ContinuationDispatchContext<'_>,
+) -> Result<crate::models::DevRailRunRow, ApiError> {
+    let mut tx = context.pool.begin().await.map_err(crate::error::db_error)?;
+    let child = repositories::devrail_runs::create_continuation_run(
+        &mut tx,
+        &repositories::devrail_runs::NewContinuationRun {
+            actor: context.actor,
+            task_id: context.request.task_id,
+            snapshot_id: context.source.snapshot_id,
+            idempotency_key: &format!("continuation:{}", context.request.id),
+            task_revision: context.task.revision,
+            workflow_source: &context.source.workflow_source,
+            workflow_version: &context.source.workflow_version,
+            workflow_digest: &context.source.workflow_digest,
+            workflow_snapshot: &context.source.workflow_snapshot,
+            parent_run_id: context.request.source_run_id,
+            parent_turn_id: &context.request.source_turn_id,
+            thread_id: context.source.thread_id.as_deref().unwrap_or_default(),
+            continuation_request_id: context.request.id,
+            continuation_sequence: context.request.continuation_sequence,
+            harness_start_key: &format!("continuation:{}:start", context.request.id),
+            cwd: context.cwd.to_string_lossy().as_ref(),
+            policy: &context.request.policy_snapshot,
+            startup_args: &serde_json::json!(["app-server"]),
+            model_id: context.source.model_id.as_deref(),
+            department_id: context.request.department_id,
+        },
+    )
+    .await
+    .map_err(crate::error::db_error)?
+    .ok_or_else(|| ApiError::conflict("continuation child run 已由其他 worker 创建"))?;
+    let path_digest = devrail_workspaces::path_digest(context.relative);
+    let workspace = repositories::devrail_workspaces::create(
+        &mut tx,
+        &repositories::devrail_workspaces::NewWorkspace {
+            actor: context.actor,
+            task_id: context.request.task_id,
+            run_id: Some(child.id),
+            attempt: child.attempt,
+            workspace_key: context.relative,
+            relative_path: context.relative,
+            path_digest: &path_digest,
+            repository_id: Some(context.handoff.repository_id),
+            environment_id: context.handoff.environment_id,
+            base_commit: Some(&context.handoff.base_commit),
+            branch_name: context.handoff.branch_ref.as_deref(),
+            workflow_version: Some(&context.source.workflow_version),
+            workflow_digest: Some(&context.source.workflow_digest),
+            environment_version: None,
+            tool_versions: &context.handoff.tool_versions,
+            snapshot_digest: Some(&context.request.input_digest),
+        },
+    )
+    .await
+    .map_err(crate::error::db_error)?
+    .ok_or_else(|| ApiError::conflict("continuation workspace 已被其他请求占用"))?;
+    repositories::devrail_workspaces::set_lifecycle(
+        &mut tx,
+        workspace.id,
+        "running",
+        "pending",
+        Some("before_run"),
+        None,
+    )
+    .await
+    .map_err(crate::error::db_error)?;
+    repositories::devrail_continuations::mark_dispatched(
+        &mut tx,
+        context.actor,
+        context.request.id,
+        context.worker_id,
+        context.claim_token,
+        child.id,
+    )
+    .await
+    .map_err(crate::error::db_error)?
+    .ok_or_else(|| ApiError::conflict("continuation claim 已失效"))?;
+    tx.commit().await.map_err(crate::error::db_error)?;
+    Ok(child)
+}
+
+fn scheduler_actor_for_request(
+    request: &crate::models::DevRailContinuationRequestRow,
+) -> ActorContext {
+    ActorContext {
+        actor_type: ActorType::System,
+        user_id: request.owner_user_id,
+        session_id: 0,
+        organization_id: request.organization_id,
+        department_id: request.department_id,
+        data_scope: DataScope::All,
+        permission_codes: BTreeSet::new(),
+    }
 }
 
 pub(crate) fn retry_delay(attempt: i32, policy: SchedulerPolicy) -> ChronoDuration {
@@ -538,6 +1030,32 @@ mod tests {
                 TickPhase::ReapMetrics
             ]
         );
+    }
+
+    #[test]
+    fn dispatch_prioritizes_continuations_before_queued_tasks() {
+        assert_eq!(
+            DISPATCH_PHASES,
+            [
+                DispatchPhase::Continuations,
+                DispatchPhase::DispatchedContinuationRecovery,
+                DispatchPhase::QueuedTasks,
+            ]
+        );
+    }
+
+    #[test]
+    fn continuation_dispatch_errors_have_stable_retry_or_rejection_classes() {
+        let expired = ApiError::conflict("continuation 触发证据已过期");
+        assert!(continuation_dispatch_is_deterministic(&expired));
+        assert_eq!(continuation_dispatch_reason(&expired), "evidence_expired");
+
+        let missing = ApiError::conflict("来源运行缺少有效 handoff");
+        assert!(continuation_dispatch_is_deterministic(&missing));
+        assert_eq!(continuation_dispatch_reason(&missing), "evidence_missing");
+
+        let capacity = ApiError::conflict("Harness 并发额度已用尽");
+        assert!(!continuation_dispatch_is_deterministic(&capacity));
     }
 
     #[tokio::test]

@@ -40,6 +40,60 @@
   gap: 1rem;
   margin-top: 1.5rem;
 }
+.continuation-section {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+.continuation-list {
+  display: grid;
+  gap: 0.75rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.continuation-list li {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.9rem;
+  border: 1px solid var(--outline-variant);
+  border-radius: 0.4rem;
+}
+.continuation-meta,
+.continuation-form-footer {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.continuation-meta span,
+.continuation-list small,
+.continuation-form-footer small {
+  color: var(--on-surface-variant);
+}
+.continuation-form {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.9rem;
+  border: 1px dashed var(--outline-variant);
+  border-radius: 0.4rem;
+}
+.continuation-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.65rem;
+  border: 1px solid var(--outline-variant);
+  border-radius: 4px;
+  font: inherit;
+  resize: vertical;
+}
+.continuation-form-footer {
+  justify-content: space-between;
+}
+.input-limit-error {
+  color: var(--error) !important;
+  font-weight: 600;
+}
 .dependency-list {
   display: grid;
   gap: 0.65rem;
@@ -104,6 +158,13 @@
   border-radius: 0.35rem;
 }
 @media (max-width: 700px) {
+  .continuation-form-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .continuation-form-footer button {
+    width: 100%;
+  }
   .dependency-edit-list li {
     grid-template-columns: 1fr;
   }

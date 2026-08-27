@@ -5,6 +5,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use sqlx::FromRow;
+use std::collections::BTreeSet;
+use uuid::Uuid;
 
 // ===== 数据库行 =====
 
@@ -348,6 +350,15 @@ pub struct DevRailRunRow {
     pub retry_reason: Option<String>,
     pub parent_run_id: Option<i64>,
     pub parent_turn_id: Option<String>,
+    pub run_kind: String,
+    pub root_run_id: Option<i64>,
+    pub continuation_sequence: Option<i16>,
+    pub continuation_request_id: Option<i64>,
+    pub harness_start_key: Option<String>,
+    pub harness_start_claim_owner: Option<String>,
+    pub harness_start_claim_token: Option<Uuid>,
+    pub harness_start_claim_expires_at: Option<DateTime<Utc>>,
+    pub harness_started_token: Option<Uuid>,
     pub cleanup_status: String,
     pub branch_name: Option<String>,
     pub branch_expires_at: Option<DateTime<Utc>>,
@@ -369,6 +380,80 @@ pub struct DevRailRunRow {
     pub completed_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct DevRailContinuationRequestRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub project_id: i64,
+    pub task_id: i64,
+    pub source_run_id: i64,
+    pub root_run_id: i64,
+    pub source_turn_id: String,
+    pub requested_by_user_id: Option<i64>,
+    pub trigger_type: String,
+    pub evidence_ref: String,
+    pub evidence_digest: String,
+    pub evidence_observed_at: DateTime<Utc>,
+    pub evidence_expires_at: Option<DateTime<Utc>>,
+    pub changeset_digest: Option<String>,
+    pub redacted_context: String,
+    pub context_summary: String,
+    pub input_digest: String,
+    pub idempotency_key: String,
+    pub continuation_sequence: i16,
+    pub chain_depth: i16,
+    pub prior_task_status: String,
+    pub policy_version: String,
+    pub policy_snapshot: Value,
+    pub status: String,
+    pub status_version: i64,
+    pub claim_owner: Option<String>,
+    pub claim_token: Option<Uuid>,
+    pub claim_expires_at: Option<DateTime<Utc>>,
+    pub dispatch_attempts: i32,
+    pub next_attempt_at: Option<DateTime<Utc>>,
+    pub child_run_id: Option<i64>,
+    pub result_code: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub claimed_at: Option<DateTime<Utc>>,
+    pub dispatched_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub cancelled_at: Option<DateTime<Utc>>,
+    pub rejected_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct DevRailRunHandoffRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub project_id: i64,
+    pub task_id: i64,
+    pub source_run_id: i64,
+    pub task_snapshot_id: i64,
+    pub repository_id: i64,
+    pub environment_id: Option<i64>,
+    pub task_snapshot_digest: String,
+    pub workflow_snapshot_digest: String,
+    pub environment_snapshot_digest: Option<String>,
+    pub repository_identity: String,
+    pub repository_identity_digest: String,
+    pub base_commit: String,
+    pub head_commit: Option<String>,
+    pub branch_ref: Option<String>,
+    pub changeset_ref: Option<String>,
+    pub changeset_digest: String,
+    pub tool_versions: Value,
+    pub evidence_status: String,
+    pub error_code: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub validated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -445,6 +530,214 @@ pub struct DevRailApprovalRow {
 }
 
 // ===== API DTO =====
+
+pub const DEFAULT_CONTINUATION_MAX_COUNT: u16 = 3;
+pub const DEFAULT_CONTINUATION_MAX_CHAIN_DEPTH: u16 = 3;
+pub const DEFAULT_CONTINUATION_MAX_CONTEXT_BYTES: usize = 16 * 1024;
+pub const DEFAULT_CONTINUATION_CLAIM_LEASE_SECONDS: i64 = 60;
+pub const DEFAULT_CONTINUATION_MAX_DISPATCH_ATTEMPTS: i32 = 3;
+pub const DEFAULT_CONTINUATION_RETRY_BASE_DELAY_SECONDS: i64 = 5;
+pub const DEFAULT_CONTINUATION_RETRY_MAX_DELAY_SECONDS: i64 = 300;
+
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, utoipa::ToSchema, PartialEq, Eq, PartialOrd, Ord,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum DevRailContinuationTrigger {
+    UserContext,
+    QualityGate,
+    ReviewChanges,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, utoipa::ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DevRailContinuationStatus {
+    Pending,
+    Claimed,
+    Dispatched,
+    Completed,
+    Cancelled,
+    Rejected,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, utoipa::ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DevRailRunKind {
+    Primary,
+    Retry,
+    Continuation,
+    FollowUp,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, utoipa::ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DevRailHandoffEvidenceStatus {
+    Available,
+    Missing,
+    Invalid,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, utoipa::ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DevRailContinuationErrorCode {
+    PolicyDisabled,
+    InvalidSource,
+    ActivityConflict,
+    TaskCancelled,
+    EvidenceMissing,
+    EvidenceExpired,
+    EvidenceMismatch,
+    InputTooLarge,
+    InputRejected,
+    ChainLimit,
+    CountLimit,
+    ClaimConflict,
+    DispatchUnavailable,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ContinuationPolicy {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_continuation_triggers")]
+    pub allowed_triggers: BTreeSet<DevRailContinuationTrigger>,
+    #[serde(default = "default_continuation_max_count")]
+    pub max_continuations: u16,
+    #[serde(default = "default_continuation_max_chain_depth")]
+    pub max_chain_depth: u16,
+    #[serde(default = "default_continuation_max_context_bytes")]
+    pub max_context_bytes: usize,
+    #[serde(default = "default_continuation_claim_lease_seconds")]
+    pub claim_lease_seconds: i64,
+    #[serde(default = "default_continuation_max_dispatch_attempts")]
+    pub max_dispatch_attempts: i32,
+    #[serde(default = "default_continuation_retry_base_delay_seconds")]
+    pub retry_base_delay_seconds: i64,
+    #[serde(default = "default_continuation_retry_max_delay_seconds")]
+    pub retry_max_delay_seconds: i64,
+}
+
+const fn default_continuation_max_count() -> u16 {
+    DEFAULT_CONTINUATION_MAX_COUNT
+}
+
+const fn default_continuation_max_chain_depth() -> u16 {
+    DEFAULT_CONTINUATION_MAX_CHAIN_DEPTH
+}
+
+const fn default_continuation_max_context_bytes() -> usize {
+    DEFAULT_CONTINUATION_MAX_CONTEXT_BYTES
+}
+
+const fn default_continuation_claim_lease_seconds() -> i64 {
+    DEFAULT_CONTINUATION_CLAIM_LEASE_SECONDS
+}
+
+const fn default_continuation_max_dispatch_attempts() -> i32 {
+    DEFAULT_CONTINUATION_MAX_DISPATCH_ATTEMPTS
+}
+
+const fn default_continuation_retry_base_delay_seconds() -> i64 {
+    DEFAULT_CONTINUATION_RETRY_BASE_DELAY_SECONDS
+}
+
+const fn default_continuation_retry_max_delay_seconds() -> i64 {
+    DEFAULT_CONTINUATION_RETRY_MAX_DELAY_SECONDS
+}
+
+fn default_continuation_triggers() -> BTreeSet<DevRailContinuationTrigger> {
+    [
+        DevRailContinuationTrigger::UserContext,
+        DevRailContinuationTrigger::QualityGate,
+        DevRailContinuationTrigger::ReviewChanges,
+    ]
+    .into_iter()
+    .collect()
+}
+
+impl Default for ContinuationPolicy {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            allowed_triggers: default_continuation_triggers(),
+            max_continuations: DEFAULT_CONTINUATION_MAX_COUNT,
+            max_chain_depth: DEFAULT_CONTINUATION_MAX_CHAIN_DEPTH,
+            max_context_bytes: DEFAULT_CONTINUATION_MAX_CONTEXT_BYTES,
+            claim_lease_seconds: DEFAULT_CONTINUATION_CLAIM_LEASE_SECONDS,
+            max_dispatch_attempts: DEFAULT_CONTINUATION_MAX_DISPATCH_ATTEMPTS,
+            retry_base_delay_seconds: DEFAULT_CONTINUATION_RETRY_BASE_DELAY_SECONDS,
+            retry_max_delay_seconds: DEFAULT_CONTINUATION_RETRY_MAX_DELAY_SECONDS,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailContinuationResponse {
+    pub id: i64,
+    pub task_id: i64,
+    pub source_run_id: i64,
+    pub root_run_id: i64,
+    pub source_turn_id: String,
+    #[schema(value_type = DevRailContinuationTrigger)]
+    pub trigger_type: String,
+    pub context_summary: String,
+    pub continuation_sequence: i16,
+    pub chain_depth: i16,
+    #[schema(value_type = DevRailContinuationStatus)]
+    pub status: String,
+    pub child_run_id: Option<i64>,
+    pub result_code: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub dispatched_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub cancelled_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailContinuationPage {
+    pub items: Vec<DevRailContinuationResponse>,
+    pub total: i64,
+    pub page: i64,
+    pub page_size: i64,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailContinuationCapabilities {
+    pub can_read: bool,
+    pub can_create: bool,
+    pub can_cancel: bool,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CreateDevRailContinuationRequest {
+    pub idempotency_key: String,
+    pub input: String,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailRunHandoffResponse {
+    pub source_run_id: i64,
+    #[schema(value_type = DevRailHandoffEvidenceStatus)]
+    pub evidence_status: String,
+    pub task_snapshot_digest: String,
+    pub workflow_snapshot_digest: String,
+    pub environment_snapshot_digest: Option<String>,
+    pub base_commit: String,
+    pub head_commit: Option<String>,
+    pub branch_ref: Option<String>,
+    pub changeset_ref: Option<String>,
+    pub changeset_digest: String,
+    pub error_code: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub validated_at: Option<DateTime<Utc>>,
+}
 
 #[derive(Debug, utoipa::ToSchema)]
 #[serde(rename_all = "lowercase")]
@@ -950,6 +1243,8 @@ pub struct DevRailListQuery {
     pub project_id: Option<i64>,
     pub assignee_user_id: Option<i64>,
     pub label: Option<String>,
+    pub task_id: Option<i64>,
+    pub run_id: Option<i64>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -1186,6 +1481,8 @@ pub struct DevRailTaskResponse {
     pub workflow_source: String,
     pub workflow_version: String,
     pub workflow_digest: String,
+    pub continuation_policy: ContinuationPolicy,
+    pub continuation_capabilities: DevRailContinuationCapabilities,
     pub scheduler_attempt: i32,
     pub scheduler_retry_count: i32,
     pub scheduler_max_attempts: i32,
@@ -1312,6 +1609,14 @@ pub struct DevRailRunResponse {
     pub retry_reason: Option<String>,
     pub parent_run_id: Option<i64>,
     pub parent_turn_id: Option<String>,
+    #[schema(value_type = DevRailRunKind)]
+    pub run_kind: String,
+    pub root_run_id: Option<i64>,
+    pub continuation_sequence: Option<i16>,
+    pub continuation_request_id: Option<i64>,
+    #[schema(value_type = Option<DevRailHandoffEvidenceStatus>)]
+    pub handoff_evidence_status: Option<String>,
+    pub handoff_error_code: Option<String>,
     pub cleanup_status: String,
     pub branch_name: Option<String>,
     pub branch_expires_at: Option<DateTime<Utc>>,
@@ -2184,5 +2489,32 @@ mod dependency_contract_tests {
                 "organizationId": 42
             }));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn continuation_defaults_are_closed_and_bounded() {
+        let policy = ContinuationPolicy::default();
+        assert!(!policy.enabled);
+        assert_eq!(policy.max_continuations, DEFAULT_CONTINUATION_MAX_COUNT);
+        assert_eq!(policy.max_chain_depth, DEFAULT_CONTINUATION_MAX_CHAIN_DEPTH);
+        assert_eq!(
+            policy.max_context_bytes,
+            DEFAULT_CONTINUATION_MAX_CONTEXT_BYTES
+        );
+        assert_eq!(policy.allowed_triggers.len(), 3);
+    }
+
+    #[test]
+    fn continuation_wire_enums_reject_unknown_values() {
+        assert_eq!(
+            serde_json::to_string(&DevRailContinuationStatus::Pending).unwrap(),
+            "\"pending\""
+        );
+        assert_eq!(
+            serde_json::to_string(&DevRailRunKind::Continuation).unwrap(),
+            "\"continuation\""
+        );
+        assert!(serde_json::from_str::<DevRailContinuationStatus>("\"started\"").is_err());
+        assert!(serde_json::from_str::<DevRailContinuationTrigger>("\"manual\"").is_err());
     }
 }

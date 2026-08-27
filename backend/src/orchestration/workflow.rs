@@ -1,5 +1,6 @@
 //! Strict, fail-closed repository workflow loading and snapshot rendering.
 
+use crate::models::ContinuationPolicy;
 use minijinja::value::Value as TemplateValue;
 use minijinja::{Environment, UndefinedBehavior};
 use serde::{Deserialize, Serialize};
@@ -100,6 +101,8 @@ pub struct WorkflowConfig {
     pub retry: WorkflowRetryPolicy,
     pub hooks: WorkflowHooks,
     pub notifications: WorkflowNotifications,
+    #[serde(default)]
+    pub continuation: ContinuationPolicy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -459,6 +462,24 @@ fn validate_config(
     {
         return Err(policy_error("workflow hook 不在平台白名单内"));
     }
+    validate_continuation_policy(&config.continuation)?;
+    Ok(())
+}
+
+fn validate_continuation_policy(policy: &ContinuationPolicy) -> Result<(), WorkflowError> {
+    if policy.allowed_triggers.len() > 3
+        || (policy.enabled && policy.allowed_triggers.is_empty())
+        || !(1..=3).contains(&policy.max_continuations)
+        || !(1..=3).contains(&policy.max_chain_depth)
+        || !(1..=16 * 1024).contains(&policy.max_context_bytes)
+        || !(10..=3_600).contains(&policy.claim_lease_seconds)
+        || !(1..=10).contains(&policy.max_dispatch_attempts)
+        || policy.retry_base_delay_seconds < 1
+        || policy.retry_max_delay_seconds < policy.retry_base_delay_seconds
+        || policy.retry_max_delay_seconds > 3_600
+    {
+        return Err(policy_error("continuation 策略超出平台范围"));
+    }
     Ok(())
 }
 
@@ -574,6 +595,33 @@ mod tests {
         assert_eq!(first.digest, second.digest);
         assert_eq!(first.declared_version, "devrail-v1");
         assert_eq!(first.source, WorkflowSource::Repository);
+        assert!(!first.config.continuation.enabled);
+        assert_eq!(
+            first.config.continuation.max_context_bytes,
+            crate::models::DEFAULT_CONTINUATION_MAX_CONTEXT_BYTES
+        );
+    }
+
+    #[test]
+    fn continuation_policy_round_trips_and_rejects_unknown_trigger() {
+        let workflow = valid_workflow().replace(
+            "quality_gates:\n",
+            "continuation:\n  enabled: true\n  allowed_triggers:\n    - user_context\n  max_continuations: 2\n  max_chain_depth: 2\n  max_context_bytes: 4096\n  claim_lease_seconds: 30\n  max_dispatch_attempts: 2\n  retry_base_delay_seconds: 2\n  retry_max_delay_seconds: 60\nquality_gates:\n",
+        );
+        let parsed = parse_workflow(&workflow, WorkflowSource::Repository, &policy())
+            .expect("continuation policy");
+        let encoded = serde_json::to_value(&parsed.config.continuation).expect("encode policy");
+        let decoded: crate::models::ContinuationPolicy =
+            serde_json::from_value(encoded).expect("decode policy");
+        assert_eq!(decoded, parsed.config.continuation);
+
+        let invalid = workflow.replace("- user_context", "- unknown_trigger");
+        assert_eq!(
+            parse_workflow(&invalid, WorkflowSource::Repository, &policy())
+                .expect_err("unknown continuation trigger")
+                .kind(),
+            WorkflowErrorKind::Schema
+        );
     }
 
     #[test]
