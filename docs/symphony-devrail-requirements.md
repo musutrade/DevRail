@@ -267,6 +267,16 @@ run 范围内使用。所有三项权限均在迁移中以幂等种子绑定，A
 
 **SY-SPACE-005**：workspace 元数据必须包含 workflow 版本、基础提交、环境版本和工具版本，使同一任务可重新创建等价环境。
 
+#### Workspace 证据矩阵（2026-08-27）
+
+| Requirement ID | 状态 | 代码、迁移与测试证据 |
+| --- | --- | --- |
+| `SY-SPACE-001` | 部分实现 | `20260906100000_add_task_workspaces.sql`、`devrail_workspaces::workspace_key` 和 canonical 受控路径校验；worktree 内容复制与完整碰撞集成测试待补。 |
+| `SY-SPACE-002` | 部分实现 | workspace 元数据保存仓库/环境引用且 SQL 使用组织复合外键；Git 基础提交校验与运行时凭据注入待补。 |
+| `SY-SPACE-003` | 未完成 | workflow loader 已限制 hook 名称；workspace hook 执行器和顺序测试待补。 |
+| `SY-SPACE-004` | 部分实现 | Supervisor 终态写入 `cleanup_pending`，scheduler cleanup reconciliation 支持幂等删除和退避；告警与完整终态演练待补。 |
+| `SY-SPACE-005` | 部分实现 | workspace 保存 workflow、快照摘要、工具版本字段并提供 API；基础提交和环境版本采集待补。 |
+
 ### 5.7 Agent Runner 与 continuation（P1）
 
 **SY-RUNNER-001**：只有 Harness Supervisor 可创建 app-server 进程、thread 和 turn；Orchestrator 通过服务接口请求执行。

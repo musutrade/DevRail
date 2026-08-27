@@ -92,9 +92,13 @@ const DEVRAIL_TASK_DEPENDENCIES_PATH: &str =
 const DEVRAIL_TASK_EVENTS_PATH: &str = "/api/v1/tasks/{task_id}/events";
 const DEVRAIL_TASK_EVENTS_STREAM_PATH: &str = "/api/v1/tasks/{task_id}/events/stream";
 const DEVRAIL_TASK_RUNS_PATH: &str = "/api/v1/tasks/{task_id}/runs";
+const DEVRAIL_TASK_WORKSPACE_PATH: &str = "/api/v1/tasks/{task_id}/workspace";
+const DEVRAIL_TASK_WORKSPACE_REBUILD_PATH: &str = "/api/v1/tasks/{task_id}/workspace/rebuild";
 const DEVRAIL_TASK_COMMENTS_PATH: &str = "/api/v1/tasks/{task_id}/comments";
 const DEVRAIL_TASK_COMMENT_PATH: &str = "/api/v1/task-comments/{id}";
 const DEVRAIL_RUN_PATH: &str = "/api/v1/runs/{id}";
+const DEVRAIL_RUN_WORKSPACE_PATH: &str = "/api/v1/runs/{id}/workspace";
+const DEVRAIL_WORKSPACE_CLEANUP_PATH: &str = "/api/v1/workspaces/{id}/cleanup";
 const DEVRAIL_RUN_INTERRUPT_PATH: &str = "/api/v1/runs/{id}/interrupt";
 const DEVRAIL_RUN_RETRY_PATH: &str = "/api/v1/runs/{id}/retry";
 const DEVRAIL_RUN_EVENTS_PATH: &str = "/api/v1/runs/{id}/events";
@@ -183,9 +187,13 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_TASK_EVENTS_PATH, &["get"]),
     (DEVRAIL_TASK_EVENTS_STREAM_PATH, &["get"]),
     (DEVRAIL_TASK_RUNS_PATH, &["get", "post"]),
+    (DEVRAIL_TASK_WORKSPACE_PATH, &["get"]),
+    (DEVRAIL_TASK_WORKSPACE_REBUILD_PATH, &["post"]),
     (DEVRAIL_TASK_COMMENTS_PATH, &["get", "post"]),
     (DEVRAIL_TASK_COMMENT_PATH, &["patch", "delete"]),
     (DEVRAIL_RUN_PATH, &["get"]),
+    (DEVRAIL_RUN_WORKSPACE_PATH, &["get"]),
+    (DEVRAIL_WORKSPACE_CLEANUP_PATH, &["post"]),
     (DEVRAIL_RUN_INTERRUPT_PATH, &["post"]),
     (DEVRAIL_RUN_RETRY_PATH, &["post"]),
     (DEVRAIL_RUN_EVENTS_PATH, &["get"]),
@@ -440,6 +448,14 @@ fn base_router(state: AppState) -> Router {
             get(handlers::devrail::list_runs).post(handlers::devrail::create_run),
         )
         .route(
+            DEVRAIL_TASK_WORKSPACE_PATH,
+            get(handlers::devrail::get_task_workspace),
+        )
+        .route(
+            DEVRAIL_TASK_WORKSPACE_REBUILD_PATH,
+            post(handlers::devrail::rebuild_task_workspace),
+        )
+        .route(
             DEVRAIL_TASK_COMMENTS_PATH,
             get(handlers::devrail::list_task_comments).post(handlers::devrail::create_task_comment),
         )
@@ -449,6 +465,14 @@ fn base_router(state: AppState) -> Router {
                 .delete(handlers::devrail::delete_task_comment),
         )
         .route(DEVRAIL_RUN_PATH, get(handlers::devrail::get_run))
+        .route(
+            DEVRAIL_RUN_WORKSPACE_PATH,
+            get(handlers::devrail::get_run_workspace),
+        )
+        .route(
+            DEVRAIL_WORKSPACE_CLEANUP_PATH,
+            post(handlers::devrail::cleanup_workspace),
+        )
         .route(
             DEVRAIL_RUN_INTERRUPT_PATH,
             post(handlers::devrail::interrupt_run),

@@ -13,6 +13,7 @@ pub mod devrail_review_comments;
 pub mod devrail_reviews;
 pub mod devrail_runs;
 pub mod devrail_workflows;
+pub mod devrail_workspaces;
 pub mod mfa;
 pub mod module_unlock;
 pub mod organizations;

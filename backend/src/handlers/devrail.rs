@@ -526,6 +526,53 @@ pub async fn list_runs(
         .map(Json)
 }
 
+pub async fn get_task_workspace(
+    State(s): State<AppState>,
+    auth: RequirePermission<WorkspaceRead>,
+    Path(task_id): Path<i64>,
+) -> Result<Json<Option<DevRailTaskWorkspaceResponse>>, ApiError> {
+    services::devrail_workspaces::get_for_task(&s.pool, &auth, task_id)
+        .await
+        .map(Json)
+}
+
+pub async fn rebuild_task_workspace(
+    State(s): State<AppState>,
+    auth: RequirePermission<WorkspaceWrite>,
+    Path(task_id): Path<i64>,
+    Json(request): Json<RebuildDevRailTaskWorkspaceRequest>,
+) -> Result<Json<DevRailTaskWorkspaceResponse>, ApiError> {
+    services::devrail_workspaces::rebuild_for_task(
+        &s.pool,
+        &auth,
+        task_id,
+        s.run_workspace_root.as_path(),
+        &request,
+    )
+    .await
+    .map(Json)
+}
+
+pub async fn get_run_workspace(
+    State(s): State<AppState>,
+    auth: RequirePermission<WorkspaceRead>,
+    Path(run_id): Path<i64>,
+) -> Result<Json<DevRailTaskWorkspaceResponse>, ApiError> {
+    services::devrail_workspaces::get_for_run(&s.pool, &auth, run_id)
+        .await
+        .map(Json)
+}
+
+pub async fn cleanup_workspace(
+    State(s): State<AppState>,
+    auth: RequirePermission<WorkspaceWrite>,
+    Path(id): Path<i64>,
+) -> Result<Json<DevRailTaskWorkspaceResponse>, ApiError> {
+    services::devrail_workspaces::cleanup(&s.pool, &auth, id, s.run_workspace_root.as_path())
+        .await
+        .map(Json)
+}
+
 pub async fn get_run(
     State(s): State<AppState>,
     auth: RequirePermission<RunRead>,

@@ -59,6 +59,14 @@
         <div>
           <span>状态</span><strong>{{ statusLabel(current.status) }}</strong>
         </div>
+        @if (workspace(); as currentWorkspace) {
+          <div>
+            <span>工作区</span><strong>{{ currentWorkspace.relativeId }}</strong>
+          </div>
+          <div>
+            <span>工作区生命周期</span><strong>{{ currentWorkspace.lifecycleStatus }}</strong>
+          </div>
+        }
         <div>
           <span>线程</span><strong>{{ current.threadId || '等待 Harness' }}</strong>
         </div>
@@ -106,6 +114,21 @@
           }
           @if (current.retryReason) {
             <small>重试原因：{{ current.retryReason }}</small>
+          }
+        </div>
+      }
+      @if (workspace(); as currentWorkspace) {
+        <div class="run-actions">
+          <span>工作区清理：{{ currentWorkspace.cleanupStatus }}</span>
+          @if (canManageWorkspace() && currentWorkspace.lifecycleStatus !== 'cleaned') {
+            <button
+              class="btn-outline"
+              type="button"
+              (click)="cleanupWorkspace()"
+              [disabled]="busy()"
+            >
+              <mat-icon>delete_sweep</mat-icon>清理工作区
+            </button>
           }
         </div>
       }

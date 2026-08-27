@@ -24,6 +24,7 @@ import type {
   DevRailReviewResponse,
   DevRailReviewCommentResponse,
   DevRailExternalReviewCommentResponse,
+  DevRailTaskWorkspaceResponse,
 } from '../../generated/api/models';
 
 @Component({
@@ -44,6 +45,7 @@ export class DevRailRunPage implements OnInit, OnDestroy {
   readonly reviewComments = signal<DevRailReviewCommentResponse[]>([]);
   readonly selectedReviewId = signal<number | null>(null);
   readonly externalReviewComments = signal<DevRailExternalReviewCommentResponse[]>([]);
+  readonly workspace = signal<DevRailTaskWorkspaceResponse | null>(null);
   readonly externalProjectId = signal('');
   readonly externalRepositoryId = signal('');
   readonly externalNumber = signal('');
@@ -55,6 +57,9 @@ export class DevRailRunPage implements OnInit, OnDestroy {
   readonly canExecute = computed(() => this.auth.hasPermission(DEVRAIL_PERMISSIONS.runExecute));
   readonly canInterrupt = computed(() => this.auth.hasPermission(DEVRAIL_PERMISSIONS.runInterrupt));
   readonly canRetry = computed(() => this.auth.hasPermission(DEVRAIL_PERMISSIONS.runRetry));
+  readonly canManageWorkspace = computed(() =>
+    this.auth.hasPermission(DEVRAIL_PERMISSIONS.workspaceWrite),
+  );
   private readonly route = inject(ActivatedRoute);
   private readonly auth = inject(AuthService);
   private readonly api = inject(DevRailApiService);
@@ -102,6 +107,20 @@ export class DevRailRunPage implements OnInit, OnDestroy {
       this.snack.open('质量门禁执行完成', '关闭', { duration: 2500 });
     } catch (error) {
       this.snack.open(apiErrorMessage(error, '质量门禁执行失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  async cleanupWorkspace(): Promise<void> {
+    const current = this.workspace();
+    if (!current || this.busy() || !this.canManageWorkspace()) return;
+    this.busy.set(true);
+    try {
+      this.workspace.set(await this.api.cleanupWorkspace(current.id));
+      this.snack.open('工作区清理完成', '关闭', { duration: 2500 });
+    } catch (error) {
+      this.snack.open(apiErrorMessage(error, '工作区清理失败'), '关闭', { duration: 5000 });
     } finally {
       this.busy.set(false);
     }
@@ -280,14 +299,20 @@ export class DevRailRunPage implements OnInit, OnDestroy {
     this.error.set(null);
     try {
       this.run.set(await this.api.getRun(this.runId));
-      const [page, changeset, gates] = await Promise.all([
+      const workspacePromise =
+        typeof this.api.getRunWorkspace === 'function'
+          ? this.api.getRunWorkspace(this.runId).catch(() => null)
+          : Promise.resolve(null);
+      const [page, changeset, gates, workspace] = await Promise.all([
         this.api.listRunEvents(this.runId),
         this.api.getRunChangeset(this.runId),
         this.api.getRunQualityGates(this.runId),
+        workspacePromise,
       ]);
       this.events.set(page.items);
       this.changes.set(changeset.files);
       this.qualityGates.set(gates.items);
+      this.workspace.set(workspace);
       await this.loadReviews();
       this.connectEvents();
     } catch (error) {

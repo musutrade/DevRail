@@ -22,6 +22,7 @@ import type {
   DevRailRepositoryResponse,
   DevRailTaskDependencyInput,
   DevRailTaskResponse,
+  DevRailTaskWorkspaceResponse,
 } from '../../generated/api/models';
 import type { DevRailTaskCommentResponse } from '../../generated/api/models';
 
@@ -40,6 +41,7 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
   readonly environments = signal<DevRailEnvironmentResponse[]>([]);
   readonly comments = signal<DevRailTaskCommentResponse[]>([]);
   readonly taskEvents = signal<import('../../generated/api/models').DevRailTaskEventResponse[]>([]);
+  readonly workspace = signal<DevRailTaskWorkspaceResponse | null>(null);
   readonly dependencyDraft = signal<DevRailTaskDependencyInput[]>([]);
   readonly dependencyCandidates = signal<DevRailTaskResponse[]>([]);
   readonly dependencyCandidateId = signal<number | null>(null);
@@ -48,6 +50,9 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
     () =>
       this.auth.hasPermission(DEVRAIL_PERMISSIONS.taskDependencyWrite) &&
       ['draft', 'queued'].includes(this.task()?.status ?? ''),
+  );
+  readonly canManageWorkspace = computed(() =>
+    this.auth.hasPermission(DEVRAIL_PERMISSIONS.workspaceWrite),
   );
   readonly editingCommentId = signal<number | null>(null);
   private readonly route = inject(ActivatedRoute);
@@ -87,6 +92,19 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
       this.snack.open('任务已保存', '关闭', { duration: 2500 });
     } catch (error) {
       this.snack.open(apiErrorMessage(error, '任务保存失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  async rebuildWorkspace(): Promise<void> {
+    if (this.busy() || !this.canManageWorkspace()) return;
+    this.busy.set(true);
+    try {
+      this.workspace.set(await this.api.rebuildTaskWorkspace(this.taskId));
+      this.snack.open('任务工作区已准备', '关闭', { duration: 2500 });
+    } catch (error) {
+      this.snack.open(apiErrorMessage(error, '准备任务工作区失败'), '关闭', { duration: 5000 });
     } finally {
       this.busy.set(false);
     }
@@ -209,19 +227,26 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
 
   private async load(): Promise<void> {
     try {
-      const [task, repositories, environments, comments, events, candidates] = await Promise.all([
-        this.api.getTask(this.projectId, this.taskId),
-        this.api.listRepositories(this.projectId),
-        this.api.listEnvironments(this.projectId),
-        this.api.listTaskComments(this.taskId),
-        this.api.listTaskEvents(this.taskId),
-        this.api.listTasks(this.projectId, 1, 100),
-      ]);
+      const workspacePromise =
+        typeof this.api.getTaskWorkspace === 'function'
+          ? this.api.getTaskWorkspace(this.taskId).catch(() => null)
+          : Promise.resolve(null);
+      const [task, repositories, environments, comments, events, candidates, workspace] =
+        await Promise.all([
+          this.api.getTask(this.projectId, this.taskId),
+          this.api.listRepositories(this.projectId),
+          this.api.listEnvironments(this.projectId),
+          this.api.listTaskComments(this.taskId),
+          this.api.listTaskEvents(this.taskId),
+          this.api.listTasks(this.projectId, 1, 100),
+          workspacePromise,
+        ]);
       this.task.set(task);
       this.repositories.set(repositories.items);
       this.environments.set(environments.items);
       this.comments.set(comments.items);
       this.taskEvents.set(events.items);
+      this.workspace.set(workspace);
       this.dependencyDraft.set(
         task.prerequisites.map((dependency) => ({
           prerequisiteTaskId: dependency.prerequisiteTaskId,

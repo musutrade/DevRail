@@ -5090,6 +5090,42 @@
         ]
       }
     },
+    "/runs/{id}/workspace": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "getDevRailRunWorkspace",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailTaskWorkspaceResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/task-comments/{id}": {
       "delete": {
         "tags": [
@@ -5532,6 +5568,95 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DevRailRunResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/tasks/{task_id}/workspace": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "getDevRailTaskWorkspace",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DevRailTaskWorkspaceResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/tasks/{task_id}/workspace/rebuild": {
+      "post": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "rebuildDevRailTaskWorkspace",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RebuildDevRailTaskWorkspaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailTaskWorkspaceResponse"
                 }
               }
             }
@@ -6209,6 +6334,42 @@
             }
           }
         }
+      }
+    },
+    "/workspaces/{id}/cleanup": {
+      "post": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "cleanupDevRailWorkspace",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailTaskWorkspaceResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
       }
     }
   },
@@ -9232,6 +9393,132 @@
           }
         }
       },
+      "DevRailTaskWorkspaceResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "taskId",
+          "attempt",
+          "relativeId",
+          "toolVersions",
+          "lifecycleStatus",
+          "cleanupStatus",
+          "cleanupAttempts",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "attempt": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "baseCommit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "branchName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cleanedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "cleanupAttempts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cleanupStatus": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "diagnosticRef": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "environmentVersion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "errorSummary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastHook": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lifecycleStatus": {
+            "type": "string"
+          },
+          "nextCleanupAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "relativeId": {
+            "type": "string"
+          },
+          "runId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "snapshotDigest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "taskId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "toolVersions": {},
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "workflowDigest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workflowVersion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "DevRailWorktreeFileResponse": {
         "type": "object",
         "required": [
@@ -9817,6 +10104,18 @@
             "type": "string"
           }
         }
+      },
+      "RebuildDevRailTaskWorkspaceRequest": {
+        "type": "object",
+        "properties": {
+          "snapshotDigest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
       },
       "RecoveryCodesResponse": {
         "type": "object",

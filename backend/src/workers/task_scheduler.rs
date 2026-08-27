@@ -9,6 +9,7 @@ use crate::error::ApiError;
 use crate::models::{CreateDevRailRunRequest, DevRailTaskRow};
 use crate::orchestration::task_tracker::{PostgresTaskTracker, TaskTracker, TrackerError};
 use crate::services::devrail_runs;
+use crate::services::devrail_workspaces;
 use crate::workers::harness_supervisor::HarnessSupervisor;
 use chrono::{Duration as ChronoDuration, Utc};
 use sqlx::PgPool;
@@ -145,6 +146,12 @@ async fn run_tick(
         crate::app_metrics::record_reconciliation("retry_exhausted");
     }
     crate::app_metrics::record_reconciliation("ok");
+    if let Err(error) =
+        devrail_workspaces::reconcile_cleanup(pool, &supervisor.workspace_root()).await
+    {
+        tracing::warn!(error = %error, "workspace cleanup reconciliation failed");
+        crate::app_metrics::record_reconciliation("workspace_cleanup_failed");
+    }
     let claim_token = Uuid::new_v4();
     let tasks = tracker
         .claim_dispatch_candidates(

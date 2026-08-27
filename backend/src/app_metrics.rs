@@ -89,6 +89,10 @@ pub fn initialize() {
             "devrail_workflow_reload_healthy",
             "DevRail workflow reloader 最近一次对账是否成功"
         );
+        describe_counter!(
+            "devrail_workspace_event_total",
+            "DevRail 任务工作区生命周期事件总数"
+        );
     });
 }
 
@@ -215,6 +219,36 @@ pub fn record_workflow_reload_health(healthy: bool) {
     gauge!("devrail_workflow_reload_healthy").set(if healthy { 1.0 } else { 0.0 });
 }
 
+pub fn record_workspace_event(operation: &str, outcome: &str) {
+    counter!(
+        "devrail_workspace_event_total",
+        "operation" => workspace_operation(operation),
+        "outcome" => workspace_outcome(outcome)
+    )
+    .increment(1);
+}
+
+fn workspace_operation(operation: &str) -> &'static str {
+    match operation {
+        "create" => "create",
+        "rebuild" => "rebuild",
+        "cleanup" => "cleanup",
+        "hook" => "hook",
+        "reconcile" => "reconcile",
+        _ => "other",
+    }
+}
+
+fn workspace_outcome(outcome: &str) -> &'static str {
+    match outcome {
+        "started" => "started",
+        "succeeded" => "succeeded",
+        "failed" => "failed",
+        "retry" => "retry",
+        _ => "other",
+    }
+}
+
 fn workflow_reload_outcome(outcome: &str) -> &'static str {
     match outcome {
         "accepted" => "accepted",
@@ -286,5 +320,9 @@ mod tests {
         assert_eq!(dependency_propagation_outcome("applied"), "applied");
         assert_eq!(dependency_conflict_outcome("task-123"), "other");
         assert_eq!(followup_outcome("source-run-42"), "other");
+        assert_eq!(workspace_operation("cleanup"), "cleanup");
+        assert_eq!(workspace_operation("workspace-42"), "other");
+        assert_eq!(workspace_outcome("retry"), "retry");
+        assert_eq!(workspace_outcome("path-/tmp"), "other");
     }
 }

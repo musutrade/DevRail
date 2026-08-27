@@ -31,7 +31,7 @@ DevRail 的 Codex Harness 开发系统 MVP **尚未实现完成**，因此不能
 | arc-admin 认证、MFA、组织和 RBAC | 已有基线 | DevRail API 已增加业务权限标记和组织/部门/所有者数据范围过滤。 |
 | 项目、仓库、环境、成员、策略 | 部分实现 | 项目/仓库/环境列表与详情、仓库/环境创建表单、成员和项目策略 API/页面已加入；仓库远端 HEAD、默认分支、分支数量、完整远端分支列表、受控工作区提交摘要、工作树状态检查以及环境健康检查已完成。 |
 | 任务、快照和运行 | 部分实现 | 已有任务详情页、服务端关键词/状态/负责人/标签筛选、分页、不可变任务快照、任务与项目仓库/环境关联、run 生命周期字段、单任务活动运行唯一约束、幂等创建、终态重试、指定 turn 恢复和运行详情页；完整状态验收仍待补齐。 |
-| Symphony 任务调度器 | P0 与 DAG/follow-up 已实现 | queued 任务已支持稳定 attempt、优先级 aging、活动 run 排除、依赖资格、claim 租约/恢复、取消传播、重启 reconciliation、低基数指标和 System Actor 审计；调度器通过 `TaskTracker` 访问 PostgreSQL，并在入队时固化严格校验的 `WORKFLOW.md` 快照。外部 tracker adapter、per-task workspace 和 continuation 尚未实现。 |
+| Symphony 任务调度器 | P0 与 DAG/follow-up 已实现，任务工作区进行中 | queued 任务已支持稳定 attempt、优先级 aging、活动 run 排除、依赖资格、claim 租约/恢复、取消传播、重启 reconciliation、低基数指标和 System Actor 审计；新增任务/attempt 工作区持久化、受控路径校验、终态清理对账和 workspace API。外部 tracker adapter、continuation 和完整 worktree/hooks 仍待完成。 |
 | Codex `app-server` Harness Supervisor | P0 恢复能力已实现 | 后端独占启动受控 `codex app-server`，完成初始化、thread/turn 启动、同 attempt thread/resume 断流恢复（最多 2 次）、心跳/stall/超时清理、活动 run 重启恢复、不可恢复通知、审批等待状态恢复、stderr 摘要、恢复建议和优雅中断。 |
 | thread/turn/item 事件与 SSE | 基础实现 | JSONL 事件按安全类型脱敏持久化，提供 cursor 补拉、Last-Event-ID 与 after_cursor SSE 补拉、固定心跳和质量门禁事件映射；运行详情断线重连会从最后游标继续。 |
 | 工具命令审批 | 部分实现 | 已有审批表、数据范围 API、审批中心列表/详情、批准/拒绝/撤回决策、过期时间、过期 worker、追加决策审计、策略版本强校验和 Supervisor resolve；请求、批准、拒绝、撤回和过期均已写入站内通知/outbox。 |
