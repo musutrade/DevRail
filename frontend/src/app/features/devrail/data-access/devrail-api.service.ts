@@ -68,6 +68,10 @@ import { createDevRailPullRequest } from '../../../generated/api/fn/devrail/crea
 import { syncDevRailPullRequest } from '../../../generated/api/fn/devrail/sync-dev-rail-pull-request';
 import { listDevRailExternalReviewComments } from '../../../generated/api/fn/devrail/list-dev-rail-external-review-comments';
 import { syncDevRailExternalReviewComments } from '../../../generated/api/fn/devrail/sync-dev-rail-external-review-comments';
+import { getDevRailTaskWorkspace } from '../../../generated/api/fn/devrail/get-dev-rail-task-workspace';
+import { rebuildDevRailTaskWorkspace } from '../../../generated/api/fn/devrail/rebuild-dev-rail-task-workspace';
+import { getDevRailRunWorkspace } from '../../../generated/api/fn/devrail/get-dev-rail-run-workspace';
+import { cleanupDevRailWorkspace } from '../../../generated/api/fn/devrail/cleanup-dev-rail-workspace';
 import type {
   CreateDevRailEnvironmentRequest,
   CreateDevRailProjectRequest,
@@ -124,6 +128,8 @@ import type {
   SyncDevRailPullRequestRequest,
   SyncDevRailExternalReviewRequest,
   DevRailExternalReviewCommentResponse,
+  DevRailTaskWorkspaceResponse,
+  RebuildDevRailTaskWorkspaceRequest,
 } from '../../../generated/api/models';
 
 @Injectable({ providedIn: 'root' })
@@ -365,6 +371,15 @@ export class DevRailApiService {
       limit,
     });
   }
+  getTaskWorkspace(taskId: number): Promise<DevRailTaskWorkspaceResponse | null> {
+    return this.api.invoke(getDevRailTaskWorkspace, { task_id: taskId });
+  }
+  rebuildTaskWorkspace(
+    taskId: number,
+    body: RebuildDevRailTaskWorkspaceRequest = {},
+  ): Promise<DevRailTaskWorkspaceResponse> {
+    return this.api.invoke(rebuildDevRailTaskWorkspace, { task_id: taskId, body });
+  }
   createTask(projectId: number, body: CreateDevRailTaskRequest) {
     return this.api.invoke(createDevRailTask, { project_id: projectId, body });
   }
@@ -392,6 +407,12 @@ export class DevRailApiService {
 
   getRun(id: number): Promise<DevRailRunResponse> {
     return this.api.invoke(getDevRailRun, { id });
+  }
+  getRunWorkspace(id: number): Promise<DevRailTaskWorkspaceResponse> {
+    return this.api.invoke(getDevRailRunWorkspace, { id });
+  }
+  cleanupWorkspace(id: number): Promise<DevRailTaskWorkspaceResponse> {
+    return this.api.invoke(cleanupDevRailWorkspace, { id });
   }
 
   listRunEvents(id: number): Promise<DevRailRunEventPage> {

@@ -3,7 +3,7 @@
 
 use crate::access::{ActorContext, ActorType, DataScope};
 use crate::models::CreateDevRailFollowupTaskRequest;
-use crate::repositories::devrail_runs;
+use crate::repositories::{devrail_runs, devrail_workspaces};
 use crate::services;
 use crate::workers::task_scheduler::SchedulerPolicy;
 use serde_json::{json, Map, Value};
@@ -138,6 +138,10 @@ impl HarnessSupervisor {
             let reservation = self.reserve()?;
             self.launch_reserved(launch, reservation).await
         })
+    }
+
+    pub(crate) fn workspace_root(&self) -> PathBuf {
+        self.workspace_root.as_ref().clone()
     }
 
     pub(crate) fn reserve(&self) -> Result<RunReservation, SupervisorError> {
@@ -1089,10 +1093,30 @@ async fn finish_run(
     stderr: Option<&str>,
     recovery: Option<&str>,
 ) -> Result<(), sqlx::Error> {
+    let hook_phase = if status == "completed" {
+        "after_run"
+    } else {
+        "on_failure"
+    };
+    let hook_failed = if let Some(snapshot) =
+        devrail_runs::workflow_snapshot_for_run(pool, launch.run_id).await?
+    {
+        services::devrail_workspaces::run_hooks(&snapshot, hook_phase, &launch.cwd)
+            .await
+            .is_err()
+    } else {
+        false
+    };
     let mut tx = pool.begin().await?;
     let quality_gate_failed = status == "completed"
         && devrail_runs::has_failed_quality_gate(&mut tx, launch.run_id).await?;
-    let (status, reason, recovery) = if quality_gate_failed {
+    let (status, reason, recovery) = if hook_failed && status == "completed" {
+        (
+            "failed",
+            "after_run_failed",
+            Some("运行已结束，但 after_run hook 未通过；请查看门禁诊断后重试"),
+        )
+    } else if quality_gate_failed {
         (
             "failed",
             "quality_gate_failed",
@@ -1120,6 +1144,44 @@ async fn finish_run(
         tx.commit().await?;
         return Ok(());
     }
+    devrail_workspaces::mark_cleanup_pending_for_run(
+        &mut tx,
+        launch.organization_id,
+        launch.run_id,
+        if status == "completed" {
+            "after_run"
+        } else {
+            "on_failure"
+        },
+    )
+    .await?;
+    let system_actor = ActorContext {
+        actor_type: ActorType::System,
+        user_id: launch.owner_user_id,
+        session_id: 0,
+        organization_id: launch.organization_id,
+        department_id: launch.department_id,
+        data_scope: DataScope::All,
+        permission_codes: BTreeSet::new(),
+    };
+    crate::repositories::audit_logs::record_actor(
+        &mut tx,
+        &system_actor,
+        "devrail.workspace.cleanup_pending",
+        "devrail_task_workspace",
+        Some(launch.run_id),
+        json!({"runId": launch.run_id, "status": "cleanup_pending"}),
+    )
+    .await?;
+    crate::repositories::devrail_notifications::outbox(
+        &mut tx,
+        launch.organization_id,
+        "workspace.cleanup_pending",
+        "devrail_task_workspace",
+        Some(launch.run_id),
+        &json!({"runId": launch.run_id, "status": "cleanup_pending"}),
+    )
+    .await?;
     let task_status = match status {
         "completed" => "succeeded",
         "cancelled" => "cancelled",

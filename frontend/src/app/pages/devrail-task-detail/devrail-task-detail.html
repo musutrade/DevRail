@@ -30,6 +30,29 @@
         }
       </section>
     }
+    <section class="comments" aria-labelledby="workspace-title">
+      <div class="section-heading">
+        <h2 id="workspace-title">任务工作区</h2>
+        @if (canManageWorkspace()) {
+          <button type="button" (click)="rebuildWorkspace()" [disabled]="busy()">
+            <mat-icon>build</mat-icon>准备工作区
+          </button>
+        }
+      </div>
+      @if (workspace(); as currentWorkspace) {
+        <p>标识：{{ currentWorkspace.relativeId }}</p>
+        <p>生命周期：{{ currentWorkspace.lifecycleStatus }}</p>
+        <p>
+          清理：{{ currentWorkspace.cleanupStatus }}（{{ currentWorkspace.cleanupAttempts }} 次）
+        </p>
+        <p>基础提交：{{ currentWorkspace.baseCommit || '未记录' }}</p>
+        @if (currentWorkspace.errorSummary) {
+          <p role="alert">{{ currentWorkspace.errorSummary }}</p>
+        }
+      } @else {
+        <p class="empty">尚未创建任务工作区</p>
+      }
+    </section>
     <section class="comments" aria-labelledby="dependency-title">
       <h2 id="dependency-title">任务依赖</h2>
       @if (current.blockedReason) {

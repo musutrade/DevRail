@@ -1,11 +1,10 @@
 use crate::access::ActorContext;
 use crate::error::ApiError;
 use crate::models::*;
-use crate::repositories::{self, devrail, devrail_runs};
+use crate::repositories::{self, devrail, devrail_runs, devrail_workspaces};
 use crate::workers::harness_supervisor::{HarnessSupervisor, RunLaunch, SupervisorError};
 use serde_json::json;
 use sqlx::PgPool;
-use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 use tokio::process::Command;
@@ -405,6 +404,7 @@ async fn create_run_with_context(
             || branch.contains("..")
             || branch.starts_with('/')
             || branch.ends_with('/')
+            || branch.starts_with('-')
             || branch.bytes().any(|b| b.is_ascii_whitespace())
         {
             return Err(ApiError::validation("运行分支名称无效"));
@@ -432,7 +432,6 @@ async fn create_run_with_context(
     if !environment.enabled {
         return Err(ApiError::conflict("运行环境已禁用"));
     }
-    let cwd = PathBuf::from(&environment.workspace_root);
     let workflow_snapshot = validate_workflow_identity(
         task.dispatch_snapshot.get("workflow"),
         &task.workflow_source,
@@ -477,6 +476,8 @@ async fn create_run_with_context(
             .await
             .map_err(db_error)?
     };
+    let workspace_key = crate::services::devrail_workspaces::workspace_key(task.id, attempt)?;
+    let workspace_digest = crate::services::devrail_workspaces::path_digest(&workspace_key);
     let row = devrail_runs::create_run(
         &mut tx,
         &devrail_runs::NewRun {
@@ -504,7 +505,7 @@ async fn create_run_with_context(
     )
     .await
     .map_err(db_error)?;
-    let Some(row) = row else {
+    let Some(mut row) = row else {
         tx.rollback().await.map_err(db_error)?;
         if let Some(existing) =
             devrail_runs::find_run_by_idempotency(pool, actor, task.id, &idempotency_key)
@@ -515,6 +516,51 @@ async fn create_run_with_context(
         }
         return Err(ApiError::conflict("该任务已有相同 attempt 或活动运行"));
     };
+    let workspace = devrail_workspaces::create(
+        &mut tx,
+        &devrail_workspaces::NewWorkspace {
+            actor,
+            task_id: task.id,
+            run_id: Some(row.id),
+            attempt: row.attempt,
+            workspace_key: &workspace_key,
+            relative_path: &workspace_key,
+            path_digest: &workspace_digest,
+            repository_id: task.repository_id,
+            environment_id: Some(environment.id),
+            base_commit: None,
+            branch_name,
+            workflow_version: Some(&task.workflow_version),
+            workflow_digest: Some(&task.workflow_digest),
+            environment_version: None,
+            tool_versions: &json!({}),
+            snapshot_digest: Some(&task.dispatch_snapshot_digest),
+        },
+    )
+    .await
+    .map_err(db_error)?
+    .ok_or_else(|| ApiError::conflict("任务执行工作区已被其他运行占用"))?;
+    crate::app_metrics::record_workspace_event("create", "started");
+    repositories::audit_logs::record_actor(
+        &mut tx,
+        actor,
+        "devrail.workspace.create",
+        "devrail_task_workspace",
+        Some(workspace.id),
+        json!({"taskId": task.id, "runId": row.id, "attempt": row.attempt, "relativeId": workspace.relative_path}),
+    )
+    .await
+    .map_err(db_error)?;
+    repositories::devrail_notifications::outbox(
+        &mut tx,
+        actor.organization_id,
+        "workspace.created",
+        "devrail_task_workspace",
+        Some(workspace.id),
+        &json!({"workspaceId": workspace.id, "taskId": task.id, "runId": row.id, "status": "preparing"}),
+    )
+    .await
+    .map_err(db_error)?;
     devrail_runs::update_task_status(&mut tx, task.id, "running")
         .await
         .map_err(db_error)?;
@@ -529,6 +575,89 @@ async fn create_run_with_context(
     .await
     .map_err(db_error)?;
     tx.commit().await.map_err(db_error)?;
+    let materialized = crate::services::devrail_workspaces::materialize_from_source(
+        &supervisor.workspace_root(),
+        std::path::Path::new(&environment.workspace_root),
+        &workspace_key,
+        branch_name,
+    )
+    .await;
+    let (cwd, base_commit) = match materialized {
+        Ok(result) => (result.path, result.base_commit),
+        Err(error) => {
+            let mut cleanup = pool.begin().await.map_err(db_error)?;
+            let trace = uuid::Uuid::new_v4().to_string();
+            devrail_runs::update_run_terminal(
+                &mut cleanup,
+                &devrail_runs::TerminalRunUpdate {
+                    run_id: row.id,
+                    status: "failed",
+                    exit_reason: "workspace_prepare_failed",
+                    exit_code: None,
+                    stderr_summary: Some("工作区准备失败"),
+                    trace_id: &trace,
+                    recovery_suggestion: Some("请检查受控工作区根目录权限后重试"),
+                },
+            )
+            .await
+            .map_err(db_error)?;
+            cleanup.commit().await.map_err(db_error)?;
+            return Err(error);
+        }
+    };
+    let mut workspace_state = pool.begin().await.map_err(db_error)?;
+    let cwd_string = cwd.to_string_lossy().into_owned();
+    devrail_workspaces::set_base_commit(&mut workspace_state, workspace.id, base_commit.as_deref())
+        .await
+        .map_err(db_error)?;
+    devrail_runs::set_cwd(&mut workspace_state, row.id, &cwd_string)
+        .await
+        .map_err(db_error)?;
+    devrail_workspaces::set_lifecycle(
+        &mut workspace_state,
+        workspace.id,
+        "running",
+        "pending",
+        Some("before_run"),
+        None,
+    )
+    .await
+    .map_err(db_error)?;
+    workspace_state.commit().await.map_err(db_error)?;
+    row.cwd = cwd_string;
+    if let Err(error) =
+        crate::services::devrail_workspaces::run_hooks(&workflow_snapshot, "before_run", &cwd).await
+    {
+        crate::app_metrics::record_workspace_event("hook", "failed");
+        let mut cleanup = pool.begin().await.map_err(db_error)?;
+        devrail_workspaces::set_lifecycle(
+            &mut cleanup,
+            workspace.id,
+            "cleanup_pending",
+            "pending",
+            Some("before_run"),
+            Some("before_run hook 执行失败"),
+        )
+        .await
+        .map_err(db_error)?;
+        devrail_runs::update_run_terminal(
+            &mut cleanup,
+            &devrail_runs::TerminalRunUpdate {
+                run_id: row.id,
+                status: "failed",
+                exit_reason: "before_run_failed",
+                exit_code: None,
+                stderr_summary: Some("before_run hook 执行失败"),
+                trace_id: &uuid::Uuid::new_v4().to_string(),
+                recovery_suggestion: Some("请检查工作流 hook 和质量门禁配置"),
+            },
+        )
+        .await
+        .map_err(db_error)?;
+        cleanup.commit().await.map_err(db_error)?;
+        return Err(error);
+    }
+    crate::app_metrics::record_workspace_event("hook", "succeeded");
     if let Err(error) = supervisor
         .launch_reserved(
             RunLaunch {
@@ -1072,7 +1201,7 @@ mod tests {
         assert_eq!(run.workflow_version, queued.workflow_version);
         assert_eq!(run.task_revision, queued.revision);
 
-        let captured_path = workspace.join("captured-turn.json");
+        let captured_path = std::path::PathBuf::from(&run.cwd).join("captured-turn.json");
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
         let captured = loop {
             if let Ok(value) = tokio::fs::read_to_string(&captured_path).await {

@@ -9,6 +9,7 @@ pub mod devrail_notifications;
 pub mod devrail_push;
 pub mod devrail_reviews;
 pub mod devrail_runs;
+pub mod devrail_workspaces;
 pub mod mfa;
 pub mod module_unlock;
 pub mod permissions;

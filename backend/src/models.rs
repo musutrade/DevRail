@@ -372,6 +372,39 @@ pub struct DevRailRunRow {
 }
 
 #[derive(Debug, Clone, FromRow)]
+pub struct DevRailTaskWorkspaceRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub task_id: i64,
+    pub run_id: Option<i64>,
+    pub attempt: i32,
+    pub workspace_key: String,
+    pub relative_path: String,
+    pub path_digest: String,
+    pub repository_id: Option<i64>,
+    pub environment_id: Option<i64>,
+    pub base_commit: Option<String>,
+    pub branch_name: Option<String>,
+    pub workflow_version: Option<String>,
+    pub workflow_digest: Option<String>,
+    pub environment_version: Option<String>,
+    pub tool_versions: Value,
+    pub snapshot_digest: Option<String>,
+    pub lifecycle_status: String,
+    pub cleanup_status: String,
+    pub cleanup_attempts: i32,
+    pub next_cleanup_at: Option<DateTime<Utc>>,
+    pub last_hook: Option<String>,
+    pub diagnostic_ref: Option<String>,
+    pub error_summary: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub cleaned_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, FromRow)]
 pub struct DevRailRunEventRow {
     pub id: i64,
     pub organization_id: i64,
@@ -1300,6 +1333,51 @@ pub struct DevRailRunResponse {
     pub completed_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DevRailWorkspaceLifecycle {
+    Preparing,
+    Ready,
+    Running,
+    CleanupPending,
+    CleanupFailed,
+    Cleaned,
+    Orphaned,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailTaskWorkspaceResponse {
+    pub id: i64,
+    pub task_id: i64,
+    pub run_id: Option<i64>,
+    pub attempt: i32,
+    pub relative_id: String,
+    pub base_commit: Option<String>,
+    pub branch_name: Option<String>,
+    pub workflow_version: Option<String>,
+    pub workflow_digest: Option<String>,
+    pub environment_version: Option<String>,
+    pub tool_versions: Value,
+    pub snapshot_digest: Option<String>,
+    pub lifecycle_status: String,
+    pub cleanup_status: String,
+    pub cleanup_attempts: i32,
+    pub next_cleanup_at: Option<DateTime<Utc>>,
+    pub last_hook: Option<String>,
+    pub diagnostic_ref: Option<String>,
+    pub error_summary: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub cleaned_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RebuildDevRailTaskWorkspaceRequest {
+    pub snapshot_digest: Option<String>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]

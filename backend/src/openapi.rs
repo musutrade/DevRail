@@ -30,22 +30,23 @@ use crate::models::{
     DevRailRunPage, DevRailRunResponse, DevRailTaskCommentPage, DevRailTaskCommentResponse,
     DevRailTaskDependencyResponse, DevRailTaskDependentResponse, DevRailTaskEventPage,
     DevRailTaskEventResponse, DevRailTaskPage, DevRailTaskRelationsResponse, DevRailTaskResponse,
-    DevRailWorktreeFileResponse, DevRailWorktreeQuery, DevRailWorktreeResponse, HealthResponse,
-    LoginRequest, LoginResponse, LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest,
-    MfaMethodSchema, MfaPasskeyAuthenticationFinishRequest, MfaPasskeyAuthenticationStartRequest,
-    MfaPasskeyRegistrationFinishRequest, MfaPasskeyRegistrationStartRequest, MfaPasskeyResponse,
-    MfaStatusResponse, MfaWebauthnChallengeResponse, ModuleUnlockRequest, ModuleUnlockScopeSchema,
+    DevRailTaskWorkspaceResponse, DevRailWorktreeFileResponse, DevRailWorktreeQuery,
+    DevRailWorktreeResponse, HealthResponse, LoginRequest, LoginResponse, LoginStatusSchema,
+    MfaCodeRequest, MfaFactorRevokeRequest, MfaMethodSchema, MfaPasskeyAuthenticationFinishRequest,
+    MfaPasskeyAuthenticationStartRequest, MfaPasskeyRegistrationFinishRequest,
+    MfaPasskeyRegistrationStartRequest, MfaPasskeyResponse, MfaStatusResponse,
+    MfaWebauthnChallengeResponse, ModuleUnlockRequest, ModuleUnlockScopeSchema,
     ModuleUnlockStatusResponse, PageAuditLog, PageQuery, PageUser, PermissionCodes,
     PermissionGroupResponse, PermissionResponse, PermissionTypeSchema, QualityGateLogQuery,
-    ReadinessResponse, RecoveryCodesResponse, RegisterDevRailPushDeviceRequest,
-    ReplaceDevRailTaskDependenciesRequest, RetryDevRailRunRequest, RoleColorSchema,
-    RolePermissions, RoleResponse, SortDirectionSchema, StepUpRequest, StepUpResponse,
-    SyncDevRailExternalReviewRequest, SyncDevRailPullRequestRequest, UpdateDepartmentRequest,
-    UpdateDevRailEnvironmentRequest, UpdateDevRailNotificationPreferencesRequest,
-    UpdateDevRailProjectPolicyRequest, UpdateDevRailProjectRequest, UpdateDevRailRepositoryRequest,
-    UpdateDevRailReviewCommentRequest, UpdateDevRailTaskCommentRequest, UpdateDevRailTaskRequest,
-    UpdateRolePermissionsRequest, UpdateRoleRequest, UpdateUserRequest, UserResponse,
-    UserSortBySchema, UserStatusSchema,
+    ReadinessResponse, RebuildDevRailTaskWorkspaceRequest, RecoveryCodesResponse,
+    RegisterDevRailPushDeviceRequest, ReplaceDevRailTaskDependenciesRequest,
+    RetryDevRailRunRequest, RoleColorSchema, RolePermissions, RoleResponse, SortDirectionSchema,
+    StepUpRequest, StepUpResponse, SyncDevRailExternalReviewRequest, SyncDevRailPullRequestRequest,
+    UpdateDepartmentRequest, UpdateDevRailEnvironmentRequest,
+    UpdateDevRailNotificationPreferencesRequest, UpdateDevRailProjectPolicyRequest,
+    UpdateDevRailProjectRequest, UpdateDevRailRepositoryRequest, UpdateDevRailReviewCommentRequest,
+    UpdateDevRailTaskCommentRequest, UpdateDevRailTaskRequest, UpdateRolePermissionsRequest,
+    UpdateRoleRequest, UpdateUserRequest, UserResponse, UserSortBySchema, UserStatusSchema,
 };
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::openapi::OpenApi as OpenApiDocument;
@@ -815,8 +816,16 @@ fn delete_devrail_task_comment() {}
 fn create_devrail_run() {}
 #[utoipa::path(get, path = "/tasks/{task_id}/runs", operation_id = "listDevRailRuns", tag = "devrail", security(("cookieAuth" = [])), params(("task_id" = i64, Path), DevRailListQuery), responses((status = 200, body = DevRailRunPage)))]
 fn list_devrail_runs() {}
+#[utoipa::path(get, path = "/tasks/{task_id}/workspace", operation_id = "getDevRailTaskWorkspace", tag = "devrail", security(("cookieAuth" = [])), params(("task_id" = i64, Path)), responses((status = 200, body = Option<DevRailTaskWorkspaceResponse>)))]
+fn get_devrail_task_workspace() {}
+#[utoipa::path(post, path = "/tasks/{task_id}/workspace/rebuild", operation_id = "rebuildDevRailTaskWorkspace", tag = "devrail", security(("cookieAuth" = [])), params(("task_id" = i64, Path)), request_body = RebuildDevRailTaskWorkspaceRequest, responses((status = 200, body = DevRailTaskWorkspaceResponse)))]
+fn rebuild_devrail_task_workspace() {}
 #[utoipa::path(get, path = "/runs/{id}", operation_id = "getDevRailRun", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 200, body = DevRailRunResponse)))]
 fn get_devrail_run() {}
+#[utoipa::path(get, path = "/runs/{id}/workspace", operation_id = "getDevRailRunWorkspace", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 200, body = DevRailTaskWorkspaceResponse)))]
+fn get_devrail_run_workspace() {}
+#[utoipa::path(post, path = "/workspaces/{id}/cleanup", operation_id = "cleanupDevRailWorkspace", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 200, body = DevRailTaskWorkspaceResponse)))]
+fn cleanup_devrail_workspace() {}
 #[utoipa::path(post, path = "/runs/{id}/interrupt", operation_id = "interruptDevRailRun", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 200, body = DevRailRunResponse)))]
 fn interrupt_devrail_run() {}
 #[utoipa::path(get, path = "/runs/{id}/events", operation_id = "listDevRailRunEvents", tag = "devrail", security(("cookieAuth" = [])), params(("id" = i64, Path)), responses((status = 200, body = DevRailRunEventPage)))]
@@ -935,8 +944,8 @@ fn withdraw_devrail_approval() {}
         create_devrail_repository, get_devrail_repository, get_devrail_git_provider, create_devrail_pull_request, create_devrail_branch, delete_devrail_branch, sync_devrail_pull_request, receive_devrail_pull_request_webhook, list_devrail_external_review_comments, sync_devrail_external_review_comments, update_devrail_repository, sync_devrail_repository, get_devrail_repository_sync, inspect_devrail_repository_worktree,
         list_devrail_environments, create_devrail_environment, get_devrail_environment,
         update_devrail_environment, health_check_devrail_environment, list_devrail_tasks, create_devrail_task,
-        get_devrail_task, update_devrail_task, get_devrail_task_dependencies, replace_devrail_task_dependencies, list_devrail_task_events, stream_devrail_task_events, list_devrail_task_comments, create_devrail_task_comment, update_devrail_task_comment, delete_devrail_task_comment, create_devrail_run, list_devrail_runs,
-        get_devrail_run, interrupt_devrail_run, list_devrail_run_events, get_devrail_run_changeset, export_devrail_run_patch, get_devrail_run_quality_gates, execute_devrail_run_quality_gates, get_devrail_run_quality_gate_log
+        get_devrail_task, update_devrail_task, get_devrail_task_dependencies, replace_devrail_task_dependencies, list_devrail_task_events, stream_devrail_task_events, list_devrail_task_comments, create_devrail_task_comment, update_devrail_task_comment, delete_devrail_task_comment, create_devrail_run, list_devrail_runs, get_devrail_task_workspace, rebuild_devrail_task_workspace,
+        get_devrail_run, get_devrail_run_workspace, cleanup_devrail_workspace, interrupt_devrail_run, list_devrail_run_events, get_devrail_run_changeset, export_devrail_run_patch, get_devrail_run_quality_gates, execute_devrail_run_quality_gates, get_devrail_run_quality_gate_log
         ,stream_devrail_run_events, retry_devrail_run, list_devrail_approvals, list_devrail_reviews, create_devrail_review, decide_devrail_review, list_devrail_review_comments, create_devrail_review_comment, update_devrail_review_comment,
         get_devrail_approval, approve_devrail_approval, recover_devrail_approval, reject_devrail_approval, withdraw_devrail_approval, list_devrail_notifications, mark_devrail_notification_read, mark_all_devrail_notifications_read, get_devrail_notification_preferences, update_devrail_notification_preferences, list_devrail_push_devices, register_devrail_push_device, revoke_devrail_push_device, get_devrail_push_config
     ),
@@ -999,7 +1008,7 @@ fn withdraw_devrail_approval() {}
         UpdateDevRailRepositoryRequest, CreateDevRailEnvironmentRequest,
         UpdateDevRailEnvironmentRequest, DevRailEnvironmentHealthResponse, CreateDevRailTaskRequest,
         UpdateDevRailTaskRequest, CreateDevRailRunRequest, DevRailRunResponse,
-        DevRailRunPage, DevRailRunEventPage, DevRailChangesetResponse, DevRailPatchExportResponse, DevRailQualityGatePage, DevRailQualityGateLogPage, DevRailNotificationPage, DevRailNotificationResponse, DevRailNotificationPreferencesResponse, UpdateDevRailNotificationPreferencesRequest, DevRailPushConfigResponse, DevRailPushDeviceResponse, RegisterDevRailPushDeviceRequest, RetryDevRailRunRequest,
+        DevRailRunPage, DevRailRunEventPage, DevRailChangesetResponse, DevRailPatchExportResponse, DevRailQualityGatePage, DevRailQualityGateLogPage, DevRailTaskWorkspaceResponse, RebuildDevRailTaskWorkspaceRequest, DevRailNotificationPage, DevRailNotificationResponse, DevRailNotificationPreferencesResponse, UpdateDevRailNotificationPreferencesRequest, DevRailPushConfigResponse, DevRailPushDeviceResponse, RegisterDevRailPushDeviceRequest, RetryDevRailRunRequest,
         DevRailApprovalResponse, DevRailApprovalPage, DevRailApprovalDecisionRequest, DevRailReviewResponse, DevRailReviewPage, CreateDevRailReviewRequest, DecideDevRailReviewRequest, DevRailReviewCommentResponse, CreateDevRailReviewCommentRequest, UpdateDevRailReviewCommentRequest
     )),
     servers((url = "/api/v1", description = "默认 API 根路径")),

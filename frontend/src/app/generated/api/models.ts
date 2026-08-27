@@ -76,6 +76,7 @@ export type { DevRailTaskEventResponse } from './models/dev-rail-task-event-resp
 export type { DevRailTaskPage } from './models/dev-rail-task-page';
 export type { DevRailTaskRelationsResponse } from './models/dev-rail-task-relations-response';
 export type { DevRailTaskResponse } from './models/dev-rail-task-response';
+export type { DevRailTaskWorkspaceResponse } from './models/dev-rail-task-workspace-response';
 export type { DevRailWorktreeFileResponse } from './models/dev-rail-worktree-file-response';
 export type { DevRailWorktreeResponse } from './models/dev-rail-worktree-response';
 export type { ErrorBody } from './models/error-body';
@@ -104,6 +105,7 @@ export type { PermissionGroupResponse } from './models/permission-group-response
 export type { PermissionResponse } from './models/permission-response';
 export type { PermissionType } from './models/permission-type';
 export type { ReadinessResponse } from './models/readiness-response';
+export type { RebuildDevRailTaskWorkspaceRequest } from './models/rebuild-dev-rail-task-workspace-request';
 export type { RecoveryCodesResponse } from './models/recovery-codes-response';
 export type { RegisterDevRailPushDeviceRequest } from './models/register-dev-rail-push-device-request';
 export type { ReplaceDevRailTaskDependenciesRequest } from './models/replace-dev-rail-task-dependencies-request';

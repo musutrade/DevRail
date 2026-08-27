@@ -133,6 +133,8 @@ export type { ExecuteDevRailRunQualityGates$Params as ExecuteDevRailRunQualityGa
 export { executeDevRailRunQualityGates as executeDevRailRunQualityGates } from './fn/devrail/execute-dev-rail-run-quality-gates';
 export type { RetryDevRailRun$Params as RetryDevRailRun$Params } from './fn/devrail/retry-dev-rail-run';
 export { retryDevRailRun as retryDevRailRun } from './fn/devrail/retry-dev-rail-run';
+export type { GetDevRailRunWorkspace$Params as GetDevRailRunWorkspace$Params } from './fn/devrail/get-dev-rail-run-workspace';
+export { getDevRailRunWorkspace as getDevRailRunWorkspace } from './fn/devrail/get-dev-rail-run-workspace';
 export type { DeleteDevRailTaskComment$Params as DeleteDevRailTaskComment$Params } from './fn/devrail/delete-dev-rail-task-comment';
 export { deleteDevRailTaskComment as deleteDevRailTaskComment } from './fn/devrail/delete-dev-rail-task-comment';
 export type { UpdateDevRailTaskComment$Params as UpdateDevRailTaskComment$Params } from './fn/devrail/update-dev-rail-task-comment';
@@ -149,8 +151,14 @@ export type { ListDevRailRuns$Params as ListDevRailRuns$Params } from './fn/devr
 export { listDevRailRuns as listDevRailRuns } from './fn/devrail/list-dev-rail-runs';
 export type { CreateDevRailRun$Params as CreateDevRailRun$Params } from './fn/devrail/create-dev-rail-run';
 export { createDevRailRun as createDevRailRun } from './fn/devrail/create-dev-rail-run';
+export type { GetDevRailTaskWorkspace$Params as GetDevRailTaskWorkspace$Params } from './fn/devrail/get-dev-rail-task-workspace';
+export { getDevRailTaskWorkspace as getDevRailTaskWorkspace } from './fn/devrail/get-dev-rail-task-workspace';
+export type { RebuildDevRailTaskWorkspace$Params as RebuildDevRailTaskWorkspace$Params } from './fn/devrail/rebuild-dev-rail-task-workspace';
+export { rebuildDevRailTaskWorkspace as rebuildDevRailTaskWorkspace } from './fn/devrail/rebuild-dev-rail-task-workspace';
 export type { ReceiveDevRailPullRequestWebhook$Params as ReceiveDevRailPullRequestWebhook$Params } from './fn/devrail/receive-dev-rail-pull-request-webhook';
 export { receiveDevRailPullRequestWebhook as receiveDevRailPullRequestWebhook } from './fn/devrail/receive-dev-rail-pull-request-webhook';
+export type { CleanupDevRailWorkspace$Params as CleanupDevRailWorkspace$Params } from './fn/devrail/cleanup-dev-rail-workspace';
+export { cleanupDevRailWorkspace as cleanupDevRailWorkspace } from './fn/devrail/cleanup-dev-rail-workspace';
 export type { ListAuditLogs$Params as ListAuditLogs$Params } from './fn/audit/list-audit-logs';
 export { listAuditLogs as listAuditLogs } from './fn/audit/list-audit-logs';
 export type { Login$Params as Login$Params } from './fn/auth/login';

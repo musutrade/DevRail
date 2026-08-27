@@ -84,6 +84,14 @@ pub struct RunRetry;
 impl PermissionRequirement for RunRetry {
     const CODE: &'static str = "devrail:run:retry";
 }
+pub struct WorkspaceRead;
+impl PermissionRequirement for WorkspaceRead {
+    const CODE: &'static str = "devrail:workspace:read";
+}
+pub struct WorkspaceWrite;
+impl PermissionRequirement for WorkspaceWrite {
+    const CODE: &'static str = "devrail:workspace:write";
+}
 pub struct ApprovalRead;
 impl PermissionRequirement for ApprovalRead {
     const CODE: &'static str = "devrail:approval:read";

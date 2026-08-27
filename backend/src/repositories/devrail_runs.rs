@@ -122,6 +122,16 @@ pub(crate) async fn next_attempt(c: &mut PgConnection, task_id: i64) -> Result<i
         .await
 }
 
+pub(crate) async fn workflow_snapshot_for_run(
+    pool: &PgPool,
+    run_id: i64,
+) -> Result<Option<Value>, sqlx::Error> {
+    sqlx::query_scalar("SELECT workflow_snapshot FROM devrail_runs WHERE id=$1")
+        .bind(run_id)
+        .fetch_optional(pool)
+        .await
+}
+
 pub(crate) async fn clear_expired_branch(
     c: &mut PgConnection,
     run_id: i64,
@@ -205,6 +215,19 @@ pub(crate) async fn update_task_status(
         .execute(c)
         .await
         .map(|_| ())
+}
+
+pub(crate) async fn set_cwd(
+    connection: &mut PgConnection,
+    run_id: i64,
+    cwd: &str,
+) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query("UPDATE devrail_runs SET cwd=$2, updated_at=now() WHERE id=$1")
+        .bind(run_id)
+        .bind(cwd)
+        .execute(connection)
+        .await?;
+    Ok(result.rows_affected() > 0)
 }
 
 pub(crate) async fn mark_quality_gate_failed(
