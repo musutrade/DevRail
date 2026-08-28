@@ -6,7 +6,7 @@ import { vi } from 'vitest';
 import { AuthService } from '../../core/auth.service';
 import { DevRailApiService } from '../../features/devrail/data-access/devrail-api.service';
 import { DEVRAIL_PERMISSIONS } from '../../features/devrail/devrail.permissions';
-import type { DevRailRunResponse } from '../../generated/api/models';
+import type { DevRailContinuationResponse, DevRailRunResponse } from '../../generated/api/models';
 import { DevRailRunPage } from './devrail-run';
 
 const RUN: DevRailRunResponse = {
@@ -18,6 +18,8 @@ const RUN: DevRailRunResponse = {
   attempt: 2,
   actorType: 'system',
   cleanupStatus: 'completed',
+  runKind: 'retry',
+  handoffEvidenceStatus: 'available',
   status: 'failed',
   cwd: '/tmp/devrail-test',
   policy: {},
@@ -25,11 +27,28 @@ const RUN: DevRailRunResponse = {
   recoveryAttempts: 1,
   retryReason: 'stall',
   recoverySuggestion: '系统将在退避结束后自动重试',
+  parentRunId: 11,
+  parentTurnId: 'turn-parent',
   workflowSource: 'repository',
   workflowVersion: '1',
   workflowDigest: 'a'.repeat(64),
   createdAt: '2026-08-26T00:00:00Z',
   updatedAt: '2026-08-26T00:01:00Z',
+};
+
+const CONTINUATION: DevRailContinuationResponse = {
+  id: 31,
+  taskId: 7,
+  sourceRunId: 19,
+  rootRunId: 19,
+  sourceTurnId: 'turn-19',
+  triggerType: 'review_changes',
+  contextSummary: '根据审查意见继续修改',
+  continuationSequence: 1,
+  chainDepth: 1,
+  status: 'claimed',
+  createdAt: '2026-08-26T00:02:00Z',
+  updatedAt: '2026-08-26T00:02:00Z',
 };
 
 class EventSourceStub {
@@ -57,9 +76,17 @@ describe('DevRailRunPage', () => {
     getRunChangeset: vi.fn(async () => ({ runId: 19, files: [] })),
     getRunQualityGates: vi.fn(async () => ({ runId: 19, items: [] })),
     listReviews: vi.fn(async () => ({ items: [], total: 0, page: 1, pageSize: 50 })),
+    listContinuations: vi.fn(async () => ({
+      items: [CONTINUATION],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })),
+    cancelContinuation: vi.fn(async () => ({ ...CONTINUATION, status: 'cancelled' as const })),
   };
 
   beforeEach(async () => {
+    vi.clearAllMocks();
     permissionState.set(new Set());
     vi.stubGlobal('EventSource', EventSourceStub);
     await TestBed.configureTestingModule({
@@ -102,6 +129,7 @@ describe('DevRailRunPage', () => {
     expect(text).toContain('工作流版本');
     expect(text).toContain('工作流摘要');
     expect(text).toContain('a'.repeat(64));
+    expect(text).toContain('可用于追加执行');
   });
 
   it('无运行权限时隐藏执行和重试操作', () => {
@@ -116,5 +144,28 @@ describe('DevRailRunPage', () => {
     const text = fixture.nativeElement.textContent as string;
     expect(text).toContain('执行质量门禁');
     expect(text).toContain('重试运行');
+  });
+
+  it('区分运行类型并仅按 continuation 权限取消未启动请求', async () => {
+    permissionState.set(new Set([DEVRAIL_PERMISSIONS.continuationCancel]));
+    await fixture.whenStable();
+    const page = fixture.componentInstance;
+    expect(fixture.nativeElement.textContent).toContain('失败重试');
+    expect(fixture.nativeElement.textContent).toContain('根据审查意见继续修改');
+    await page.cancelPendingContinuation(CONTINUATION);
+    expect(page.continuations()[0].status).toBe('cancelled');
+  });
+
+  it('展示父运行和父回合，并拒绝取消已派发请求', async () => {
+    permissionState.set(new Set([DEVRAIL_PERMISSIONS.continuationCancel]));
+    const page = fixture.componentInstance;
+    page.continuations.set([{ ...CONTINUATION, status: 'dispatched' }]);
+    await fixture.whenStable();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('父运行');
+    expect(text).toContain('父回合');
+    expect(text).toContain('turn-parent');
+    await page.cancelPendingContinuation({ ...CONTINUATION, status: 'dispatched' });
+    expect(apiStub.cancelContinuation).not.toHaveBeenCalled();
   });
 });

@@ -25,6 +25,7 @@ import type {
   DevRailReviewCommentResponse,
   DevRailExternalReviewCommentResponse,
   DevRailTaskWorkspaceResponse,
+  DevRailContinuationResponse,
 } from '../../generated/api/models';
 
 @Component({
@@ -46,6 +47,7 @@ export class DevRailRunPage implements OnInit, OnDestroy {
   readonly selectedReviewId = signal<number | null>(null);
   readonly externalReviewComments = signal<DevRailExternalReviewCommentResponse[]>([]);
   readonly workspace = signal<DevRailTaskWorkspaceResponse | null>(null);
+  readonly continuations = signal<DevRailContinuationResponse[]>([]);
   readonly externalProjectId = signal('');
   readonly externalRepositoryId = signal('');
   readonly externalNumber = signal('');
@@ -57,6 +59,9 @@ export class DevRailRunPage implements OnInit, OnDestroy {
   readonly canExecute = computed(() => this.auth.hasPermission(DEVRAIL_PERMISSIONS.runExecute));
   readonly canInterrupt = computed(() => this.auth.hasPermission(DEVRAIL_PERMISSIONS.runInterrupt));
   readonly canRetry = computed(() => this.auth.hasPermission(DEVRAIL_PERMISSIONS.runRetry));
+  readonly canCancelContinuation = computed(() =>
+    this.auth.hasPermission(DEVRAIL_PERMISSIONS.continuationCancel),
+  );
   readonly canManageWorkspace = computed(() =>
     this.auth.hasPermission(DEVRAIL_PERMISSIONS.workspaceWrite),
   );
@@ -294,6 +299,66 @@ export class DevRailRunPage implements OnInit, OnDestroy {
     return actorType === 'system' ? '系统调度器' : '用户';
   }
 
+  runKindLabel(kind: string): string {
+    return (
+      {
+        primary: '主运行',
+        retry: '失败重试',
+        continuation: '追加执行',
+        follow_up: '后续任务运行',
+      }[kind] ?? kind
+    );
+  }
+
+  continuationStatusLabel(status: string): string {
+    return (
+      {
+        pending: '待派发',
+        claimed: '已领取',
+        dispatched: '已派发',
+        completed: '已完成',
+        cancelled: '已取消',
+        rejected: '已拒绝',
+      }[status] ?? status
+    );
+  }
+
+  continuationTriggerLabel(trigger: string): string {
+    return (
+      {
+        user_context: '用户追加',
+        quality_gate: '质量门禁',
+        review_changes: '审查修改',
+      }[trigger] ?? trigger
+    );
+  }
+
+  handoffStatusLabel(status: string | null | undefined): string {
+    return (
+      {
+        available: '可用于追加执行',
+        missing: '缺少可验证证据',
+        invalid: '证据校验失败',
+      }[status ?? ''] ?? '不可用'
+    );
+  }
+
+  async cancelPendingContinuation(item: DevRailContinuationResponse): Promise<void> {
+    if (this.busy() || !['pending', 'claimed'].includes(item.status)) return;
+    this.busy.set(true);
+    try {
+      const cancelled = await this.api.cancelContinuation(item.id);
+      this.continuations.update((items) =>
+        items.map((current) => (current.id === cancelled.id ? cancelled : current)),
+      );
+      this.snack.open('追加执行请求已取消', '关闭', { duration: 2500 });
+    } catch (error) {
+      this.snack.open(apiErrorMessage(error, '取消追加执行请求失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
   private async load(): Promise<void> {
     this.loading.set(true);
     this.error.set(null);
@@ -303,16 +368,22 @@ export class DevRailRunPage implements OnInit, OnDestroy {
         typeof this.api.getRunWorkspace === 'function'
           ? this.api.getRunWorkspace(this.runId).catch(() => null)
           : Promise.resolve(null);
-      const [page, changeset, gates, workspace] = await Promise.all([
+      const [page, changeset, gates, workspace, continuations] = await Promise.all([
         this.api.listRunEvents(this.runId),
         this.api.getRunChangeset(this.runId),
         this.api.getRunQualityGates(this.runId),
         workspacePromise,
+        typeof this.api.listContinuations === 'function'
+          ? this.api
+              .listContinuations(undefined, this.runId, 1, 50)
+              .catch(() => ({ items: [], total: 0, page: 1, pageSize: 50 }))
+          : Promise.resolve({ items: [], total: 0, page: 1, pageSize: 50 }),
       ]);
       this.events.set(page.items);
       this.changes.set(changeset.files);
       this.qualityGates.set(gates.items);
       this.workspace.set(workspace);
+      this.continuations.set(continuations.items);
       await this.loadReviews();
       this.connectEvents();
     } catch (error) {
@@ -342,6 +413,26 @@ export class DevRailRunPage implements OnInit, OnDestroy {
     this.eventSource.addEventListener('turn_complete', (event) =>
       this.appendEvent((event as MessageEvent).data),
     );
+    for (const eventType of [
+      'continuation.created',
+      'continuation.claimed',
+      'continuation.dispatched',
+      'continuation.cancelled',
+      'continuation.completed',
+    ]) {
+      this.eventSource.addEventListener(eventType, () => {
+        if (typeof this.api.listContinuations === 'function') {
+          void this.api
+            .listContinuations(undefined, this.runId, 1, 50)
+            .then((page) => this.continuations.set(page.items))
+            .catch(() => undefined);
+        }
+        void this.api
+          .getRun(this.runId)
+          .then((run) => this.run.set(run))
+          .catch(() => undefined);
+      });
+    }
     this.eventSource.onerror = () => {
       this.eventSource?.close();
       if (!['completed', 'failed', 'cancelled'].includes(this.run()?.status ?? '')) {

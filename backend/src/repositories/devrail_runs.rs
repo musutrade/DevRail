@@ -5,7 +5,7 @@ use crate::models::{DevRailRunEventRow, DevRailRunRow};
 use serde_json::Value;
 use sqlx::{AssertSqlSafe, PgConnection, PgPool};
 
-const RUN_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, attempt, task_revision, workflow_source, workflow_version, workflow_digest, workflow_snapshot, actor_type, last_heartbeat_at, last_event_at, retry_reason, parent_run_id, parent_turn_id, cleanup_status, branch_name, branch_expires_at, status, thread_id, turn_id, harness_version, model_id, cwd, policy, startup_args_summary, exit_reason, exit_code, stderr_summary, trace_id, recovery_suggestion, recovery_attempts, started_at, completed_at, created_at, updated_at";
+const RUN_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, attempt, task_revision, workflow_source, workflow_version, workflow_digest, workflow_snapshot, actor_type, last_heartbeat_at, last_event_at, retry_reason, parent_run_id, parent_turn_id, run_kind, root_run_id, continuation_sequence, continuation_request_id, harness_start_key, harness_start_claim_owner, harness_start_claim_token, harness_start_claim_expires_at, harness_started_token, cleanup_status, branch_name, branch_expires_at, status, thread_id, turn_id, harness_version, model_id, cwd, policy, startup_args_summary, exit_reason, exit_code, stderr_summary, trace_id, recovery_suggestion, recovery_attempts, started_at, completed_at, created_at, updated_at";
 const EVENT_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, run_id, cursor, event_type, source_event_id, idempotency_key, payload, summary, occurred_at";
 const MAX_TRANSPORT_RECOVERY_ATTEMPTS: i32 = 2;
 
@@ -35,6 +35,29 @@ pub(crate) struct NewRun<'a> {
     pub parent_turn_id: Option<&'a str>,
     pub branch_name: Option<&'a str>,
     pub branch_expires_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub cwd: &'a str,
+    pub policy: &'a Value,
+    pub startup_args: &'a Value,
+    pub model_id: Option<&'a str>,
+    pub department_id: Option<i64>,
+}
+
+pub struct NewContinuationRun<'a> {
+    pub actor: &'a ActorContext,
+    pub task_id: i64,
+    pub snapshot_id: i64,
+    pub idempotency_key: &'a str,
+    pub task_revision: i64,
+    pub workflow_source: &'a str,
+    pub workflow_version: &'a str,
+    pub workflow_digest: &'a str,
+    pub workflow_snapshot: &'a Value,
+    pub parent_run_id: i64,
+    pub parent_turn_id: &'a str,
+    pub thread_id: &'a str,
+    pub continuation_request_id: i64,
+    pub continuation_sequence: i16,
+    pub harness_start_key: &'a str,
     pub cwd: &'a str,
     pub policy: &'a Value,
     pub startup_args: &'a Value,
@@ -81,15 +104,15 @@ pub(crate) async fn create_run(
     input: &NewRun<'_>,
 ) -> Result<Option<DevRailRunRow>, sqlx::Error> {
     let sql = format!(
-        "INSERT INTO devrail_runs (organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, attempt, task_revision, workflow_source, workflow_version, workflow_digest, workflow_snapshot, actor_type, parent_run_id, parent_turn_id, branch_name, branch_expires_at, status, cwd, policy, startup_args_summary, model_id)
-         SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'starting',$18,$19,$20,$21
+        "INSERT INTO devrail_runs (organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, attempt, task_revision, workflow_source, workflow_version, workflow_digest, workflow_snapshot, actor_type, parent_run_id, parent_turn_id, run_kind, branch_name, branch_expires_at, status, cwd, policy, startup_args_summary, model_id)
+         SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,CASE WHEN $14 IS NOT NULL OR ($13='system' AND $7 > 1) THEN 'retry' ELSE 'primary' END,$16,$17,'starting',$18,$19,$20,$21
          FROM devrail_tasks t
          WHERE t.id=$4 AND t.organization_id=$1 AND t.revision=$8
            AND t.workflow_source=$9 AND t.workflow_version=$10 AND t.workflow_digest=$11
            AND t.dispatch_snapshot->'workflow'=$12::jsonb
          ON CONFLICT DO NOTHING RETURNING {RUN_COLUMNS}"
     );
-    sqlx::query_as::<_, DevRailRunRow>(AssertSqlSafe(sql))
+    let inserted = sqlx::query_as::<_, DevRailRunRow>(AssertSqlSafe(sql))
         .bind(input.actor.organization_id)
         .bind(input.department_id)
         .bind(input.actor.user_id)
@@ -111,8 +134,83 @@ pub(crate) async fn create_run(
         .bind(input.policy)
         .bind(input.startup_args)
         .bind(input.model_id)
-        .fetch_optional(c)
-        .await
+        .fetch_optional(&mut *c)
+        .await?;
+    let Some(inserted) = inserted else {
+        return Ok(None);
+    };
+    sqlx::query(
+        "UPDATE devrail_runs child
+         SET root_run_id=CASE
+             WHEN child.parent_run_id IS NULL THEN child.id
+             ELSE parent.root_run_id
+         END,
+         updated_at=now()
+         FROM devrail_runs parent
+         WHERE child.id=$1 AND child.parent_run_id IS NOT NULL AND parent.id=child.parent_run_id",
+    )
+    .bind(inserted.id)
+    .execute(&mut *c)
+    .await?;
+    sqlx::query(
+        "UPDATE devrail_runs SET root_run_id=id, updated_at=now()
+         WHERE id=$1 AND parent_run_id IS NULL AND root_run_id IS NULL",
+    )
+    .bind(inserted.id)
+    .execute(&mut *c)
+    .await?;
+    sqlx::query_as::<_, DevRailRunRow>(AssertSqlSafe(format!(
+        "SELECT {RUN_COLUMNS} FROM devrail_runs WHERE id=$1"
+    )))
+    .bind(inserted.id)
+    .fetch_one(&mut *c)
+    .await
+    .map(Some)
+}
+
+pub async fn create_continuation_run(
+    c: &mut PgConnection,
+    input: &NewContinuationRun<'_>,
+) -> Result<Option<DevRailRunRow>, sqlx::Error> {
+    let sql = format!(
+        "INSERT INTO devrail_runs (organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, attempt, task_revision, workflow_source, workflow_version, workflow_digest, workflow_snapshot, actor_type, parent_run_id, parent_turn_id, run_kind, root_run_id, continuation_sequence, continuation_request_id, harness_start_key, status, thread_id, cwd, policy, startup_args_summary, model_id) SELECT $1,$2,$3,$4,$5,$6,COALESCE((SELECT MAX(attempt)+1 FROM devrail_runs WHERE task_id=$4),1),$7,$8,$9,$10,$11,'system',$12,$13,'continuation',COALESCE(source.root_run_id,source.id),$14,$15,$16,'starting',$17,$18,$19,$20,$21 FROM devrail_runs source JOIN devrail_tasks task ON task.id=source.task_id AND task.organization_id=source.organization_id WHERE source.id=$12 AND source.organization_id=$1 AND source.task_id=$4 AND source.status IN ('completed','failed','cancelled') AND task.revision=$7 AND task.status='continuation_pending' AND NOT EXISTS (SELECT 1 FROM devrail_runs active WHERE active.task_id=$4 AND active.organization_id=$1 AND active.status IN ('starting','active','awaiting_approval')) ON CONFLICT DO NOTHING RETURNING {RUN_COLUMNS}"
+    );
+    let inserted = sqlx::query_as::<_, DevRailRunRow>(AssertSqlSafe(sql))
+        .bind(input.actor.organization_id)
+        .bind(input.department_id)
+        .bind(input.actor.user_id)
+        .bind(input.task_id)
+        .bind(input.snapshot_id)
+        .bind(input.idempotency_key)
+        .bind(input.task_revision)
+        .bind(input.workflow_source)
+        .bind(input.workflow_version)
+        .bind(input.workflow_digest)
+        .bind(input.workflow_snapshot)
+        .bind(input.parent_run_id)
+        .bind(input.parent_turn_id)
+        .bind(input.continuation_sequence)
+        .bind(input.continuation_request_id)
+        .bind(input.harness_start_key)
+        .bind(input.thread_id)
+        .bind(input.cwd)
+        .bind(input.policy)
+        .bind(input.startup_args)
+        .bind(input.model_id)
+        .fetch_optional(&mut *c)
+        .await?;
+    if inserted.is_some() {
+        return Ok(inserted);
+    }
+    sqlx::query_as::<_, DevRailRunRow>(AssertSqlSafe(format!(
+        "SELECT {RUN_COLUMNS} FROM devrail_runs
+         WHERE organization_id=$1 AND continuation_request_id=$2
+         FOR UPDATE"
+    )))
+    .bind(input.actor.organization_id)
+    .bind(input.continuation_request_id)
+    .fetch_optional(&mut *c)
+    .await
 }
 
 pub(crate) async fn next_attempt(c: &mut PgConnection, task_id: i64) -> Result<i32, sqlx::Error> {
@@ -160,9 +258,58 @@ pub(crate) async fn update_run_started(
     thread_id: Option<&str>,
     turn_id: Option<&str>,
     harness_version: Option<&str>,
-) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE devrail_runs SET status='active', thread_id=COALESCE($2,thread_id), turn_id=COALESCE($3,turn_id), harness_version=COALESCE($4,harness_version), started_at=COALESCE(started_at,now()), last_heartbeat_at=now(), updated_at=now() WHERE id=$1 AND status IN ('created','starting','active')")
-        .bind(run_id).bind(thread_id).bind(turn_id).bind(harness_version).execute(c).await.map(|_| ())
+    start_claim_token: uuid::Uuid,
+) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query("UPDATE devrail_runs SET status='active', thread_id=COALESCE($2,thread_id), turn_id=COALESCE($3,turn_id), harness_version=COALESCE($4,harness_version), harness_started_token=CASE WHEN harness_start_key IS NULL THEN harness_started_token WHEN harness_start_claim_token=$5 THEN $5 ELSE harness_started_token END, harness_start_claim_owner=NULL, harness_start_claim_token=NULL, harness_start_claim_expires_at=NULL, started_at=COALESCE(started_at,now()), last_heartbeat_at=now(), updated_at=now() WHERE id=$1 AND status IN ('created','starting','active') AND (harness_start_key IS NULL OR harness_start_claim_token=$5 OR (status='active' AND harness_started_token=$5))")
+        .bind(run_id).bind(thread_id).bind(turn_id).bind(harness_version).bind(start_claim_token).execute(c).await?;
+    Ok(result.rows_affected() == 1)
+}
+
+pub(crate) async fn claim_harness_start(
+    pool: &PgPool,
+    run_id: i64,
+    owner: &str,
+    token: uuid::Uuid,
+    lease_seconds: i64,
+) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query(
+        "UPDATE devrail_runs
+         SET harness_start_claim_owner=CASE WHEN harness_start_key IS NULL THEN harness_start_claim_owner ELSE $2 END,
+             harness_start_claim_token=CASE WHEN harness_start_key IS NULL THEN harness_start_claim_token ELSE $3 END,
+             harness_start_claim_expires_at=CASE WHEN harness_start_key IS NULL THEN harness_start_claim_expires_at ELSE now()+make_interval(secs => $4) END,
+             harness_started_token=CASE WHEN harness_start_key IS NULL THEN harness_started_token ELSE NULL END,
+             updated_at=now()
+         WHERE id=$1
+           AND (harness_start_key IS NULL OR (
+               status='starting'
+               AND (harness_start_claim_token IS NULL OR harness_start_claim_expires_at<=now())
+           ))",
+    )
+    .bind(run_id)
+    .bind(owner)
+    .bind(token)
+    .bind(lease_seconds.clamp(30, 300))
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() == 1)
+}
+
+pub(crate) async fn release_harness_start(
+    pool: &PgPool,
+    run_id: i64,
+    token: uuid::Uuid,
+) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query(
+        "UPDATE devrail_runs
+         SET harness_start_claim_owner=NULL, harness_start_claim_token=NULL,
+             harness_start_claim_expires_at=NULL, updated_at=now()
+         WHERE id=$1 AND status='starting' AND harness_start_claim_token=$2",
+    )
+    .bind(run_id)
+    .bind(token)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() == 1)
 }
 
 pub(crate) async fn update_run_heartbeat(pool: &PgPool, run_id: i64) -> Result<bool, sqlx::Error> {
@@ -298,12 +445,34 @@ pub(crate) async fn requeue_task_after_run(
 
 pub(crate) async fn mark_unrecoverable_runs(pool: &PgPool) -> Result<u64, sqlx::Error> {
     let mut tx = pool.begin().await?;
-    let rows = sqlx::query_as::<_, (i64,)>("UPDATE devrail_runs SET status='failed', exit_reason='supervisor_restart', retry_reason='服务重启后缺少可恢复 thread', recovery_suggestion='服务重启后运行无法自动恢复；请使用相同快照重试', completed_at=COALESCE(completed_at,now()), cleanup_status='completed', updated_at=now() WHERE status IN ('starting','active') AND thread_id IS NULL RETURNING id")
+    let rows = sqlx::query_as::<_, (i64, i64, Option<i64>, i64, String)>("UPDATE devrail_runs SET status='failed', exit_reason='supervisor_restart', retry_reason='服务重启后缺少可恢复 thread', recovery_suggestion='服务重启后运行无法自动恢复；请使用相同快照重试', completed_at=COALESCE(completed_at,now()), cleanup_status='completed', updated_at=now() WHERE status IN ('starting','active') AND thread_id IS NULL RETURNING id, organization_id, department_id, owner_user_id, run_kind")
         .fetch_all(&mut *tx)
         .await?;
     if !rows.is_empty() {
         let run_ids = rows.iter().map(|row| row.0).collect::<Vec<_>>();
-        sqlx::query("UPDATE devrail_tasks t SET status='failed', scheduler_claim_token=NULL, scheduler_claimed_at=NULL, updated_at=now() WHERE t.status='running' AND EXISTS (SELECT 1 FROM devrail_runs r WHERE r.task_id=t.id AND r.status='failed' AND r.exit_reason='supervisor_restart')")
+        for (run_id, organization_id, department_id, owner_user_id, run_kind) in &rows {
+            if run_kind != "continuation" {
+                continue;
+            }
+            let actor = ActorContext {
+                actor_type: crate::access::ActorType::System,
+                user_id: *owner_user_id,
+                session_id: 0,
+                organization_id: *organization_id,
+                department_id: *department_id,
+                data_scope: crate::access::DataScope::All,
+                permission_codes: std::collections::BTreeSet::new(),
+            };
+            crate::repositories::devrail_continuations::complete_for_child_run(
+                &mut tx,
+                &actor,
+                *run_id,
+                "supervisor_restart",
+                "failed",
+            )
+            .await?;
+        }
+        sqlx::query("UPDATE devrail_tasks t SET status='failed', scheduler_claim_token=NULL, scheduler_claimed_at=NULL, updated_at=now() WHERE t.status='running' AND EXISTS (SELECT 1 FROM devrail_runs r WHERE r.task_id=t.id AND r.status='failed' AND r.exit_reason='supervisor_restart' AND r.run_kind <> 'continuation')")
             .execute(&mut *tx)
             .await?;
         sqlx::query(
@@ -535,6 +704,25 @@ pub async fn find_run_by_idempotency(
         .bind(actor.department_id)
         .bind(task_id)
         .bind(idempotency_key)
+        .fetch_optional(pool)
+        .await
+}
+
+pub(crate) async fn find_retry_parent(
+    pool: &PgPool,
+    actor: &ActorContext,
+    task_id: i64,
+) -> Result<Option<DevRailRunRow>, sqlx::Error> {
+    let sql = format!(
+        "WITH RECURSIVE visible_departments AS (SELECT id FROM departments WHERE id=$4 AND organization_id=$2 UNION SELECT child.id FROM departments child JOIN visible_departments parent ON child.parent_id=parent.id WHERE child.organization_id=$2) SELECT {RUN_COLUMNS} FROM devrail_runs r WHERE r.task_id=$5 AND r.status='failed' AND {} ORDER BY r.attempt DESC,r.id DESC LIMIT 1",
+        scope("r")
+    );
+    sqlx::query_as::<_, DevRailRunRow>(AssertSqlSafe(sql))
+        .bind(actor.data_scope.as_str())
+        .bind(actor.organization_id)
+        .bind(actor.user_id)
+        .bind(actor.department_id)
+        .bind(task_id)
         .fetch_optional(pool)
         .await
 }
@@ -794,5 +982,162 @@ mod workflow_identity_tests {
         assert_eq!(inserted.workflow_digest, "0".repeat(64));
         assert_eq!(inserted.workflow_snapshot, workflow_snapshot);
         tx.rollback().await.expect("rollback isolated fixture");
+    }
+
+    #[tokio::test]
+    async fn harness_start_claim_accepts_only_the_current_process_token() {
+        let _guard = DATABASE_TEST_LOCK.lock().await;
+        let Ok(database_url) = std::env::var("TEST_DATABASE_URL") else {
+            return;
+        };
+        let pool = crate::db::init_pool(&database_url)
+            .await
+            .expect("connect test database");
+        crate::db::run_migrations(&pool)
+            .await
+            .expect("run migrations");
+        let suffix = uuid::Uuid::new_v4().simple().to_string();
+        let (owner_user_id, organization_id, department_id, task_id) =
+            create_harness_test_task(&pool, &suffix)
+                .await
+                .expect("create task");
+        let actor = ActorContext {
+            actor_type: ActorType::System,
+            user_id: owner_user_id,
+            session_id: 0,
+            organization_id,
+            department_id,
+            data_scope: DataScope::Organization,
+            permission_codes: BTreeSet::new(),
+        };
+        let dispatch_snapshot = sqlx::query_scalar::<_, Value>(
+            "SELECT dispatch_snapshot FROM devrail_tasks WHERE id=$1",
+        )
+        .bind(task_id)
+        .fetch_one(&pool)
+        .await
+        .expect("read task snapshot");
+        let workflow_snapshot = dispatch_snapshot
+            .get("workflow")
+            .cloned()
+            .expect("workflow snapshot");
+        let workflow_digest = "0".repeat(64);
+        let mut tx = pool.begin().await.expect("begin run transaction");
+        let snapshot_id =
+            create_snapshot(&mut tx, &actor, task_id, &dispatch_snapshot, department_id)
+                .await
+                .expect("create snapshot");
+        let run = create_run(
+            &mut tx,
+            &NewRun {
+                actor: &actor,
+                task_id,
+                snapshot_id,
+                idempotency_key: "start-claim-token",
+                attempt: 1,
+                task_revision: 1,
+                workflow_source: "legacy",
+                workflow_version: "legacy-v1",
+                workflow_digest: &workflow_digest,
+                workflow_snapshot: &workflow_snapshot,
+                actor_type: "system",
+                parent_run_id: None,
+                parent_turn_id: None,
+                branch_name: None,
+                branch_expires_at: None,
+                cwd: "/tmp/devrail-start-claim",
+                policy: &serde_json::json!({}),
+                startup_args: &serde_json::json!(["app-server"]),
+                model_id: None,
+                department_id,
+            },
+        )
+        .await
+        .expect("create run")
+        .expect("run inserted");
+        sqlx::query("UPDATE devrail_runs SET harness_start_key='start-claim-token' WHERE id=$1")
+            .bind(run.id)
+            .execute(&mut *tx)
+            .await
+            .expect("set stable start key");
+        tx.commit().await.expect("commit run");
+
+        let first_token = uuid::Uuid::new_v4();
+        assert!(
+            claim_harness_start(&pool, run.id, "supervisor:first", first_token, 120,)
+                .await
+                .expect("claim first start")
+        );
+        let mut started_tx = pool.begin().await.expect("begin first start");
+        assert!(update_run_started(
+            &mut started_tx,
+            run.id,
+            Some("thread-first"),
+            Some("turn-first"),
+            None,
+            first_token,
+        )
+        .await
+        .expect("persist first start"));
+        started_tx.commit().await.expect("commit first start");
+
+        let stale_token = uuid::Uuid::new_v4();
+        let mut stale_tx = pool.begin().await.expect("begin stale update");
+        assert!(!update_run_started(
+            &mut stale_tx,
+            run.id,
+            Some("thread-stale"),
+            Some("turn-stale"),
+            None,
+            stale_token,
+        )
+        .await
+        .expect("stale update result"));
+        stale_tx.commit().await.expect("commit stale update");
+        let stored = sqlx::query_as::<_, (String, String)>(
+            "SELECT thread_id,turn_id FROM devrail_runs WHERE id=$1",
+        )
+        .bind(run.id)
+        .fetch_one(&pool)
+        .await
+        .expect("read started run");
+        assert_eq!(
+            stored,
+            ("thread-first".to_string(), "turn-first".to_string())
+        );
+
+        assert!(
+            prepare_transport_recovery(&pool, run.id, "transport_disconnect")
+                .await
+                .expect("prepare recovered start")
+        );
+        assert!(
+            claim_harness_start(&pool, run.id, "supervisor:second", stale_token, 120,)
+                .await
+                .expect("claim second start")
+        );
+        let mut second_tx = pool.begin().await.expect("begin second start");
+        assert!(update_run_started(
+            &mut second_tx,
+            run.id,
+            Some("thread-second"),
+            Some("turn-second"),
+            None,
+            stale_token,
+        )
+        .await
+        .expect("persist second start"));
+        second_tx.commit().await.expect("commit second start");
+        let stored = sqlx::query_as::<_, (String, String)>(
+            "SELECT thread_id,turn_id FROM devrail_runs WHERE id=$1",
+        )
+        .bind(run.id)
+        .fetch_one(&pool)
+        .await
+        .expect("read recovered run");
+        assert_eq!(
+            stored,
+            ("thread-second".to_string(), "turn-second".to_string())
+        );
     }
 }

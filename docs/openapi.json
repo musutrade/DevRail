@@ -81,6 +81,24 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "taskId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "responses": {
@@ -1308,6 +1326,193 @@
         }
       }
     },
+    "/continuations": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "listDevRailContinuations",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "assigneeUserId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "label",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailContinuationPage"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/continuations/{id}": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "getDevRailContinuation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailContinuationResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/continuations/{id}/cancel": {
+      "post": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "cancelDevRailContinuation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailContinuationResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/dashboard/stats": {
       "get": {
         "tags": [
@@ -1824,6 +2029,24 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "taskId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "responses": {
@@ -1985,6 +2208,24 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
             }
           }
         ],
@@ -2363,6 +2604,24 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
             }
           }
         ],
@@ -2764,6 +3023,24 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
             }
           }
         ],
@@ -3440,6 +3717,24 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "taskId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "responses": {
@@ -3957,6 +4252,24 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
             }
           }
         ],
@@ -4767,6 +5080,62 @@
         ]
       }
     },
+    "/runs/{id}/continuations": {
+      "post": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "createDevRailContinuation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDevRailContinuationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailContinuationResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/runs/{id}/events": {
       "get": {
         "tags": [
@@ -5274,6 +5643,24 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "taskId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "responses": {
@@ -5514,6 +5901,24 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
             }
           }
         ],
@@ -6520,6 +6925,52 @@
           }
         }
       },
+      "ContinuationPolicy": {
+        "type": "object",
+        "properties": {
+          "allowed_triggers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DevRailContinuationTrigger"
+            },
+            "uniqueItems": true
+          },
+          "claim_lease_seconds": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "max_chain_depth": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "max_context_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "max_continuations": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "max_dispatch_attempts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "retry_base_delay_seconds": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "retry_max_delay_seconds": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
       "CreateDepartmentRequest": {
         "type": "object",
         "required": [
@@ -6564,6 +7015,22 @@
             "type": "string"
           }
         }
+      },
+      "CreateDevRailContinuationRequest": {
+        "type": "object",
+        "required": [
+          "idempotencyKey",
+          "input"
+        ],
+        "properties": {
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "input": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
       },
       "CreateDevRailEnvironmentRequest": {
         "type": "object",
@@ -7354,6 +7821,188 @@
           }
         }
       },
+      "DevRailContinuationCapabilities": {
+        "type": "object",
+        "required": [
+          "canRead",
+          "canCreate",
+          "canCancel"
+        ],
+        "properties": {
+          "canCancel": {
+            "type": "boolean"
+          },
+          "canCreate": {
+            "type": "boolean"
+          },
+          "canRead": {
+            "type": "boolean"
+          }
+        }
+      },
+      "DevRailContinuationErrorCode": {
+        "type": "string",
+        "enum": [
+          "policy_disabled",
+          "invalid_source",
+          "activity_conflict",
+          "task_cancelled",
+          "evidence_missing",
+          "evidence_expired",
+          "evidence_mismatch",
+          "input_too_large",
+          "input_rejected",
+          "chain_limit",
+          "count_limit",
+          "claim_conflict",
+          "dispatch_unavailable"
+        ]
+      },
+      "DevRailContinuationPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DevRailContinuationResponse"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "DevRailContinuationResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "taskId",
+          "sourceRunId",
+          "rootRunId",
+          "sourceTurnId",
+          "triggerType",
+          "contextSummary",
+          "continuationSequence",
+          "chainDepth",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "cancelledAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "chainDepth": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "childRunId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "contextSummary": {
+            "type": "string"
+          },
+          "continuationSequence": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "dispatchedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "resultCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rootRunId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sourceRunId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sourceTurnId": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DevRailContinuationStatus"
+          },
+          "taskId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "triggerType": {
+            "$ref": "#/components/schemas/DevRailContinuationTrigger"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DevRailContinuationStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "claimed",
+          "dispatched",
+          "completed",
+          "cancelled",
+          "rejected"
+        ]
+      },
+      "DevRailContinuationTrigger": {
+        "type": "string",
+        "enum": [
+          "user_context",
+          "quality_gate",
+          "review_changes"
+        ]
+      },
       "DevRailDependencyAction": {
         "type": "string",
         "enum": [
@@ -7629,6 +8278,14 @@
             "format": "int64"
           }
         }
+      },
+      "DevRailHandoffEvidenceStatus": {
+        "type": "string",
+        "enum": [
+          "available",
+          "missing",
+          "invalid"
+        ]
       },
       "DevRailNotificationPage": {
         "type": "object",
@@ -8621,6 +9278,89 @@
           }
         }
       },
+      "DevRailRunHandoffResponse": {
+        "type": "object",
+        "required": [
+          "sourceRunId",
+          "evidenceStatus",
+          "taskSnapshotDigest",
+          "workflowSnapshotDigest",
+          "baseCommit",
+          "changesetDigest",
+          "createdAt"
+        ],
+        "properties": {
+          "baseCommit": {
+            "type": "string"
+          },
+          "branchRef": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "changesetDigest": {
+            "type": "string"
+          },
+          "changesetRef": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "environmentSnapshotDigest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "errorCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evidenceStatus": {
+            "$ref": "#/components/schemas/DevRailHandoffEvidenceStatus"
+          },
+          "headCommit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sourceRunId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "taskSnapshotDigest": {
+            "type": "string"
+          },
+          "validatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "workflowSnapshotDigest": {
+            "type": "string"
+          }
+        }
+      },
+      "DevRailRunKind": {
+        "type": "string",
+        "enum": [
+          "primary",
+          "retry",
+          "continuation",
+          "follow_up"
+        ]
+      },
       "DevRailRunPage": {
         "type": "object",
         "required": [
@@ -8663,6 +9403,7 @@
           "workflowVersion",
           "workflowDigest",
           "actorType",
+          "runKind",
           "cleanupStatus",
           "status",
           "cwd",
@@ -8703,6 +9444,20 @@
             ],
             "format": "date-time"
           },
+          "continuationRequestId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "continuationSequence": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -8721,6 +9476,22 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "handoffErrorCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "handoffEvidenceStatus": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DevRailHandoffEvidenceStatus"
+              }
             ]
           },
           "harnessVersion": {
@@ -8785,6 +9556,16 @@
               "string",
               "null"
             ]
+          },
+          "rootRunId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "runKind": {
+            "$ref": "#/components/schemas/DevRailRunKind"
           },
           "snapshotId": {
             "type": "integer",
@@ -9205,6 +9986,8 @@
           "workflowSource",
           "workflowVersion",
           "workflowDigest",
+          "continuationPolicy",
+          "continuationCapabilities",
           "schedulerAttempt",
           "schedulerRetryCount",
           "schedulerMaxAttempts",
@@ -9254,6 +10037,12 @@
               "string",
               "null"
             ]
+          },
+          "continuationCapabilities": {
+            "$ref": "#/components/schemas/DevRailContinuationCapabilities"
+          },
+          "continuationPolicy": {
+            "$ref": "#/components/schemas/ContinuationPolicy"
           },
           "createdAt": {
             "type": "string",

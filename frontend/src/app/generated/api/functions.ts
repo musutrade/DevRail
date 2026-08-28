@@ -13,6 +13,12 @@ export type { RejectDevRailApproval$Params as RejectDevRailApproval$Params } fro
 export { rejectDevRailApproval as rejectDevRailApproval } from './fn/devrail/reject-dev-rail-approval';
 export type { WithdrawDevRailApproval$Params as WithdrawDevRailApproval$Params } from './fn/devrail/withdraw-dev-rail-approval';
 export { withdrawDevRailApproval as withdrawDevRailApproval } from './fn/devrail/withdraw-dev-rail-approval';
+export type { ListDevRailContinuations$Params as ListDevRailContinuations$Params } from './fn/devrail/list-dev-rail-continuations';
+export { listDevRailContinuations as listDevRailContinuations } from './fn/devrail/list-dev-rail-continuations';
+export type { GetDevRailContinuation$Params as GetDevRailContinuation$Params } from './fn/devrail/get-dev-rail-continuation';
+export { getDevRailContinuation as getDevRailContinuation } from './fn/devrail/get-dev-rail-continuation';
+export type { CancelDevRailContinuation$Params as CancelDevRailContinuation$Params } from './fn/devrail/cancel-dev-rail-continuation';
+export { cancelDevRailContinuation as cancelDevRailContinuation } from './fn/devrail/cancel-dev-rail-continuation';
 export type { GetDevRailNotificationPreferences$Params as GetDevRailNotificationPreferences$Params } from './fn/devrail/get-dev-rail-notification-preferences';
 export { getDevRailNotificationPreferences as getDevRailNotificationPreferences } from './fn/devrail/get-dev-rail-notification-preferences';
 export type { UpdateDevRailNotificationPreferences$Params as UpdateDevRailNotificationPreferences$Params } from './fn/devrail/update-dev-rail-notification-preferences';
@@ -117,6 +123,8 @@ export type { GetDevRailRun$Params as GetDevRailRun$Params } from './fn/devrail/
 export { getDevRailRun as getDevRailRun } from './fn/devrail/get-dev-rail-run';
 export type { GetDevRailRunChangeset$Params as GetDevRailRunChangeset$Params } from './fn/devrail/get-dev-rail-run-changeset';
 export { getDevRailRunChangeset as getDevRailRunChangeset } from './fn/devrail/get-dev-rail-run-changeset';
+export type { CreateDevRailContinuation$Params as CreateDevRailContinuation$Params } from './fn/devrail/create-dev-rail-continuation';
+export { createDevRailContinuation as createDevRailContinuation } from './fn/devrail/create-dev-rail-continuation';
 export type { ListDevRailRunEvents$Params as ListDevRailRunEvents$Params } from './fn/devrail/list-dev-rail-run-events';
 export { listDevRailRunEvents as listDevRailRunEvents } from './fn/devrail/list-dev-rail-run-events';
 export type { StreamDevRailRunEvents$Params as StreamDevRailRunEvents$Params } from './fn/devrail/stream-dev-rail-run-events';

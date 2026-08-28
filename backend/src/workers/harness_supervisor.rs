@@ -48,6 +48,7 @@ struct ProcessContext {
     stdout: ChildStdout,
     stderr: tokio::process::ChildStderr,
     controls: mpsc::Receiver<ControlMessage>,
+    start_claim_token: uuid::Uuid,
     _slot: tokio::sync::OwnedSemaphorePermit,
 }
 
@@ -161,6 +162,20 @@ impl HarnessSupervisor {
             if !launch.cwd.starts_with(self.workspace_root.as_ref()) {
                 return Err(SupervisorError::Workspace);
             }
+            let start_claim_token = uuid::Uuid::new_v4();
+            let start_claim_owner = format!("supervisor:{}", start_claim_token.simple());
+            if !devrail_runs::claim_harness_start(
+                &self.pool,
+                launch.run_id,
+                &start_claim_owner,
+                start_claim_token,
+                120,
+            )
+            .await
+            .map_err(|error| SupervisorError::Spawn(error.to_string()))?
+            {
+                return Err(SupervisorError::ControlUnavailable);
+            }
             let (tx, rx) = mpsc::channel(2);
             self.controls.lock().await.insert(launch.run_id, tx);
 
@@ -187,21 +202,57 @@ impl HarnessSupervisor {
                 Ok(child) => child,
                 Err(error) => {
                     self.controls.lock().await.remove(&launch.run_id);
+                    let _ = devrail_runs::release_harness_start(
+                        &self.pool,
+                        launch.run_id,
+                        start_claim_token,
+                    )
+                    .await;
                     return Err(SupervisorError::Spawn(error.to_string()));
                 }
             };
-            let stdin = child
-                .stdin
-                .take()
-                .ok_or_else(|| SupervisorError::Spawn("stdin 不可用".into()))?;
-            let stdout = child
-                .stdout
-                .take()
-                .ok_or_else(|| SupervisorError::Spawn("stdout 不可用".into()))?;
-            let stderr = child
-                .stderr
-                .take()
-                .ok_or_else(|| SupervisorError::Spawn("stderr 不可用".into()))?;
+            let stdin = match child.stdin.take() {
+                Some(stdin) => stdin,
+                None => {
+                    self.controls.lock().await.remove(&launch.run_id);
+                    let _ = devrail_runs::release_harness_start(
+                        &self.pool,
+                        launch.run_id,
+                        start_claim_token,
+                    )
+                    .await;
+                    let _ = child.start_kill();
+                    return Err(SupervisorError::Spawn("stdin 不可用".into()));
+                }
+            };
+            let stdout = match child.stdout.take() {
+                Some(stdout) => stdout,
+                None => {
+                    self.controls.lock().await.remove(&launch.run_id);
+                    let _ = devrail_runs::release_harness_start(
+                        &self.pool,
+                        launch.run_id,
+                        start_claim_token,
+                    )
+                    .await;
+                    let _ = child.start_kill();
+                    return Err(SupervisorError::Spawn("stdout 不可用".into()));
+                }
+            };
+            let stderr = match child.stderr.take() {
+                Some(stderr) => stderr,
+                None => {
+                    self.controls.lock().await.remove(&launch.run_id);
+                    let _ = devrail_runs::release_harness_start(
+                        &self.pool,
+                        launch.run_id,
+                        start_claim_token,
+                    )
+                    .await;
+                    let _ = child.start_kill();
+                    return Err(SupervisorError::Spawn("stderr 不可用".into()));
+                }
+            };
             let supervisor = self.clone();
             tokio::spawn(async move {
                 run_process(ProcessContext {
@@ -212,6 +263,7 @@ impl HarnessSupervisor {
                     stdout,
                     stderr,
                     controls: rx,
+                    start_claim_token,
                     _slot: reservation.0,
                 })
                 .await;
@@ -384,7 +436,7 @@ impl HarnessSupervisor {
             devrail_runs::prepare_transport_recovery(&self.pool, launch.run_id, reason).await
         else {
             let _ = finish_run(
-                &self.pool,
+                self,
                 launch,
                 "failed",
                 reason,
@@ -408,7 +460,7 @@ impl HarnessSupervisor {
             Ok(Some(run)) => run,
             _ => {
                 let _ = finish_run(
-                    &self.pool,
+                    self,
                     launch,
                     "failed",
                     "recovery_state_missing",
@@ -422,7 +474,7 @@ impl HarnessSupervisor {
         };
         let Some(thread_id) = run.thread_id else {
             let _ = finish_run(
-                &self.pool,
+                self,
                 launch,
                 "failed",
                 "transport_resume_unavailable",
@@ -449,6 +501,7 @@ async fn run_process(context: ProcessContext) {
         stdout,
         stderr,
         mut controls,
+        start_claim_token,
         _slot: slot,
     } = context;
     let pool = supervisor.pool.clone();
@@ -475,7 +528,7 @@ async fn run_process(context: ProcessContext) {
     });
     if !handshake_ok {
         let _ = finish_run(
-            &pool,
+            &supervisor,
             &launch,
             "failed",
             "initialization_failed",
@@ -488,27 +541,25 @@ async fn run_process(context: ProcessContext) {
         supervisor.controls.lock().await.remove(&launch.run_id);
         return;
     }
-    let thread_method = if launch.resume_thread_id.is_some() {
-        "thread/resume"
-    } else {
-        "thread/start"
-    };
-    let thread_params = if let Some(thread_id) = launch.resume_thread_id.as_deref() {
-        json!({"threadId": thread_id, "cwd": launch.cwd})
-    } else {
-        json!({"cwd": launch.cwd})
-    };
-    let _ = write_json(
-        &mut stdin,
-        json!({"id":"thread-start","method":thread_method,"params":thread_params}),
-    )
-    .await;
-    let _ = write_json(
-        &mut stdin,
-        json!({"id":"turn-start","method":"turn/start","params":{"input":launch.input,"threadId":launch.resume_thread_id,"resumeFromTurnId":launch.resume_turn_id}}),
-    )
-    .await;
-    let _ = persist_started(&pool, &launch).await;
+    // The startup lease is the final gate before any thread/turn request is
+    // sent. A stale worker must not start an Agent after another worker has
+    // taken over the run.
+    match persist_started(&pool, &launch, start_claim_token).await {
+        Ok(true) => {}
+        Ok(false) | Err(_) => {
+            let _ = child.start_kill();
+            let _ = child.wait().await;
+            // Another Supervisor may have taken over the startup lease. Do
+            // not terminalize the run here: a stale process must not rewrite
+            // the state or lineage owned by the current worker.
+            tracing::debug!(run_id = launch.run_id, "Harness startup lease lost");
+            supervisor.controls.lock().await.remove(&launch.run_id);
+            return;
+        }
+    }
+    let (thread_request, turn_request) = start_requests(&launch);
+    let _ = write_json(&mut stdin, thread_request).await;
+    let _ = write_json(&mut stdin, turn_request).await;
     let _ = persist_event(
         &pool,
         &launch,
@@ -542,7 +593,7 @@ async fn run_process(context: ProcessContext) {
                 let _ = child.start_kill();
                 let code = child.wait().await.ok().and_then(|status| status.code());
                 let _ = finish_run(
-                    &pool,
+                    &supervisor,
                     &launch,
                     "failed",
                     "stall",
@@ -562,7 +613,7 @@ async fn run_process(context: ProcessContext) {
                     let status = tokio::time::timeout(supervisor.graceful_interrupt, child.wait()).await;
                     let exit_code = match status { Ok(Ok(s)) => s.code(), _ => { let _ = child.start_kill(); child.wait().await.ok().and_then(|s| s.code()) } };
                     let (terminal_status, reason, recovery) = cause.terminal();
-                    let _ = finish_run(&pool, &launch, terminal_status, reason, exit_code, Some(&stderr_summary), Some(recovery)).await;
+                    let _ = finish_run(&supervisor, &launch, terminal_status, reason, exit_code, Some(&stderr_summary), Some(recovery)).await;
                     break;
                 }
                 if let Some(ControlMessage::Approval { approval_id, approved }) = command {
@@ -581,7 +632,7 @@ async fn run_process(context: ProcessContext) {
                             .as_mut()
                             .reset(tokio::time::Instant::now() + supervisor.scheduler_policy.stall_timeout);
                         let line = out_line.trim();
-                        if !line.is_empty() && !handle_stdout(&pool, &launch, line).await { protocol_failed = true; let _ = child.start_kill(); }
+                        if !line.is_empty() && !handle_stdout(&pool, &launch, line, start_claim_token).await { protocol_failed = true; let _ = child.start_kill(); }
                         out_line.clear();
                     }
                     Err(error) => {
@@ -609,7 +660,7 @@ async fn run_process(context: ProcessContext) {
             _ = &mut timeout_sleep => {
                 let _ = child.start_kill();
                 let code = child.wait().await.ok().and_then(|s| s.code());
-                let _ = finish_run(&pool, &launch, "failed", "timeout", code, Some(&stderr_summary), Some("运行超时；请检查任务范围或增加环境时限")).await;
+                let _ = finish_run(&supervisor, &launch, "failed", "timeout", code, Some(&stderr_summary), Some("运行超时；请检查任务范围或增加环境时限")).await;
                 break;
             }
             result = child.wait() => {
@@ -622,7 +673,7 @@ async fn run_process(context: ProcessContext) {
                 let (status, reason, recovery) = if protocol_failed || code != Some(0) {
                     ("failed", reason, Some(recovery_for_failure(protocol_failed, &stderr_summary)))
                 } else { ("completed", "completed", None) };
-                let _ = finish_run(&pool, &launch, status, reason, code, Some(&stderr_summary), recovery).await;
+                let _ = finish_run(&supervisor, &launch, status, reason, code, Some(&stderr_summary), recovery).await;
                 break;
             }
         }
@@ -632,7 +683,7 @@ async fn run_process(context: ProcessContext) {
     if let Some(recovery) = transport_recovery {
         if supervisor.launch(recovery).await.is_err() {
             let _ = finish_run(
-                &pool,
+                &supervisor,
                 &launch,
                 "failed",
                 "recovery_spawn_failed",
@@ -697,7 +748,29 @@ async fn write_json(stdin: &mut tokio::process::ChildStdin, value: Value) -> std
     stdin.write_all(&line).await
 }
 
-async fn handle_stdout(pool: &PgPool, launch: &RunLaunch, line: &str) -> bool {
+fn start_requests(launch: &RunLaunch) -> (Value, Value) {
+    let thread_method = if launch.resume_thread_id.is_some() {
+        "thread/resume"
+    } else {
+        "thread/start"
+    };
+    let thread_params = if let Some(thread_id) = launch.resume_thread_id.as_deref() {
+        json!({"threadId": thread_id, "cwd": launch.cwd})
+    } else {
+        json!({"cwd": launch.cwd})
+    };
+    (
+        json!({"id":"thread-start","method":thread_method,"params":thread_params}),
+        json!({"id":"turn-start","method":"turn/start","params":{"input":launch.input,"threadId":launch.resume_thread_id,"resumeFromTurnId":launch.resume_turn_id}}),
+    )
+}
+
+async fn handle_stdout(
+    pool: &PgPool,
+    launch: &RunLaunch,
+    line: &str,
+    start_claim_token: uuid::Uuid,
+) -> bool {
     let value: Value = match serde_json::from_str(line) {
         Ok(value) => value,
         Err(_) => {
@@ -727,16 +800,27 @@ async fn handle_stdout(pool: &PgPool, launch: &RunLaunch, line: &str) -> bool {
         .or_else(|| value.get("serverVersion"))
         .and_then(Value::as_str);
     if thread_id.is_some() || turn_id.is_some() || harness_version.is_some() {
-        if let Ok(mut tx) = pool.begin().await {
-            let _ = devrail_runs::update_run_started(
+        let accepted = if let Ok(mut tx) = pool.begin().await {
+            match devrail_runs::update_run_started(
                 &mut tx,
                 launch.run_id,
                 thread_id,
                 turn_id,
                 harness_version,
+                start_claim_token,
             )
-            .await;
-            let _ = tx.commit().await;
+            .await
+            {
+                Ok(updated) => updated && tx.commit().await.is_ok(),
+                Err(_) => false,
+            }
+        } else {
+            false
+        };
+        if !accepted {
+            // A stale process must not persist thread/turn metadata after its
+            // startup lease has been taken over by another Supervisor.
+            return false;
         }
     }
     if followup_proposal(&value).is_some() {
@@ -1038,10 +1122,23 @@ fn append_summary(summary: &mut String, line: &str) {
     }
 }
 
-async fn persist_started(pool: &PgPool, launch: &RunLaunch) -> Result<(), sqlx::Error> {
+async fn persist_started(
+    pool: &PgPool,
+    launch: &RunLaunch,
+    start_claim_token: uuid::Uuid,
+) -> Result<bool, sqlx::Error> {
     let mut tx = pool.begin().await?;
-    devrail_runs::update_run_started(&mut tx, launch.run_id, None, None, None).await?;
-    tx.commit().await
+    let updated = devrail_runs::update_run_started(
+        &mut tx,
+        launch.run_id,
+        None,
+        None,
+        None,
+        start_claim_token,
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(updated)
 }
 
 async fn persist_event(
@@ -1085,7 +1182,7 @@ async fn persist_event(
 }
 
 async fn finish_run(
-    pool: &PgPool,
+    supervisor: &HarnessSupervisor,
     launch: &RunLaunch,
     status: &str,
     reason: &str,
@@ -1093,13 +1190,49 @@ async fn finish_run(
     stderr: Option<&str>,
     recovery: Option<&str>,
 ) -> Result<(), sqlx::Error> {
+    let system_actor = ActorContext {
+        actor_type: ActorType::System,
+        user_id: launch.owner_user_id,
+        session_id: 0,
+        organization_id: launch.organization_id,
+        department_id: launch.department_id,
+        data_scope: DataScope::All,
+        permission_codes: BTreeSet::new(),
+    };
+    // Resolve quality-gate effects before handoff so the evidence captures the
+    // final terminal outcome while the source run remains immutable.
+    let quality_gate_failed = if status == "completed" {
+        let mut gate_tx = supervisor.pool.begin().await?;
+        let failed = devrail_runs::has_failed_quality_gate(&mut gate_tx, launch.run_id).await?;
+        gate_tx.commit().await?;
+        failed
+    } else {
+        false
+    };
+    let (status, reason, recovery) = if quality_gate_failed {
+        (
+            "failed",
+            "quality_gate_failed",
+            Some("质量门禁未通过；请查看门禁结果后重试"),
+        )
+    } else {
+        (status, reason, recovery)
+    };
+    let handoff_ready = services::devrail_continuations::persist_handoff(
+        &supervisor.pool,
+        &system_actor,
+        launch.run_id,
+        supervisor.workspace_root.as_ref(),
+    )
+    .await
+    .unwrap_or(false);
     let hook_phase = if status == "completed" {
         "after_run"
     } else {
         "on_failure"
     };
     let hook_failed = if let Some(snapshot) =
-        devrail_runs::workflow_snapshot_for_run(pool, launch.run_id).await?
+        devrail_runs::workflow_snapshot_for_run(&supervisor.pool, launch.run_id).await?
     {
         services::devrail_workspaces::run_hooks(&snapshot, hook_phase, &launch.cwd)
             .await
@@ -1107,9 +1240,7 @@ async fn finish_run(
     } else {
         false
     };
-    let mut tx = pool.begin().await?;
-    let quality_gate_failed = status == "completed"
-        && devrail_runs::has_failed_quality_gate(&mut tx, launch.run_id).await?;
+    let mut tx = supervisor.pool.begin().await?;
     let (status, reason, recovery) = if hook_failed && status == "completed" {
         (
             "failed",
@@ -1144,56 +1275,62 @@ async fn finish_run(
         tx.commit().await?;
         return Ok(());
     }
-    devrail_workspaces::mark_cleanup_pending_for_run(
-        &mut tx,
-        launch.organization_id,
-        launch.run_id,
-        if status == "completed" {
-            "after_run"
-        } else {
-            "on_failure"
-        },
-    )
-    .await?;
-    let system_actor = ActorContext {
-        actor_type: ActorType::System,
-        user_id: launch.owner_user_id,
-        session_id: 0,
-        organization_id: launch.organization_id,
-        department_id: launch.department_id,
-        data_scope: DataScope::All,
-        permission_codes: BTreeSet::new(),
-    };
-    crate::repositories::audit_logs::record_actor(
-        &mut tx,
-        &system_actor,
-        "devrail.workspace.cleanup_pending",
-        "devrail_task_workspace",
-        Some(launch.run_id),
-        json!({"runId": launch.run_id, "status": "cleanup_pending"}),
-    )
-    .await?;
-    crate::repositories::devrail_notifications::outbox(
-        &mut tx,
-        launch.organization_id,
-        "workspace.cleanup_pending",
-        "devrail_task_workspace",
-        Some(launch.run_id),
-        &json!({"runId": launch.run_id, "status": "cleanup_pending"}),
-    )
-    .await?;
+    if handoff_ready {
+        devrail_workspaces::mark_cleanup_pending_for_run(
+            &mut tx,
+            launch.organization_id,
+            launch.run_id,
+            if status == "completed" {
+                "after_run"
+            } else {
+                "on_failure"
+            },
+        )
+        .await?;
+        crate::repositories::audit_logs::record_actor(
+            &mut tx,
+            &system_actor,
+            "devrail.workspace.cleanup_pending",
+            "devrail_task_workspace",
+            Some(launch.run_id),
+            json!({"runId": launch.run_id, "status": "cleanup_pending"}),
+        )
+        .await?;
+        crate::repositories::devrail_notifications::outbox(
+            &mut tx,
+            launch.organization_id,
+            "workspace.cleanup_pending",
+            "devrail_task_workspace",
+            Some(launch.run_id),
+            &json!({"runId": launch.run_id, "status": "cleanup_pending"}),
+        )
+        .await?;
+    }
     let task_status = match status {
         "completed" => "succeeded",
         "cancelled" => "cancelled",
         _ if retryable => "queued",
         _ => "failed",
     };
+    let continuation_completed = if retryable {
+        false
+    } else {
+        crate::repositories::devrail_continuations::complete_for_child_run(
+            &mut tx,
+            &system_actor,
+            launch.run_id,
+            status,
+            task_status,
+        )
+        .await?
+        .is_some()
+    };
     if retryable {
         let retry_at = chrono::Utc::now()
             + crate::workers::task_scheduler::retry_delay(launch.attempt, launch.scheduler_policy);
         devrail_runs::requeue_task_after_run(&mut tx, launch.task_id, retry_at, reason).await?;
         crate::app_metrics::record_scheduler_retry();
-    } else {
+    } else if !continuation_completed {
         devrail_runs::update_task_status(&mut tx, launch.task_id, task_status).await?;
     }
     let event_idempotency = format!("terminal:{status}:{reason}");
@@ -1250,7 +1387,12 @@ async fn finish_run(
         &json!({"notificationSource":source_key}),
     )
     .await?;
-    tx.commit().await
+    tx.commit().await?;
+    if continuation_completed {
+        crate::app_metrics::record_continuation_event("completed", "completed", "other");
+        crate::app_metrics::record_continuation_child_result(status);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1267,6 +1409,33 @@ mod tests {
         crate::db::run_migrations(&pool).await.ok()?;
         Some(pool)
     }
+
+    #[test]
+    fn continuation_start_uses_same_thread_and_new_turn() {
+        let launch = RunLaunch {
+            run_id: 7,
+            task_id: 8,
+            organization_id: 1,
+            department_id: Some(2),
+            owner_user_id: 3,
+            cwd: PathBuf::from("/controlled/workspace/continuation"),
+            input: "请继续处理".to_string(),
+            resume_thread_id: Some("thread-source".to_string()),
+            resume_turn_id: Some("turn-source".to_string()),
+            attempt: 2,
+            max_attempts: 3,
+            automatic: true,
+            scheduler_policy: SchedulerPolicy::default(),
+        };
+        let (thread, turn) = start_requests(&launch);
+        assert_eq!(thread["method"], "thread/resume");
+        assert_eq!(thread["params"]["threadId"], "thread-source");
+        assert_eq!(turn["method"], "turn/start");
+        assert_eq!(turn["params"]["threadId"], "thread-source");
+        assert_eq!(turn["params"]["resumeFromTurnId"], "turn-source");
+        assert_ne!(thread["id"], turn["id"]);
+    }
+
     #[test]
     fn sanitizer_removes_credentials_and_bounds_strings() {
         let value = json!({"token":"hidden","message":"ok","nested":{"password":"hidden"}});

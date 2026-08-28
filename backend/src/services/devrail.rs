@@ -522,7 +522,15 @@ fn environment_response(row: DevRailEnvironmentRow) -> DevRailEnvironmentRespons
         archived_at: row.archived_at,
     }
 }
-fn task_response(row: DevRailTaskRow) -> DevRailTaskResponse {
+fn task_response(row: DevRailTaskRow, actor: &ActorContext) -> DevRailTaskResponse {
+    let continuation_policy = row
+        .dispatch_snapshot
+        .get("workflow")
+        .and_then(|workflow| workflow.get("config"))
+        .and_then(|config| config.get("continuation"))
+        .cloned()
+        .and_then(|value| serde_json::from_value(value).ok())
+        .unwrap_or_default();
     DevRailTaskResponse {
         id: row.id,
         organization_id: row.organization_id,
@@ -543,6 +551,12 @@ fn task_response(row: DevRailTaskRow) -> DevRailTaskResponse {
         workflow_source: row.workflow_source,
         workflow_version: row.workflow_version,
         workflow_digest: row.workflow_digest,
+        continuation_policy,
+        continuation_capabilities: DevRailContinuationCapabilities {
+            can_read: actor.has_permission("devrail:continuation:read"),
+            can_create: actor.has_permission("devrail:continuation:create"),
+            can_cancel: actor.has_permission("devrail:continuation:cancel"),
+        },
         scheduler_attempt: row.scheduler_attempt,
         scheduler_retry_count: row.scheduler_retry_count,
         scheduler_max_attempts: row.scheduler_max_attempts,
@@ -2027,6 +2041,7 @@ fn task_status(value: &str) -> Result<String, ApiError> {
         "queued",
         "running",
         "awaiting_approval",
+        "continuation_pending",
         "succeeded",
         "failed",
         "cancelled",
@@ -2059,7 +2074,10 @@ pub async fn list_tasks(
     )
     .map_err(db_error)?;
     Ok(DevRailTaskPage {
-        items: rows.into_iter().map(task_response).collect(),
+        items: rows
+            .into_iter()
+            .map(|row| task_response(row, actor))
+            .collect(),
         total,
         page,
         page_size: size,
@@ -2076,7 +2094,7 @@ pub async fn get_task(
         .map_err(db_error)?
         .ok_or_else(|| ApiError::not_found("任务不存在或超出数据范围"))?;
     let relations = task_relations(pool, actor, id, row.revision).await?;
-    let mut response = task_response(row);
+    let mut response = task_response(row, actor);
     response.blocked_reason = relations.blocked_reason;
     response.prerequisites = relations.prerequisites;
     response.dependents = relations.dependents;
@@ -2480,7 +2498,7 @@ pub async fn create_followup_task(
     }
     tx.commit().await.map_err(db_error)?;
     let relations = task_relations(pool, actor, task.id, task.revision).await?;
-    let mut task_response = task_response(task);
+    let mut task_response = task_response(task, actor);
     task_response.blocked_reason = relations.blocked_reason;
     task_response.prerequisites = relations.prerequisites;
     task_response.dependents = relations.dependents;
@@ -2758,7 +2776,7 @@ pub async fn create_task(
     .await
     .map_err(db_error)?;
     tx.commit().await.map_err(db_error)?;
-    Ok(task_response(row))
+    Ok(task_response(row, actor))
 }
 pub async fn update_task(
     pool: &PgPool,

@@ -4,9 +4,9 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档版本 | 1.1.0 |
+| 文档版本 | 1.1.1 |
 | 文档状态 | 专项需求基线，分阶段实现与验收 |
-| 编写日期 | 2026-08-26 |
+| 编写日期 | 2026-08-27 |
 | 适用产品 | DevRail（基于 Codex harness 的开发工作台） |
 | 上位需求 | [DevRail 产品与技术需求](requirements.md) |
 | 当前状态 | [DevRail 实现状态](devrail-implementation-status.md) |
@@ -19,7 +19,7 @@
 
 ### 1.1 背景
 
-DevRail 已经具备项目、仓库、环境、任务、Harness Supervisor、run/thread/turn/event、审批、通知、质量门禁和外部代码审查等基础能力。`queued` 调度的 P0 可靠性与 TaskTracker/WORKFLOW P1 基础已经实现；当前主要缺口是依赖编排、任务级隔离工作区、continuation 和自动修复闭环。
+DevRail 已经具备项目、仓库、环境、任务、Harness Supervisor、run/thread/turn/event、审批、通知、质量门禁和外部代码审查等基础能力。`queued` 调度的 P0 可靠性与 TaskTracker/WORKFLOW、DAG/follow-up、任务级隔离工作区和 continuation turns 等 P1 基础已经实现；当前主要缺口是受控修复 run 和 MVP 自动化验收闭环。
 
 ### 1.2 目标
 
@@ -63,7 +63,7 @@ DevRail 已经具备项目、仓库、环境、任务、Harness Supervisor、run
 | Orchestrator | 负责 reconciliation、领取任务、创建 run、启动 Agent 和处理终态的控制循环。 |
 | Workspace | 任务专属的受控目录或 Git worktree。 |
 | Attempt | 某任务的一次执行尝试；首次运行、重试和 continuation 都有明确编号。 |
-| Continuation turn | 在同一 run/thread 中，根据后续事件继续执行的回合。 |
+| Continuation turn | 在来源 run 之后同一 Codex thread 上创建的新 turn，并关联新的 child run。 |
 | Reconciliation | 将 tracker、run、workspace 和 worker 实际状态对账并修正不一致。 |
 | Harness | 受控的 Codex app-server 进程及其工作区、工具、审批、日志和资源限制。 |
 | Harness Engineering | 通过环境、工具、观测和自动验证，使 Agent 输出可复现、可诊断、可修复。 |
@@ -271,11 +271,11 @@ run 范围内使用。所有三项权限均在迁移中以幂等种子绑定，A
 
 | Requirement ID | 状态 | 代码、迁移与测试证据 |
 | --- | --- | --- |
-| `SY-SPACE-001` | 部分实现 | `20260906100000_add_task_workspaces.sql`、`devrail_workspaces::workspace_key` 和 canonical 受控路径校验；worktree 内容复制与完整碰撞集成测试待补。 |
-| `SY-SPACE-002` | 部分实现 | workspace 元数据保存仓库/环境引用且 SQL 使用组织复合外键；Git 基础提交校验与运行时凭据注入待补。 |
-| `SY-SPACE-003` | 未完成 | workflow loader 已限制 hook 名称；workspace hook 执行器和顺序测试待补。 |
-| `SY-SPACE-004` | 部分实现 | Supervisor 终态写入 `cleanup_pending`，scheduler cleanup reconciliation 支持幂等删除和退避；告警与完整终态演练待补。 |
-| `SY-SPACE-005` | 部分实现 | workspace 保存 workflow、快照摘要、工具版本字段并提供 API；基础提交和环境版本采集待补。 |
+| `SY-SPACE-001` | 已实现 | `20260906100000_add_task_workspaces.sql`、确定性 task/attempt 标识、canonical/符号链接越界拒绝、Git worktree 或等价目录物化，并有路径逃逸、碰撞和并发绑定测试。 |
+| `SY-SPACE-002` | 已实现 | workspace 使用组织复合外键保存仓库/环境引用，校验 Git 基础提交/分支；凭据只通过受控运行时注入，敏感字段脱敏测试通过。 |
+| `SY-SPACE-003` | 已实现 | `before_run`、`after_run`、`on_failure` 和 `cleanup` hooks 复用命令白名单、超时、网络、审批和脱敏边界，未知 hook、越权命令与执行顺序测试通过。 |
+| `SY-SPACE-004` | 已实现 | Supervisor 终态 hooks 与 `cleanup_pending` 幂等处理、scheduler cleanup reconciliation 退避重试、orphaned 恢复、低基数指标/审计/outbox 和故障演练已覆盖。 |
+| `SY-SPACE-005` | 已实现 | workspace 保存 workflow、基础提交、环境/工具版本和快照摘要，支持按不可变 run 输入幂等重建，API 和 Angular 展示脱敏投影。 |
 
 ### 5.7 Agent Runner 与 continuation（P1）
 
@@ -288,6 +288,13 @@ run 范围内使用。所有三项权限均在迁移中以幂等种子绑定，A
 **SY-RUNNER-004**：支持 continuation turn：在同一 thread 中依据测试结果、审查意见或用户追加上下文继续执行；每个 continuation 都有父 turn、原因和幂等键。
 
 **SY-RUNNER-005**：终态只能由后端根据 Agent 终态和质量门禁结果写入；客户端事件不能改变 run/task 状态。
+
+#### Continuation 证据矩阵（2026-08-27）
+
+| 需求 ID | 状态 | 代码/迁移 | 自动化与运行证据 |
+| --- | --- | --- | --- |
+| `SY-RUNNER-004` | 已实现 | `20260907100000_add_continuation_turns.sql`、`backend/src/repositories/devrail_continuations.rs`、`backend/src/repositories/devrail_runs.rs`、`backend/src/workers/task_scheduler.rs`、`backend/src/workers/harness_supervisor.rs`；`ADR-0005` 固化同 thread 新 turn、新 child run、handoff 与取消边界 | `restart_reconciles_threadless_continuation_child_terminally`、`concurrent_child_creation_reuses_one_run_and_preserves_source_terminal`、`continuation_start_uses_same_thread_and_new_turn`、`stalled_and_disconnected_processes_recover_without_duplicate_runs`；Angular continuation Vitest 与 Playwright 桌面/移动验收 |
+| `SY-RUNNER-005` | 已实现 | `finish_run` 统一写入质量门禁、终态、handoff、TaskTracker 投影、审计和 outbox；客户端只读状态 | `dispatch_and_child_terminal_projection_are_atomic_and_idempotent`、重复终态/重启 PostgreSQL 测试、OpenAPI contract 与 secret scan |
 
 ### 5.8 Reconciliation 与终态处理（P0）
 
@@ -472,7 +479,7 @@ run 范围内使用。所有三项权限均在迁移中以幂等种子绑定，A
 
 ### 12.4 P0 调度可靠性证据矩阵（2026-08-26）
 
-本矩阵只声明 `symphony-orchestrator-reconciliation` change 覆盖的 DevRail DB tracker 与 Harness 调度能力；外部 tracker 和 per-task workspace 不因此视为完成。DAG/follow-up 证据见第 5.5.1 节。
+本矩阵只声明 `symphony-orchestrator-reconciliation` change 覆盖的 DevRail DB tracker 与 Harness 调度能力。DAG/follow-up 证据见第 5.5.1 节，per-task workspace 证据见第 5.6 节；外部 tracker 仍不因本矩阵视为完成。
 
 | 需求 ID | 状态 | 代码/迁移 | 自动化与运行证据 |
 | --- | --- | --- | --- |
@@ -484,11 +491,11 @@ run 范围内使用。所有三项权限均在迁移中以幂等种子绑定，A
 | SY-ORCH-006 | 已实现 | 优先级/截止时间/创建时间排序与 `DEVRAIL_SCHEDULER_PRIORITY_AGING_SECS` | 真实 PostgreSQL 验证等待四个 aging 周期的低优先级任务获得执行权 |
 | SY-ORCH-007 | 部分实现 | task 取消和启动阶段环境失效在 reconciliation 传播；run policy 快照防止运行中漂移 | 取消竞态与 interruption 审计测试；DAG 依赖传播属于 SY-DAG P1 |
 | SY-RETRY-001 | 已实现 | 可重试分类、OS 随机抖动、指数退避、最大延迟/attempt | 退避边界单元测试、最大 retry PostgreSQL 测试 |
-| SY-RETRY-002 | 已实现（continuation 除外） | run attempt、心跳、重试原因、父 run/turn、恢复建议 | `create_run` 字段映射/父子 run PostgreSQL 断言；continuation 属于 SY-RUNNER-004 |
+| SY-RETRY-002 | 已实现 | run attempt、心跳、重试原因、父 run/turn、恢复建议和 continuation 谱系字段 | `create_run` 字段映射/父子 run PostgreSQL 断言；continuation child run 另有唯一 request、序号和来源 turn |
 | SY-RETRY-003 | 已实现 | Supervisor 心跳、stall timer、进程清理、重排队 | `stalled_and_disconnected_processes_recover_without_duplicate_runs` |
 | SY-RETRY-004 | 已实现 | 传输恢复上限、持久化 thread/turn 后同 attempt `thread/resume`；SSE cursor 补拉独立 | 受控假 app-server 关闭 stdout，断言恢复命令、同 run 和恢复后控制通道 |
 | SY-RETRY-005 | 已实现 | 启动扫描、可恢复 run 重启、不可恢复失败/通知/outbox | `mark_unrecoverable_runs` 重复执行只产生一次终态、审计和通知 |
-| SY-RECON-001 | 已实现（当前控制面） | 单事务对账 task/run/claim/Supervisor，workspace 以受控 cwd/cleanup 状态核对 | stale run、运行中 run ID 和 claim 修正 PostgreSQL 测试；独立 workspace manager 属于 P1 |
+| SY-RECON-001 | 已实现 | 单事务对账 task/run/claim/Supervisor，并核对 workspace 持久化占用、生命周期和 cleanup 状态 | stale run、运行中 run ID、claim 修正、cleanup 失败退避与 orphaned 恢复 PostgreSQL/文件系统测试 |
 | SY-RECON-002 | 已实现 | stale/cancel/environment/restart 的确定性修正和 System Actor 审计 | cancellation、process missing、restart 三类审计与 UUID trace 断言 |
 | SY-RECON-003 | 已实现 | `finish_run` 校验质量门禁并保存 exit reason、trace、恢复建议 | Harness 单元测试、质量门禁既有测试、OpenAPI contract |
 | SY-RECON-004 | 已实现 | 条件终态更新、事件/通知 source key、outbox 唯一约束 | 重复 reconciliation/终态只产生一次通知、outbox 与 cleanup 结果 |
@@ -517,7 +524,7 @@ cargo flow verify --all
 
 1. TaskTracker 抽象及 DevRail DB tracker（已完成）。
 2. `WORKFLOW.md`、严格模板、动态 reload 和 workflow 快照（已完成）。
-3. 确定性 workspace、hooks 和 continuation turns。
+3. 确定性 workspace、hooks 和 continuation turns（代码与专项测试已完成）；下一步完成受控修复 run。
 4. 完善指标、trace、成本预算和前端调度/诊断视图。
 5. 质量门禁失败生成受控修复 run，并在达到上限后转人工。
 

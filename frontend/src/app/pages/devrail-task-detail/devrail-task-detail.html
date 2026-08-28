@@ -53,6 +53,97 @@
         <p class="empty">尚未创建任务工作区</p>
       }
     </section>
+    <section class="continuation-section" aria-labelledby="continuation-title">
+      <div class="section-heading">
+        <h2 id="continuation-title">追加执行</h2>
+        <span>{{ continuations().length }} 次请求</span>
+      </div>
+      @if (continuations().length) {
+        <ol class="continuation-list">
+          @for (continuation of continuations(); track continuation.id) {
+            <li>
+              <div class="continuation-meta">
+                <strong
+                  >第 {{ continuation.continuationSequence }} 次 ·
+                  {{ continuationStatusLabel(continuation.status) }}</strong
+                >
+                <span>{{ continuationTriggerLabel(continuation.triggerType) }}</span>
+              </div>
+              <p>{{ continuation.contextSummary }}</p>
+              <small
+                >来源运行
+                <a [routerLink]="['/devrail/runs', continuation.sourceRunId]"
+                  >#{{ continuation.sourceRunId }}</a
+                >
+                · 来源回合 {{ continuation.sourceTurnId }}</small
+              >
+              @if (continuation.childRunId) {
+                <a [routerLink]="['/devrail/runs', continuation.childRunId]"
+                  >查看子运行 #{{ continuation.childRunId }}</a
+                >
+              }
+              @if (
+                canCancelContinuation() && ['pending', 'claimed'].includes(continuation.status)
+              ) {
+                <button
+                  type="button"
+                  class="btn-outline"
+                  (click)="cancelContinuation(continuation)"
+                  [disabled]="continuationBusy()"
+                >
+                  <mat-icon>cancel</mat-icon>取消请求
+                </button>
+              }
+            </li>
+          }
+        </ol>
+      } @else {
+        <p class="empty">暂无追加执行记录</p>
+      }
+      @if (canCreateContinuation()) {
+        <form
+          class="continuation-form"
+          #continuationForm
+          (submit)="$event.preventDefault(); createContinuation(continuationForm)"
+        >
+          <label for="continuation-input">追加上下文</label>
+          <textarea
+            id="continuation-input"
+            rows="4"
+            [attr.maxlength]="continuationByteLimit()"
+            [value]="continuationInput()"
+            (input)="onContinuationInput($event)"
+            aria-describedby="continuation-input-count"
+            aria-label="追加执行上下文"
+            [attr.aria-invalid]="continuationBytes() > continuationByteLimit()"
+            required
+          ></textarea>
+          <div class="continuation-form-footer">
+            <small
+              id="continuation-input-count"
+              aria-live="polite"
+              [class.input-limit-error]="continuationBytes() > continuationByteLimit()"
+              >{{ continuationBytes() }} / {{ continuationByteLimit() }} 字节</small
+            >
+            <button
+              type="submit"
+              class="btn-primary"
+              [disabled]="continuationBusy() || !continuationInputValid()"
+            >
+              <mat-icon>add_circle</mat-icon>{{ continuationBusy() ? '正在提交' : '提交追加执行' }}
+            </button>
+          </div>
+        </form>
+      } @else if (current.status === 'succeeded' || current.status === 'failed') {
+        <p class="empty">
+          {{
+            current.continuationPolicy.enabled
+              ? '当前账号或运行证据不允许追加执行'
+              : '当前任务策略未启用追加执行'
+          }}
+        </p>
+      }
+    </section>
     <section class="comments" aria-labelledby="dependency-title">
       <h2 id="dependency-title">任务依赖</h2>
       @if (current.blockedReason) {
@@ -160,6 +251,7 @@
             <option value="queued">排队中</option>
             <option value="running">运行中</option>
             <option value="awaiting_approval">等待审批</option>
+            <option value="continuation_pending">等待追加执行</option>
             <option value="succeeded">已完成</option>
             <option value="failed">失败</option>
             <option value="cancelled">已取消</option>

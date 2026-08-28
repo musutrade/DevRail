@@ -1,10 +1,11 @@
-use crate::access::ActorContext;
+use crate::access::{ActorContext, ActorType, DataScope};
 use crate::error::ApiError;
 use crate::models::*;
 use crate::repositories::{self, devrail, devrail_runs, devrail_workspaces};
 use crate::workers::harness_supervisor::{HarnessSupervisor, RunLaunch, SupervisorError};
 use serde_json::json;
 use sqlx::PgPool;
+use std::collections::BTreeSet;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 use tokio::process::Command;
@@ -42,6 +43,12 @@ fn run_response(row: DevRailRunRow) -> DevRailRunResponse {
         retry_reason: row.retry_reason,
         parent_run_id: row.parent_run_id,
         parent_turn_id: row.parent_turn_id,
+        run_kind: row.run_kind,
+        root_run_id: row.root_run_id,
+        continuation_sequence: row.continuation_sequence,
+        continuation_request_id: row.continuation_request_id,
+        handoff_evidence_status: None,
+        handoff_error_code: None,
         cleanup_status: row.cleanup_status,
         branch_name: row.branch_name,
         branch_expires_at: row.branch_expires_at,
@@ -390,8 +397,8 @@ async fn create_run_with_context(
     let RunCreationContext {
         resume,
         scheduler_claim_token,
-        parent_run_id,
-        parent_turn_id,
+        mut parent_run_id,
+        mut parent_turn_id,
     } = context;
     let idempotency_key = key(&req.idempotency_key)?;
     let branch_name = req
@@ -424,6 +431,15 @@ async fn create_run_with_context(
         .ok_or_else(|| ApiError::not_found("任务不存在或超出数据范围"))?;
     if scheduler_claim_token.is_some() && task.status != "queued" {
         return Err(ApiError::validation("任务已不在调度队列中"));
+    }
+    if scheduler_claim_token.is_some() && task.scheduler_retry_count > 0 && parent_run_id.is_none()
+    {
+        let parent = devrail_runs::find_retry_parent(pool, actor, task.id)
+            .await
+            .map_err(db_error)?
+            .ok_or_else(|| ApiError::conflict("调度重试缺少失败运行谱系"))?;
+        parent_run_id = Some(parent.id);
+        parent_turn_id = parent.turn_id;
     }
     let environment = devrail::find_environment(pool, actor, task.project_id, req.environment_id)
         .await
@@ -741,11 +757,19 @@ pub async fn get_run(
     actor: &ActorContext,
     id: i64,
 ) -> Result<DevRailRunResponse, ApiError> {
-    devrail_runs::find_run(pool, actor, id)
+    let row = devrail_runs::find_run(pool, actor, id)
         .await
         .map_err(db_error)?
-        .map(run_response)
-        .ok_or_else(|| ApiError::not_found("运行不存在或超出数据范围"))
+        .ok_or_else(|| ApiError::not_found("运行不存在或超出数据范围"))?;
+    let mut response = run_response(row);
+    if let Some(handoff) = repositories::devrail_continuations::find_handoff(pool, actor, id)
+        .await
+        .map_err(db_error)?
+    {
+        response.handoff_evidence_status = Some(handoff.evidence_status);
+        response.handoff_error_code = handoff.error_code;
+    }
+    Ok(response)
 }
 pub async fn list_runs(
     pool: &PgPool,
@@ -1061,6 +1085,45 @@ pub async fn execute_quality_gates(
     .await
     .map_err(db_error)?;
     tx.commit().await.map_err(db_error)?;
+    if failed {
+        let trusted_actor = ActorContext {
+            actor_type: ActorType::System,
+            user_id: task.owner_user_id,
+            session_id: 0,
+            organization_id: task.organization_id,
+            department_id: task.department_id,
+            data_scope: DataScope::All,
+            permission_codes: BTreeSet::new(),
+        };
+        if let Some(handoff) =
+            repositories::devrail_continuations::find_handoff(pool, &trusted_actor, id)
+                .await
+                .map_err(db_error)?
+        {
+            let observed_at = chrono::Utc::now();
+            let stable_evidence_ref = format!("quality-gate:{id}:execution-v1");
+            let evidence = crate::services::devrail_continuations::TrustedContinuationEvidence {
+                trigger: DevRailContinuationTrigger::QualityGate,
+                stable_evidence_ref: &stable_evidence_ref,
+                evidence_observed_at: observed_at,
+                evidence_expires_at: observed_at + chrono::Duration::hours(24),
+                changeset_digest: &handoff.changeset_digest,
+                redacted_context: "质量门禁未通过，请根据门禁结果继续修复",
+                context_summary: "质量门禁要求修改",
+            };
+            if let Err(error) =
+                crate::services::devrail_continuations::create_from_trusted_evidence(
+                    pool,
+                    &trusted_actor,
+                    id,
+                    &evidence,
+                )
+                .await
+            {
+                tracing::info!(reason = %error, "quality gate continuation was not created");
+            }
+        }
+    }
     get_quality_gates(pool, actor, id).await
 }
 

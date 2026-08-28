@@ -4,6 +4,7 @@ pub mod departments;
 pub mod devrail;
 pub mod devrail_approvals;
 pub mod devrail_comments;
+pub mod devrail_continuations;
 pub mod devrail_members;
 pub mod devrail_notifications;
 pub mod devrail_push;

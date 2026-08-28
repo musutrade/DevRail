@@ -17,6 +17,8 @@ export interface ListDevRailNotifications$Params {
   projectId?: number;
   assigneeUserId?: number;
   label?: string;
+  taskId?: number;
+  runId?: number;
 }
 
 export function listDevRailNotifications(http: HttpClient, rootUrl: string, params?: ListDevRailNotifications$Params, context?: HttpContext): Observable<StrictHttpResponse<DevRailNotificationPage>> {
@@ -29,6 +31,8 @@ export function listDevRailNotifications(http: HttpClient, rootUrl: string, para
     rb.query('projectId', params.projectId, {});
     rb.query('assigneeUserId', params.assigneeUserId, {});
     rb.query('label', params.label, {});
+    rb.query('taskId', params.taskId, {});
+    rb.query('runId', params.runId, {});
   }
 
   return http.request(

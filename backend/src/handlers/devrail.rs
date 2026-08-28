@@ -513,6 +513,54 @@ pub async fn create_run(
         .map(|v| (StatusCode::ACCEPTED, Json(v)))
 }
 
+pub async fn list_continuations(
+    State(s): State<AppState>,
+    auth: RequirePermission<crate::permissions::devrail_continuation::ContinuationRead>,
+    Query(q): Query<DevRailListQuery>,
+) -> Result<Json<DevRailContinuationPage>, ApiError> {
+    services::devrail_continuations::list(
+        &s.pool,
+        &auth,
+        q.task_id,
+        q.run_id,
+        q.page.unwrap_or(1),
+        q.page_size.unwrap_or(20),
+    )
+    .await
+    .map(Json)
+}
+
+pub async fn create_continuation(
+    State(s): State<AppState>,
+    auth: RequirePermission<crate::permissions::devrail_continuation::ContinuationCreate>,
+    Path(source_run_id): Path<i64>,
+    Json(request): Json<CreateDevRailContinuationRequest>,
+) -> Result<(StatusCode, Json<DevRailContinuationResponse>), ApiError> {
+    services::devrail_continuations::create_user_context(&s.pool, &auth, source_run_id, &request)
+        .await
+        .map(|value| (StatusCode::ACCEPTED, Json(value)))
+}
+
+pub async fn get_continuation(
+    State(s): State<AppState>,
+    auth: RequirePermission<crate::permissions::devrail_continuation::ContinuationRead>,
+    Path(id): Path<i64>,
+) -> Result<Json<DevRailContinuationResponse>, ApiError> {
+    services::devrail_continuations::get(&s.pool, &auth, id)
+        .await
+        .map(Json)
+}
+
+pub async fn cancel_continuation(
+    State(s): State<AppState>,
+    auth: RequirePermission<crate::permissions::devrail_continuation::ContinuationCancel>,
+    Path(id): Path<i64>,
+) -> Result<Json<DevRailContinuationResponse>, ApiError> {
+    services::devrail_continuations::cancel(&s.pool, &auth, id)
+        .await
+        .map(Json)
+}
+
 pub async fn list_runs(
     State(s): State<AppState>,
     auth: RequirePermission<RunRead>,

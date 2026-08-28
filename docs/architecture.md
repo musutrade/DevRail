@@ -32,7 +32,8 @@ Service；这些规则与 SQL 写入位置一起由 auditor 强制检查。新�
 - run 创建在 Repository SQL 中再次比对 task 修订号及 workflow 三元身份，并复制完全相同的 workflow 快照。Harness 只接收持久化快照渲染出的输入，不重新读取磁盘文件。
 - workflow reloader 以有界抖动轮询校验候选版本，合法版本只供之后入队的任务使用；非法版本保留 PostgreSQL 中的 last-known-good，并产生去重审计和低基数指标。
 
-DAG、per-task workspace/worktree、continuation turns 和外部 tracker adapter 仍是后续独立能力，不得混入本基础边界。
+- 任务依赖 DAG、受控 follow-up 和 per-task workspace/worktree 已作为独立能力落地；workspace 的路径、hooks、快照、清理和诊断边界见 [Task Workspace Manager 规范](../openspec/specs/task-workspace-manager/spec.md)。
+- continuation turns 已作为独立能力落地：同一 Codex thread 使用新 turn 和新 child run，来源终态保持不可变，handoff 证据先于 cleanup；实现决策见 [ADR-0005](adr/ADR-0005-continuation-turn-lifecycle.md)。外部 tracker adapter 仍是后续独立能力，不得用故障恢复或 follow-up 语义替代 continuation。
 
 用户-角色和角色-权限写入由 Service 开启事务并把同一个连接传给 Repository，主记录与关联表要么同时成功，要么同时回滚。内置 `super_admin` 不能被停用或清空权限，最后一个有效超级管理员不能被停用、删除或移除角色。
 

@@ -72,6 +72,11 @@ import { getDevRailTaskWorkspace } from '../../../generated/api/fn/devrail/get-d
 import { rebuildDevRailTaskWorkspace } from '../../../generated/api/fn/devrail/rebuild-dev-rail-task-workspace';
 import { getDevRailRunWorkspace } from '../../../generated/api/fn/devrail/get-dev-rail-run-workspace';
 import { cleanupDevRailWorkspace } from '../../../generated/api/fn/devrail/cleanup-dev-rail-workspace';
+import { listDevRailContinuations } from '../../../generated/api/fn/devrail/list-dev-rail-continuations';
+import { getDevRailContinuation } from '../../../generated/api/fn/devrail/get-dev-rail-continuation';
+import { createDevRailContinuation } from '../../../generated/api/fn/devrail/create-dev-rail-continuation';
+import { cancelDevRailContinuation } from '../../../generated/api/fn/devrail/cancel-dev-rail-continuation';
+import { listDevRailRuns } from '../../../generated/api/fn/devrail/list-dev-rail-runs';
 import type {
   CreateDevRailEnvironmentRequest,
   CreateDevRailProjectRequest,
@@ -130,6 +135,10 @@ import type {
   DevRailExternalReviewCommentResponse,
   DevRailTaskWorkspaceResponse,
   RebuildDevRailTaskWorkspaceRequest,
+  DevRailContinuationPage,
+  DevRailContinuationResponse,
+  CreateDevRailContinuationRequest,
+  DevRailRunPage,
 } from '../../../generated/api/models';
 
 @Injectable({ providedIn: 'root' })
@@ -374,6 +383,31 @@ export class DevRailApiService {
   getTaskWorkspace(taskId: number): Promise<DevRailTaskWorkspaceResponse | null> {
     return this.api.invoke(getDevRailTaskWorkspace, { task_id: taskId });
   }
+  listContinuations(
+    taskId?: number,
+    runId?: number,
+    page = 1,
+    pageSize = 50,
+  ): Promise<DevRailContinuationPage> {
+    return this.api.invoke(listDevRailContinuations, {
+      taskId,
+      runId,
+      page,
+      pageSize,
+    });
+  }
+  getContinuation(id: number): Promise<DevRailContinuationResponse> {
+    return this.api.invoke(getDevRailContinuation, { id });
+  }
+  createContinuation(
+    sourceRunId: number,
+    body: CreateDevRailContinuationRequest,
+  ): Promise<DevRailContinuationResponse> {
+    return this.api.invoke(createDevRailContinuation, { id: sourceRunId, body });
+  }
+  cancelContinuation(id: number): Promise<DevRailContinuationResponse> {
+    return this.api.invoke(cancelDevRailContinuation, { id });
+  }
   rebuildTaskWorkspace(
     taskId: number,
     body: RebuildDevRailTaskWorkspaceRequest = {},
@@ -407,6 +441,9 @@ export class DevRailApiService {
 
   getRun(id: number): Promise<DevRailRunResponse> {
     return this.api.invoke(getDevRailRun, { id });
+  }
+  listRuns(taskId: number, page = 1, pageSize = 50): Promise<DevRailRunPage> {
+    return this.api.invoke(listDevRailRuns, { task_id: taskId, page, pageSize });
   }
   getRunWorkspace(id: number): Promise<DevRailTaskWorkspaceResponse> {
     return this.api.invoke(getDevRailRunWorkspace, { id });

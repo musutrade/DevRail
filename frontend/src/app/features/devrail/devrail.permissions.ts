@@ -16,6 +16,9 @@ export const DEVRAIL_PERMISSIONS = {
   runRetry: 'devrail:run:retry',
   workspaceRead: 'devrail:workspace:read',
   workspaceWrite: 'devrail:workspace:write',
+  continuationRead: 'devrail:continuation:read',
+  continuationCreate: 'devrail:continuation:create',
+  continuationCancel: 'devrail:continuation:cancel',
 } as const;
 
 export const DEVRAIL_ROUTE_ACCESS = [DEVRAIL_PERMISSIONS.projectRead] as const;

@@ -78,6 +78,29 @@
           ><strong>#{{ current.attempt }} · {{ actorLabel(current.actorType) }}</strong>
         </div>
         <div>
+          <span>运行类型</span><strong>{{ runKindLabel(current.runKind) }}</strong>
+        </div>
+        @if (current.parentRunId) {
+          <div>
+            <span>父运行</span
+            ><a [routerLink]="['/devrail/runs', current.parentRunId]">#{{ current.parentRunId }}</a>
+          </div>
+        }
+        @if (current.parentTurnId) {
+          <div>
+            <span>父回合</span><strong>{{ current.parentTurnId }}</strong>
+          </div>
+        }
+        @if (['completed', 'failed', 'cancelled'].includes(current.status)) {
+          <div>
+            <span>交接证据</span
+            ><strong>{{ handoffStatusLabel(current.handoffEvidenceStatus) }}</strong>
+            @if (current.handoffErrorCode) {
+              <small>原因代码：{{ current.handoffErrorCode }}</small>
+            }
+          </div>
+        }
+        <div>
           <span>任务修订号</span><strong>{{ current.taskRevision }}</strong>
         </div>
         <div>
@@ -133,6 +156,51 @@
         </div>
       }
     </section>
+    @if (continuations().length) {
+      <section class="event-card" aria-labelledby="run-continuation-title">
+        <div class="section-heading">
+          <h2 id="run-continuation-title">追加执行请求</h2>
+          <span>{{ continuations().length }} 条</span>
+        </div>
+        <ul class="event-list">
+          @for (continuation of continuations(); track continuation.id) {
+            <li>
+              <div class="event-meta">
+                <strong>第 {{ continuation.continuationSequence }} 次</strong>
+                <span
+                  >{{ continuationStatusLabel(continuation.status) }} ·
+                  {{ continuationTriggerLabel(continuation.triggerType) }}</span
+                >
+              </div>
+              <p>{{ continuation.contextSummary }}</p>
+              <small
+                >来源运行
+                <a [routerLink]="['/devrail/runs', continuation.sourceRunId]"
+                  >#{{ continuation.sourceRunId }}</a
+                ></small
+              >
+              @if (continuation.childRunId) {
+                <a [routerLink]="['/devrail/runs', continuation.childRunId]"
+                  >查看子运行 #{{ continuation.childRunId }}</a
+                >
+              }
+              @if (
+                canCancelContinuation() && ['pending', 'claimed'].includes(continuation.status)
+              ) {
+                <button
+                  class="btn-outline"
+                  type="button"
+                  (click)="cancelPendingContinuation(continuation)"
+                  [disabled]="busy()"
+                >
+                  <mat-icon>cancel</mat-icon>取消请求
+                </button>
+              }
+            </li>
+          }
+        </ul>
+      </section>
+    }
     <section class="event-card" aria-labelledby="changeset-title">
       <div class="section-heading">
         <h2 id="changeset-title">文件变更</h2>
