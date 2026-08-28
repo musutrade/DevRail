@@ -225,6 +225,8 @@ pub struct DevRailTaskRow {
     pub scheduler_max_attempts: i32,
     pub scheduler_retry_at: Option<DateTime<Utc>>,
     pub scheduler_last_error: Option<String>,
+    pub hook_failure_fingerprint: Option<String>,
+    pub hook_failure_count: i32,
     pub creation_source: String,
     pub source_task_id: Option<i64>,
     pub source_run_id: Option<i64>,

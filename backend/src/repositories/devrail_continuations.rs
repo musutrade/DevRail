@@ -603,7 +603,7 @@ pub(crate) async fn create(
     Ok((request, true))
 }
 
-const TASK_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, repository_id, environment_id, assignee_user_id, title, goal, background, acceptance_criteria, constraints, priority, status, revision, dispatch_snapshot, dispatch_snapshot_digest, workflow_source, workflow_version, workflow_digest, scheduler_attempt, scheduler_retry_count, scheduler_max_attempts, scheduler_retry_at, scheduler_last_error, creation_source, source_task_id, source_run_id, followup_depth, labels, due_at, created_at, updated_at, archived_at";
+const TASK_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, repository_id, environment_id, assignee_user_id, title, goal, background, acceptance_criteria, constraints, priority, status, revision, dispatch_snapshot, dispatch_snapshot_digest, workflow_source, workflow_version, workflow_digest, scheduler_attempt, scheduler_retry_count, scheduler_max_attempts, scheduler_retry_at, scheduler_last_error, hook_failure_fingerprint, hook_failure_count, creation_source, source_task_id, source_run_id, followup_depth, labels, due_at, created_at, updated_at, archived_at";
 
 pub async fn find_by_id_in_connection(
     connection: &mut PgConnection,
