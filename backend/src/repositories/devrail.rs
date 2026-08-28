@@ -12,8 +12,8 @@ use sqlx::{AssertSqlSafe, PgConnection, PgPool};
 const PROJECT_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, slug, name, description, status, default_repository_id, default_environment_id, notification_policy, quality_gate_template, created_at, updated_at, archived_at";
 const REPOSITORY_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, name, remote_url, protocol, default_branch, credential_ref, last_sync_status, last_head_sha, last_remote_branch, last_remote_branch_count, created_at, updated_at, archived_at";
 const ENVIRONMENT_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, name, workspace_root, network_mode, tool_policy, secret_refs, max_duration_secs, enabled, created_at, updated_at, archived_at";
-const TASK_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, repository_id, environment_id, assignee_user_id, title, goal, background, acceptance_criteria, constraints, priority, status, revision, dispatch_snapshot, dispatch_snapshot_digest, workflow_source, workflow_version, workflow_digest, scheduler_attempt, scheduler_retry_count, scheduler_max_attempts, scheduler_retry_at, scheduler_last_error, creation_source, source_task_id, source_run_id, followup_depth, labels, due_at, created_at, updated_at, archived_at";
-const SCHEDULER_TASK_COLUMNS: &str = "t.id, t.organization_id, t.department_id, t.owner_user_id, t.project_id, t.repository_id, t.environment_id, t.assignee_user_id, t.title, t.goal, t.background, t.acceptance_criteria, t.constraints, t.priority, t.status, t.revision, t.dispatch_snapshot, t.dispatch_snapshot_digest, t.workflow_source, t.workflow_version, t.workflow_digest, t.scheduler_attempt, t.scheduler_retry_count, t.scheduler_max_attempts, t.scheduler_retry_at, t.scheduler_last_error, t.creation_source, t.source_task_id, t.source_run_id, t.followup_depth, t.labels, t.due_at, t.created_at, t.updated_at, t.archived_at";
+const TASK_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, project_id, repository_id, environment_id, assignee_user_id, title, goal, background, acceptance_criteria, constraints, priority, status, revision, dispatch_snapshot, dispatch_snapshot_digest, workflow_source, workflow_version, workflow_digest, scheduler_attempt, scheduler_retry_count, scheduler_max_attempts, scheduler_retry_at, scheduler_last_error, hook_failure_fingerprint, hook_failure_count, creation_source, source_task_id, source_run_id, followup_depth, labels, due_at, created_at, updated_at, archived_at";
+const SCHEDULER_TASK_COLUMNS: &str = "t.id, t.organization_id, t.department_id, t.owner_user_id, t.project_id, t.repository_id, t.environment_id, t.assignee_user_id, t.title, t.goal, t.background, t.acceptance_criteria, t.constraints, t.priority, t.status, t.revision, t.dispatch_snapshot, t.dispatch_snapshot_digest, t.workflow_source, t.workflow_version, t.workflow_digest, t.scheduler_attempt, t.scheduler_retry_count, t.scheduler_max_attempts, t.scheduler_retry_at, t.scheduler_last_error, t.hook_failure_fingerprint, t.hook_failure_count, t.creation_source, t.source_task_id, t.source_run_id, t.followup_depth, t.labels, t.due_at, t.created_at, t.updated_at, t.archived_at";
 
 fn dependency_eligible_sql(task_alias: &str) -> String {
     format!(
@@ -626,7 +626,8 @@ pub(crate) async fn claim_scheduler_tasks(
              AND e.department_id IS NOT DISTINCT FROM t.department_id
             WHERE t.status = 'queued'
               AND t.archived_at IS NULL
-              AND t.scheduler_attempt < t.scheduler_max_attempts
+              AND (t.scheduler_attempt < t.scheduler_max_attempts
+                   OR (t.hook_failure_count > 0 AND t.hook_failure_count < 5))
               AND {dependency_eligible}
               AND e.enabled
               AND e.archived_at IS NULL
@@ -965,6 +966,7 @@ pub(crate) async fn reconcile_scheduler_state(
              scheduler_last_error = '已达到调度最大尝试次数', updated_at = now()
          WHERE status = 'queued' AND archived_at IS NULL
            AND scheduler_attempt >= scheduler_max_attempts
+           AND (hook_failure_count = 0 OR hook_failure_count >= 5)
            AND (scheduler_retry_at IS NULL OR scheduler_retry_at <= now())",
     )
     .execute(&mut *tx)

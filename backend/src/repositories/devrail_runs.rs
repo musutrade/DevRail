@@ -8,9 +8,14 @@ use sqlx::{AssertSqlSafe, PgConnection, PgPool};
 const RUN_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, attempt, task_revision, workflow_source, workflow_version, workflow_digest, workflow_snapshot, actor_type, last_heartbeat_at, last_event_at, retry_reason, parent_run_id, parent_turn_id, run_kind, root_run_id, continuation_sequence, continuation_request_id, harness_start_key, harness_start_claim_owner, harness_start_claim_token, harness_start_claim_expires_at, harness_started_token, cleanup_status, branch_name, branch_expires_at, status, thread_id, turn_id, harness_version, model_id, cwd, policy, startup_args_summary, exit_reason, exit_code, stderr_summary, trace_id, recovery_suggestion, recovery_attempts, started_at, completed_at, created_at, updated_at";
 const EVENT_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, run_id, cursor, event_type, source_event_id, idempotency_key, payload, summary, occurred_at";
 const MAX_TRANSPORT_RECOVERY_ATTEMPTS: i32 = 2;
+pub(crate) const MAX_HOOK_FAILURES: i32 = 5;
 
 pub(crate) fn can_transport_recover(recovery_attempts: i32) -> bool {
     recovery_attempts < MAX_TRANSPORT_RECOVERY_ATTEMPTS
+}
+
+pub(crate) const fn hook_failure_breaker_open(failure_count: i32) -> bool {
+    failure_count >= MAX_HOOK_FAILURES
 }
 
 fn scope(alias: &str) -> String {
@@ -423,6 +428,60 @@ pub(crate) async fn scheduler_retry_policy(
 }
 
 pub(crate) async fn requeue_task_after_run(
+    c: &mut PgConnection,
+    task_id: i64,
+    retry_at: chrono::DateTime<chrono::Utc>,
+    reason: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE devrail_tasks
+         SET status='queued', scheduler_claim_token=NULL, scheduler_claimed_at=NULL,
+             scheduler_retry_count=scheduler_retry_count+1,
+             scheduler_retry_at=$2, scheduler_last_error=$3, updated_at=now()
+         WHERE id=$1",
+    )
+    .bind(task_id)
+    .bind(retry_at)
+    .bind(reason.chars().take(500).collect::<String>())
+    .execute(c)
+    .await?;
+    Ok(())
+}
+
+pub(crate) async fn record_hook_failure(
+    c: &mut PgConnection,
+    task_id: i64,
+    fingerprint: &str,
+) -> Result<i32, sqlx::Error> {
+    let count = sqlx::query_scalar::<_, i32>(
+        "UPDATE devrail_tasks
+         SET hook_failure_count = CASE WHEN hook_failure_fingerprint = $2
+             THEN hook_failure_count + 1 ELSE 1 END,
+             hook_failure_fingerprint = $2, updated_at = now()
+         WHERE id = $1
+         RETURNING hook_failure_count",
+    )
+    .bind(task_id)
+    .bind(fingerprint)
+    .fetch_one(c)
+    .await?;
+    Ok(count)
+}
+
+pub(crate) async fn clear_hook_failure(
+    c: &mut PgConnection,
+    task_id: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE devrail_tasks SET hook_failure_fingerprint=NULL, hook_failure_count=0, updated_at=now() WHERE id=$1",
+    )
+    .bind(task_id)
+    .execute(c)
+    .await?;
+    Ok(())
+}
+
+pub(crate) async fn requeue_task_after_hook_failure(
     c: &mut PgConnection,
     task_id: i64,
     retry_at: chrono::DateTime<chrono::Utc>,
@@ -1139,5 +1198,69 @@ mod workflow_identity_tests {
             stored,
             ("thread-second".to_string(), "turn-second".to_string())
         );
+    }
+}
+
+#[cfg(test)]
+mod hook_failure_tests {
+    use super::*;
+    use crate::db::DATABASE_TEST_LOCK;
+
+    #[tokio::test]
+    async fn hook_failure_count_tracks_same_fingerprint_and_resets() {
+        let _guard = DATABASE_TEST_LOCK.lock().await;
+        let Ok(database_url) = std::env::var("TEST_DATABASE_URL") else {
+            return;
+        };
+        let pool = crate::db::init_pool(&database_url)
+            .await
+            .expect("connect test database");
+        crate::db::run_migrations(&pool)
+            .await
+            .expect("run migrations");
+        let suffix = uuid::Uuid::new_v4().simple().to_string();
+        let (_, _, _, task_id) = create_harness_test_task(&pool, &suffix)
+            .await
+            .expect("create task");
+
+        for expected in 1..=5 {
+            let mut tx = pool.begin().await.expect("begin hook failure transaction");
+            let count = record_hook_failure(&mut tx, task_id, "before-run-hook-error")
+                .await
+                .expect("record hook failure");
+            tx.commit().await.expect("commit hook failure transaction");
+            assert_eq!(count, expected);
+            assert_eq!(
+                hook_failure_breaker_open(count),
+                expected >= MAX_HOOK_FAILURES
+            );
+        }
+
+        let mut tx = pool
+            .begin()
+            .await
+            .expect("begin fingerprint reset transaction");
+        assert_eq!(
+            record_hook_failure(&mut tx, task_id, "different-hook-error")
+                .await
+                .expect("record changed hook failure"),
+            1
+        );
+        clear_hook_failure(&mut tx, task_id)
+            .await
+            .expect("clear hook failure");
+        tx.commit()
+            .await
+            .expect("commit fingerprint reset transaction");
+
+        let state = sqlx::query_as::<_, (Option<String>, i32)>(
+            "SELECT hook_failure_fingerprint, hook_failure_count
+             FROM devrail_tasks WHERE id=$1",
+        )
+        .bind(task_id)
+        .fetch_one(&pool)
+        .await
+        .expect("read hook failure state");
+        assert_eq!(state, (None, 0));
     }
 }

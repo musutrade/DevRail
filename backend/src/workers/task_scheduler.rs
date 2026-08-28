@@ -950,6 +950,8 @@ mod tests {
             scheduler_max_attempts: 3,
             scheduler_retry_at: None,
             scheduler_last_error: None,
+            hook_failure_fingerprint: None,
+            hook_failure_count: 0,
             creation_source: "legacy".to_string(),
             source_task_id: None,
             source_run_id: None,

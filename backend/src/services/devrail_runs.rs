@@ -4,6 +4,7 @@ use crate::models::*;
 use crate::repositories::{self, devrail, devrail_runs, devrail_workspaces};
 use crate::workers::harness_supervisor::{HarnessSupervisor, RunLaunch, SupervisorError};
 use serde_json::json;
+use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use std::collections::BTreeSet;
 use std::process::Stdio;
@@ -12,6 +13,18 @@ use tokio::process::Command;
 
 fn db_error(error: sqlx::Error) -> ApiError {
     ApiError::internal(error)
+}
+
+fn hook_failure_fingerprint(phase: &str, error: &ApiError) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(phase.as_bytes());
+    hasher.update(b"\n");
+    hasher.update(error.to_string().as_bytes());
+    hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 #[derive(Debug, Clone)]
 struct ResumeContext {
@@ -656,22 +669,57 @@ async fn create_run_with_context(
         )
         .await
         .map_err(db_error)?;
+        let fingerprint = hook_failure_fingerprint("before_run", &error);
+        let failure_count = devrail_runs::record_hook_failure(&mut cleanup, task.id, &fingerprint)
+            .await
+            .map_err(db_error)?;
+        let breaker_open = devrail_runs::hook_failure_breaker_open(failure_count);
+        let terminal_reason = if breaker_open {
+            "hook_failure_circuit_open"
+        } else {
+            "before_run_failed"
+        };
+        let recovery_suggestion = if breaker_open {
+            "相同 Hook 错误已连续 5 次；已停止自动运行，请人工介入"
+        } else {
+            "请检查工作流 hook 和质量门禁配置"
+        };
         devrail_runs::update_run_terminal(
             &mut cleanup,
             &devrail_runs::TerminalRunUpdate {
                 run_id: row.id,
                 status: "failed",
-                exit_reason: "before_run_failed",
+                exit_reason: terminal_reason,
                 exit_code: None,
                 stderr_summary: Some("before_run hook 执行失败"),
                 trace_id: &uuid::Uuid::new_v4().to_string(),
-                recovery_suggestion: Some("请检查工作流 hook 和质量门禁配置"),
+                recovery_suggestion: Some(recovery_suggestion),
             },
         )
         .await
         .map_err(db_error)?;
+        if breaker_open || scheduler_claim_token.is_none() {
+            devrail_runs::update_task_status(&mut cleanup, task.id, "failed")
+                .await
+                .map_err(db_error)?;
+        } else {
+            let retry_at = chrono::Utc::now()
+                + crate::workers::task_scheduler::retry_delay(row.attempt, scheduler_policy);
+            devrail_runs::requeue_task_after_hook_failure(
+                &mut cleanup,
+                task.id,
+                retry_at,
+                terminal_reason,
+            )
+            .await
+            .map_err(db_error)?;
+        }
         cleanup.commit().await.map_err(db_error)?;
-        return Err(error);
+        return Err(if breaker_open {
+            ApiError::conflict(recovery_suggestion)
+        } else {
+            error
+        });
     }
     crate::app_metrics::record_workspace_event("hook", "succeeded");
     if let Err(error) = supervisor

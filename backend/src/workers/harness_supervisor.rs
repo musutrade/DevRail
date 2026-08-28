@@ -727,7 +727,6 @@ fn recovery_for_failure(protocol_failed: bool, stderr: &str) -> &'static str {
 fn should_retry_automatically(launch: &RunLaunch, status: &str, reason: &str) -> bool {
     launch.automatic
         && status == "failed"
-        && launch.attempt < launch.max_attempts
         && matches!(
             reason,
             "stall"
@@ -739,7 +738,9 @@ fn should_retry_automatically(launch: &RunLaunch, status: &str, reason: &str) ->
                 | "transport_resume_unavailable"
                 | "recovery_state_missing"
                 | "recovery_spawn_failed"
+                | "after_run_failed"
         )
+        && (reason == "after_run_failed" || launch.attempt < launch.max_attempts)
 }
 
 async fn write_json(stdin: &mut tokio::process::ChildStdin, value: Value) -> std::io::Result<()> {
@@ -1231,15 +1232,16 @@ async fn finish_run(
     } else {
         "on_failure"
     };
-    let hook_failed = if let Some(snapshot) =
+    let hook_error = if let Some(snapshot) =
         devrail_runs::workflow_snapshot_for_run(&supervisor.pool, launch.run_id).await?
     {
         services::devrail_workspaces::run_hooks(&snapshot, hook_phase, &launch.cwd)
             .await
-            .is_err()
+            .err()
     } else {
-        false
+        None
     };
+    let hook_failed = hook_error.is_some();
     let mut tx = supervisor.pool.begin().await?;
     let (status, reason, recovery) = if hook_failed && status == "completed" {
         (
@@ -1257,7 +1259,40 @@ async fn finish_run(
         (status, reason, recovery)
     };
     let trace = uuid::Uuid::new_v4().to_string();
-    let retryable = should_retry_automatically(launch, status, reason);
+    let hook_breaker_count = if hook_failed {
+        let mut hasher = Sha256::new();
+        hasher.update(hook_phase.as_bytes());
+        hasher.update(b"\n");
+        hasher.update(
+            hook_error
+                .as_ref()
+                .map(ToString::to_string)
+                .unwrap_or_default()
+                .as_bytes(),
+        );
+        let fingerprint = hasher
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        Some(devrail_runs::record_hook_failure(&mut tx, launch.task_id, &fingerprint).await?)
+    } else if status == "completed" {
+        devrail_runs::clear_hook_failure(&mut tx, launch.task_id).await?;
+        None
+    } else {
+        None
+    };
+    let hook_breaker_open = hook_breaker_count.is_some_and(devrail_runs::hook_failure_breaker_open);
+    let retryable = !hook_breaker_open && should_retry_automatically(launch, status, reason);
+    let (status, reason, recovery) = if hook_breaker_open {
+        (
+            "failed",
+            "hook_failure_circuit_open",
+            Some("相同 Hook 错误已连续 5 次；已停止自动运行，请人工介入"),
+        )
+    } else {
+        (status, reason, recovery)
+    };
     let transitioned = devrail_runs::update_run_terminal(
         &mut tx,
         &devrail_runs::TerminalRunUpdate {
@@ -1272,7 +1307,8 @@ async fn finish_run(
     )
     .await?;
     if !transitioned {
-        tx.commit().await?;
+        // A duplicate terminal event must not count as another Hook failure.
+        tx.rollback().await?;
         return Ok(());
     }
     if handoff_ready {
@@ -1525,11 +1561,27 @@ mod tests {
         assert!(!should_retry_automatically(
             &RunLaunch {
                 attempt: 3,
-                ..launch
+                ..launch.clone()
             },
             "failed",
             "timeout"
         ));
+        assert!(should_retry_automatically(
+            &RunLaunch {
+                attempt: 3,
+                ..launch.clone()
+            },
+            "failed",
+            "after_run_failed"
+        ));
+    }
+
+    #[test]
+    fn hook_failure_breaker_opens_only_at_fifth_failure() {
+        assert!(!devrail_runs::hook_failure_breaker_open(0));
+        assert!(!devrail_runs::hook_failure_breaker_open(4));
+        assert!(devrail_runs::hook_failure_breaker_open(5));
+        assert!(devrail_runs::hook_failure_breaker_open(6));
     }
 
     #[tokio::test]
