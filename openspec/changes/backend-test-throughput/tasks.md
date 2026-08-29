@@ -23,8 +23,8 @@
 
 ## 5. CI build and workflow caching
 
-- [ ] 5.1 为 GitHub Actions Rust toolchain 配置基于 lockfile/toolchain 的依赖和目标缓存，并验证缓存命中与失效均执行完整质量门（配置已完成，待远端 CI 确认命中/失效日志）
-- [ ] 5.2 为后端和前端 Docker 构建配置 BuildKit/GHA layer cache，保留 Trivy、SBOM 和依赖策略检查；通过 security workflow 成功运行和缓存键变更验证（配置已完成，待 security workflow 远端运行确认）
+- [x] 5.1 为 GitHub Actions Rust toolchain 配置基于 lockfile/toolchain 的依赖和目标缓存，并验证缓存命中与失效均执行完整质量门（PR #88 首轮 miss/save、rerun full hit；lockfile/toolchain hash 作为失效边界，完整质量门两轮均成功）
+- [x] 5.2 为后端和前端 Docker 构建配置 BuildKit/GHA layer cache，保留 Trivy、SBOM 和依赖策略检查；通过 security workflow 成功运行和缓存键变更验证（PR #88 两轮 security workflow 成功；两套镜像均完成 Trivy/SBOM，Dockerfile/build context 内容键与独立 scope 作为失效边界）
 - [x] 5.3 评估 `backend.compile` 与 Clippy/test 的重复编译成本，在不削弱 required step 覆盖的前提下合并或复用构建产物；通过 `cargo flow verify --all` 和报告步骤计数验证
 
 ## 6. Verification and rollout

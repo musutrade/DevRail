@@ -93,6 +93,8 @@
 - CI 的 Rust 工具链缓存以各自的 `Cargo.lock` 和 `rust-toolchain.toml` 生成键，分别覆盖 backend 与 arc-flow target 目录；缓存命中不改变 `cargo flow verify` 的 secret scan、审计、lint 或测试步骤。锁文件或 toolchain 变化会使对应缓存失效并重新构建。
 - security workflow 使用 Buildx 的 `type=gha` 缓存，并按 backend/front-end 镜像拆分 scope。镜像仍以 `load: true` 导入本地 Docker，随后无条件执行 Trivy；构建成功后才生成 SBOM。首次远端 workflow 运行须确认 cache restore/save 日志，命中与 lockfile/Dockerfile 变更后的失效均须通过同一质量门。
 - 后端质量门移除了独立 `backend.compile` 步骤。`backend.clippy --all-targets --all-features` 已提供更广的静态编译覆盖，`backend.tests` 仍会编译并执行全部测试目标；验证报告的后端步骤数因此减少一项，覆盖不减少。
+- 2026-08-29 PR #88 首轮运行 `CI`、`Supply chain security` 和 `arc-flow platform` 均成功。Rust 缓存首轮明确报告 `No cache found` 后 `Saving cache`；同提交 rerun 中 backend 依赖策略 job 对 `v1-backend-<Cargo.lock/toolchain hash>` 报告 full cache hit 和 `Cache up-to-date`。CI 后端/前端验证、arc-flow Ubuntu/Windows/benchmark、Rust 依赖策略及两套镜像的 Trivy/SBOM 均在两轮成功。
+- Rust 失效边界由 workflow 中的 `hashFiles('backend/Cargo.lock', 'rust-toolchain.toml')` 与对应 arc-flow lockfile 输入决定；BuildKit GHA cache 由 Dockerfile 和 build context 内容键决定，backend/front-end 使用独立 scope。首轮 miss/save 与 rerun hit 证明缓存不会替代质量门，依赖、toolchain 或镜像构建输入变更会创建新键并继续执行完整门禁。
 
 ## API 流拆分验证
 
