@@ -330,6 +330,142 @@
         ]
       }
     },
+    "/artifacts": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "listDevRailArtifacts",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "artifact_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailArtifactPage"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/artifacts/{id}": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "getDevRailArtifact",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailArtifactResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/artifacts/{id}/download": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "downloadDevRailArtifact",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "受控产物内容"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/audit-logs": {
       "get": {
         "tags": [
@@ -1898,6 +2034,56 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/repair-callbacks": {
+      "post": {
+        "tags": [
+          "internal"
+        ],
+        "operationId": "receiveDevRailRepairCallback",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevRailRepairCallbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailRepairResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
@@ -4141,6 +4327,473 @@
         }
       }
     },
+    "/repair-approvals/{id}/approve": {
+      "post": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "approveDevRailRepair",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevRailRepairApprovalDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailRepairApprovalResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/repair-approvals/{id}/reject": {
+      "post": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "rejectDevRailRepair",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevRailRepairApprovalDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailRepairApprovalResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/repair-approvals/{id}/withdraw": {
+      "post": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "withdrawDevRailRepairApproval",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevRailRepairApprovalDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailRepairApprovalResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/repairs": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "listDevRailRepairs",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "assigneeUserId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "label",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailRepairPage"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/repairs/{id}": {
+      "get": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "getDevRailRepair",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailRepairResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/repairs/{id}/cancel": {
+      "post": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "cancelDevRailRepair",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailRepairResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/repairs/{id}/handoff": {
+      "post": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "handoffDevRailRepair",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevRailRepairHandoffRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailRepairResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/repairs/{id}/retry": {
+      "post": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "retryDevRailRepair",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDevRailRepairRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailRepairResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/review-comments/{id}": {
       "patch": {
         "tags": [
@@ -5401,6 +6054,62 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DevRailQualityGatePage"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/runs/{id}/repairs": {
+      "post": {
+        "tags": [
+          "devrail"
+        ],
+        "operationId": "createDevRailRepair",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDevRailRepairRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevRailRepairResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
@@ -7140,6 +7849,22 @@
           }
         }
       },
+      "CreateDevRailRepairRequest": {
+        "type": "object",
+        "required": [
+          "idempotencyKey",
+          "riskCategory"
+        ],
+        "properties": {
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "riskCategory": {
+            "$ref": "#/components/schemas/DevRailRepairRiskCategory"
+          }
+        },
+        "additionalProperties": false
+      },
       "CreateDevRailRepositoryRequest": {
         "type": "object",
         "required": [
@@ -7732,6 +8457,132 @@
           },
           "toolName": {
             "type": "string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DevRailArtifactPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DevRailArtifactResponse"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "DevRailArtifactResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "projectId",
+          "taskId",
+          "artifactType",
+          "fileName",
+          "contentType",
+          "byteSize",
+          "sha256",
+          "cleanupStatus",
+          "cleanupAttempts",
+          "expiresAt",
+          "createdAt",
+          "updatedAt",
+          "downloadUrl"
+        ],
+        "properties": {
+          "artifactType": {
+            "type": "string"
+          },
+          "byteSize": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cleanupAttempts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cleanupStatus": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deletedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "downloadUrl": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "projectId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "qualityGateId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "runId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "taskId": {
+            "type": "integer",
+            "format": "int64"
           },
           "updatedAt": {
             "type": "string",
@@ -8887,6 +9738,549 @@
           }
         }
       },
+      "DevRailRepairApprovalDecisionRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "DevRailRepairApprovalResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "repairRequestId",
+          "riskCategory",
+          "policyVersion",
+          "status",
+          "requestedBy",
+          "expiresAt",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decidedBy": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "decisionReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "policyVersion": {
+            "type": "string"
+          },
+          "repairRequestId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "requestedBy": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "riskCategory": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DevRailRepairCallbackRequest": {
+        "type": "object",
+        "required": [
+          "source",
+          "eventId",
+          "organizationId",
+          "projectId",
+          "taskId",
+          "sourceRunId",
+          "evidenceObservedAt",
+          "evidenceExpiresAt",
+          "changesetDigest",
+          "affectedGates",
+          "errorSummary",
+          "structuredError",
+          "environmentSummary",
+          "riskCategory"
+        ],
+        "properties": {
+          "affectedGates": {},
+          "changesetDigest": {
+            "type": "string"
+          },
+          "environmentSummary": {},
+          "errorSummary": {
+            "type": "string"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "evidenceExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "evidenceObservedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "logRef": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "organizationId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "projectId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "riskCategory": {
+            "$ref": "#/components/schemas/DevRailRepairRiskCategory"
+          },
+          "source": {
+            "type": "string"
+          },
+          "sourceRunId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "structuredError": {},
+          "taskId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DevRailRepairDiagnosisResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "sourceRunId",
+          "evidenceRef",
+          "evidenceObservedAt",
+          "affectedGates",
+          "errorSummary",
+          "structuredError",
+          "environmentSummary",
+          "createdAt"
+        ],
+        "properties": {
+          "affectedGates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "changesetDigest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "environmentSummary": {},
+          "errorSummary": {
+            "type": "string"
+          },
+          "evidenceExpiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "evidenceObservedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "evidenceRef": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "logRef": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sourceRunId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "structuredError": {}
+        }
+      },
+      "DevRailRepairErrorCode": {
+        "type": "string",
+        "enum": [
+          "policy_disabled",
+          "invalid_source",
+          "evidence_missing",
+          "evidence_expired",
+          "evidence_mismatch",
+          "approval_required",
+          "approval_expired",
+          "approval_rejected",
+          "active_run",
+          "budget_exceeded",
+          "capacity_unavailable",
+          "hook_failure_circuit_open",
+          "claim_conflict",
+          "dispatch_unavailable",
+          "cancelled",
+          "gate_failed",
+          "forbidden_operation",
+          "manual_handoff",
+          "diagnostic_rejected"
+        ]
+      },
+      "DevRailRepairGateRerunResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "gateId",
+          "changesetDigest",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "changesetDigest": {
+            "type": "string"
+          },
+          "childRunId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "durationMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "gateId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "logRef": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resultCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "DevRailRepairHandoffRequest": {
+        "type": "object",
+        "required": [
+          "reasonCode",
+          "recommendation"
+        ],
+        "properties": {
+          "reasonCode": {
+            "$ref": "#/components/schemas/DevRailRepairErrorCode"
+          },
+          "recommendation": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DevRailRepairHandoffResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "reasonCode",
+          "recommendation",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "recommendation": {
+            "type": "string"
+          },
+          "resolvedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "DevRailRepairPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DevRailRepairResponse"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "DevRailRepairRequestStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "claimed",
+          "dispatched",
+          "running",
+          "succeeded",
+          "failed",
+          "cancelled",
+          "handed_off",
+          "rejected"
+        ]
+      },
+      "DevRailRepairResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "taskId",
+          "sourceRunId",
+          "rootRunId",
+          "diagnosisId",
+          "repairSequence",
+          "riskCategory",
+          "strategyVersion",
+          "status",
+          "costUnits",
+          "diagnosis",
+          "gateReruns",
+          "handoffs",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "approval": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DevRailRepairApprovalResponse"
+              }
+            ]
+          },
+          "cancelledAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "childRunId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "costUnits": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "diagnosis": {
+            "$ref": "#/components/schemas/DevRailRepairDiagnosisResponse"
+          },
+          "diagnosisId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "dispatchedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "gateReruns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DevRailRepairGateRerunResponse"
+            }
+          },
+          "handoffReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "handoffs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DevRailRepairHandoffResponse"
+            }
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "repairSequence": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "resultCode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DevRailRepairErrorCode"
+              }
+            ]
+          },
+          "riskCategory": {
+            "$ref": "#/components/schemas/DevRailRepairRiskCategory"
+          },
+          "rootRunId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sourceRunId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DevRailRepairRequestStatus"
+          },
+          "strategyVersion": {
+            "type": "string"
+          },
+          "taskId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DevRailRepairRiskCategory": {
+        "type": "string",
+        "enum": [
+          "low_risk",
+          "logical_change",
+          "dependency_change",
+          "remote_write",
+          "security_change",
+          "forbidden"
+        ]
+      },
       "DevRailRepositoryBranchResponse": {
         "type": "object",
         "required": [
@@ -9358,7 +10752,8 @@
           "primary",
           "retry",
           "continuation",
-          "follow_up"
+          "follow_up",
+          "repair"
         ]
       },
       "DevRailRunPage": {
@@ -9550,6 +10945,20 @@
               "string",
               "null"
             ]
+          },
+          "repairRequestId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "repairSequence": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
           },
           "retryReason": {
             "type": [
@@ -9987,6 +11396,7 @@
           "workflowVersion",
           "workflowDigest",
           "continuationPolicy",
+          "repairPolicy",
           "continuationCapabilities",
           "schedulerAttempt",
           "schedulerRetryCount",
@@ -10110,6 +11520,9 @@
           "projectId": {
             "type": "integer",
             "format": "int64"
+          },
+          "repairPolicy": {
+            "$ref": "#/components/schemas/RepairPolicy"
           },
           "repositoryId": {
             "type": [
@@ -10964,6 +12377,63 @@
             ]
           }
         }
+      },
+      "RepairPolicy": {
+        "type": "object",
+        "properties": {
+          "approval_categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DevRailRepairRiskCategory"
+            },
+            "uniqueItems": true
+          },
+          "auto_categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DevRailRepairRiskCategory"
+            },
+            "uniqueItems": true
+          },
+          "claim_lease_seconds": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "evidence_max_age_seconds": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "max_cost_units": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "max_diagnostic_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "max_dispatch_attempts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "max_repairs": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "retry_base_delay_seconds": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "retry_max_delay_seconds": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
       },
       "ReplaceDevRailTaskDependenciesRequest": {
         "type": "object",

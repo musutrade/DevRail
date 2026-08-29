@@ -78,6 +78,7 @@ const DEVRAIL_REPOSITORY_BRANCH_PATH: &str =
 const DEVRAIL_REPOSITORY_PULL_REQUEST_SYNC_PATH: &str =
     "/api/v1/projects/{project_id}/repositories/{id}/pull-requests/sync";
 const DEVRAIL_PULL_REQUEST_WEBHOOK_PATH: &str = "/api/v1/webhooks/git/pull-requests";
+const DEVRAIL_REPAIR_CALLBACK_PATH: &str = "/api/v1/internal/repair-callbacks";
 const DEVRAIL_REPOSITORY_SYNC_PATH: &str = "/api/v1/projects/{project_id}/repositories/{id}/sync";
 const DEVRAIL_REPOSITORY_WORKTREE_PATH: &str =
     "/api/v1/projects/{project_id}/repositories/{id}/worktree";
@@ -96,6 +97,15 @@ const DEVRAIL_CONTINUATIONS_PATH: &str = "/api/v1/continuations";
 const DEVRAIL_CONTINUATION_PATH: &str = "/api/v1/continuations/{id}";
 const DEVRAIL_CONTINUATION_CANCEL_PATH: &str = "/api/v1/continuations/{id}/cancel";
 const DEVRAIL_RUN_CONTINUATIONS_PATH: &str = "/api/v1/runs/{id}/continuations";
+const DEVRAIL_REPAIRS_PATH: &str = "/api/v1/repairs";
+const DEVRAIL_REPAIR_PATH: &str = "/api/v1/repairs/{id}";
+const DEVRAIL_REPAIR_CANCEL_PATH: &str = "/api/v1/repairs/{id}/cancel";
+const DEVRAIL_REPAIR_HANDOFF_PATH: &str = "/api/v1/repairs/{id}/handoff";
+const DEVRAIL_REPAIR_RETRY_PATH: &str = "/api/v1/repairs/{id}/retry";
+const DEVRAIL_REPAIR_APPROVE_PATH: &str = "/api/v1/repair-approvals/{id}/approve";
+const DEVRAIL_REPAIR_REJECT_PATH: &str = "/api/v1/repair-approvals/{id}/reject";
+const DEVRAIL_REPAIR_APPROVAL_WITHDRAW_PATH: &str = "/api/v1/repair-approvals/{id}/withdraw";
+const DEVRAIL_RUN_REPAIRS_PATH: &str = "/api/v1/runs/{id}/repairs";
 const DEVRAIL_TASK_WORKSPACE_PATH: &str = "/api/v1/tasks/{task_id}/workspace";
 const DEVRAIL_TASK_WORKSPACE_REBUILD_PATH: &str = "/api/v1/tasks/{task_id}/workspace/rebuild";
 const DEVRAIL_TASK_COMMENTS_PATH: &str = "/api/v1/tasks/{task_id}/comments";
@@ -108,6 +118,9 @@ const DEVRAIL_RUN_RETRY_PATH: &str = "/api/v1/runs/{id}/retry";
 const DEVRAIL_RUN_EVENTS_PATH: &str = "/api/v1/runs/{id}/events";
 const DEVRAIL_RUN_CHANGESET_PATH: &str = "/api/v1/runs/{id}/changeset";
 const DEVRAIL_RUN_PATCH_PATH: &str = "/api/v1/runs/{id}/patch";
+const DEVRAIL_ARTIFACTS_PATH: &str = "/api/v1/artifacts";
+const DEVRAIL_ARTIFACT_PATH: &str = "/api/v1/artifacts/{id}";
+const DEVRAIL_ARTIFACT_DOWNLOAD_PATH: &str = "/api/v1/artifacts/{id}/download";
 const DEVRAIL_RUN_QUALITY_GATES_PATH: &str = "/api/v1/runs/{id}/quality-gates";
 const DEVRAIL_RUN_QUALITY_GATES_EXECUTE_PATH: &str = "/api/v1/runs/{id}/quality-gates/execute";
 const DEVRAIL_RUN_QUALITY_GATE_LOG_PATH: &str = "/api/v1/runs/{id}/quality-gate-log";
@@ -180,6 +193,7 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_REPOSITORY_BRANCH_PATH, &["post", "delete"]),
     (DEVRAIL_REPOSITORY_PULL_REQUEST_SYNC_PATH, &["post"]),
     (DEVRAIL_PULL_REQUEST_WEBHOOK_PATH, &["post"]),
+    (DEVRAIL_REPAIR_CALLBACK_PATH, &["post"]),
     (DEVRAIL_REPOSITORY_SYNC_PATH, &["get", "post"]),
     (DEVRAIL_REPOSITORY_WORKTREE_PATH, &["get"]),
     (DEVRAIL_ENVIRONMENTS_PATH, &["get", "post"]),
@@ -195,6 +209,15 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_CONTINUATION_PATH, &["get"]),
     (DEVRAIL_CONTINUATION_CANCEL_PATH, &["post"]),
     (DEVRAIL_RUN_CONTINUATIONS_PATH, &["post"]),
+    (DEVRAIL_REPAIRS_PATH, &["get"]),
+    (DEVRAIL_REPAIR_PATH, &["get"]),
+    (DEVRAIL_REPAIR_CANCEL_PATH, &["post"]),
+    (DEVRAIL_REPAIR_HANDOFF_PATH, &["post"]),
+    (DEVRAIL_REPAIR_RETRY_PATH, &["post"]),
+    (DEVRAIL_REPAIR_APPROVE_PATH, &["post"]),
+    (DEVRAIL_REPAIR_REJECT_PATH, &["post"]),
+    (DEVRAIL_REPAIR_APPROVAL_WITHDRAW_PATH, &["post"]),
+    (DEVRAIL_RUN_REPAIRS_PATH, &["post"]),
     (DEVRAIL_TASK_WORKSPACE_PATH, &["get"]),
     (DEVRAIL_TASK_WORKSPACE_REBUILD_PATH, &["post"]),
     (DEVRAIL_TASK_COMMENTS_PATH, &["get", "post"]),
@@ -207,6 +230,9 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DEVRAIL_RUN_EVENTS_PATH, &["get"]),
     (DEVRAIL_RUN_CHANGESET_PATH, &["get"]),
     (DEVRAIL_RUN_PATCH_PATH, &["get"]),
+    (DEVRAIL_ARTIFACTS_PATH, &["get"]),
+    (DEVRAIL_ARTIFACT_PATH, &["get"]),
+    (DEVRAIL_ARTIFACT_DOWNLOAD_PATH, &["get"]),
     (DEVRAIL_RUN_QUALITY_GATES_PATH, &["get"]),
     (DEVRAIL_RUN_QUALITY_GATES_EXECUTE_PATH, &["post"]),
     (DEVRAIL_RUN_QUALITY_GATE_LOG_PATH, &["get"]),
@@ -411,6 +437,10 @@ fn base_router(state: AppState) -> Router {
             post(handlers::devrail::pull_request_webhook),
         )
         .route(
+            DEVRAIL_REPAIR_CALLBACK_PATH,
+            post(handlers::devrail::repair_callback),
+        )
+        .route(
             DEVRAIL_REPOSITORY_SYNC_PATH,
             get(handlers::devrail::get_repository_sync).post(handlers::devrail::sync_repository),
         )
@@ -471,6 +501,36 @@ fn base_router(state: AppState) -> Router {
             DEVRAIL_RUN_CONTINUATIONS_PATH,
             post(handlers::devrail::create_continuation),
         )
+        .route(DEVRAIL_REPAIRS_PATH, get(handlers::devrail::list_repairs))
+        .route(DEVRAIL_REPAIR_PATH, get(handlers::devrail::get_repair))
+        .route(
+            DEVRAIL_REPAIR_CANCEL_PATH,
+            post(handlers::devrail::cancel_repair),
+        )
+        .route(
+            DEVRAIL_REPAIR_HANDOFF_PATH,
+            post(handlers::devrail::handoff_repair),
+        )
+        .route(
+            DEVRAIL_REPAIR_RETRY_PATH,
+            post(handlers::devrail::retry_repair),
+        )
+        .route(
+            DEVRAIL_REPAIR_APPROVE_PATH,
+            post(handlers::devrail::approve_repair),
+        )
+        .route(
+            DEVRAIL_REPAIR_REJECT_PATH,
+            post(handlers::devrail::reject_repair),
+        )
+        .route(
+            DEVRAIL_REPAIR_APPROVAL_WITHDRAW_PATH,
+            post(handlers::devrail::withdraw_repair_approval),
+        )
+        .route(
+            DEVRAIL_RUN_REPAIRS_PATH,
+            post(handlers::devrail::create_repair),
+        )
         .route(
             DEVRAIL_TASK_WORKSPACE_PATH,
             get(handlers::devrail::get_task_workspace),
@@ -513,6 +573,15 @@ fn base_router(state: AppState) -> Router {
         .route(
             DEVRAIL_RUN_PATCH_PATH,
             get(handlers::devrail::export_run_patch),
+        )
+        .route(
+            DEVRAIL_ARTIFACTS_PATH,
+            get(handlers::devrail::list_artifacts),
+        )
+        .route(DEVRAIL_ARTIFACT_PATH, get(handlers::devrail::get_artifact))
+        .route(
+            DEVRAIL_ARTIFACT_DOWNLOAD_PATH,
+            get(handlers::devrail::download_artifact),
         )
         .route(
             DEVRAIL_RUN_QUALITY_GATES_PATH,

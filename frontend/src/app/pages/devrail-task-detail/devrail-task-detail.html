@@ -6,7 +6,9 @@
     </div>
   </div>
   @if (loading()) {
-    <div class="loading-wrap" role="status"><mat-progress-spinner diameter="32" /></div>
+    <div class="loading-wrap" role="status" aria-label="正在加载任务详情">
+      <mat-progress-spinner diameter="32" />
+    </div>
   } @else if (task(); as current) {
     <section class="comments" aria-labelledby="workflow-identity-title">
       <h2 id="workflow-identity-title">派发契约</h2>
@@ -144,6 +146,148 @@
         </p>
       }
     </section>
+    <section class="repair-section" aria-labelledby="repair-title" [attr.aria-busy]="repairBusy()">
+      <div class="section-heading">
+        <h2 id="repair-title" #repairHeading tabindex="-1">受控修复</h2>
+        <span>{{ repairs().length }} 次请求</span>
+      </div>
+      @if (repairs().length) {
+        <ol class="repair-list" aria-live="polite">
+          @for (repair of repairs(); track repair.id) {
+            <li>
+              <div class="repair-meta">
+                <strong
+                  >第 {{ repair.repairSequence }} 次 ·
+                  {{ repairStatusLabel(repair.status) }}</strong
+                >
+                <span>{{ repairRiskLabel(repair.riskCategory) }}</span>
+              </div>
+              <p>{{ repair.diagnosis.errorSummary }}</p>
+              <small
+                >来源运行
+                <a [routerLink]="['/devrail/runs', repair.sourceRunId]"
+                  >#{{ repair.sourceRunId }}</a
+                >
+                · 证据时间
+                {{ repair.diagnosis.evidenceObservedAt | date: 'yyyy-MM-dd HH:mm' }}</small
+              >
+              <p class="repair-gates">
+                受影响门禁：{{ repair.diagnosis.affectedGates.join('、') }}
+              </p>
+              @if (repair.childRunId) {
+                <a [routerLink]="['/devrail/runs', repair.childRunId]"
+                  >查看修复运行 #{{ repair.childRunId }}</a
+                >
+              }
+              @if (repair.gateReruns.length) {
+                <ul class="repair-gate-list" aria-label="门禁重跑结果">
+                  @for (gate of repair.gateReruns; track gate.id) {
+                    <li>
+                      <span>{{ gate.gateId }}</span>
+                      <span>{{ gate.status }}</span>
+                      @if (gate.summary) {
+                        <small>{{ gate.summary }}</small>
+                      }
+                    </li>
+                  }
+                </ul>
+              }
+              @if (repair.approval; as approval) {
+                <div class="repair-approval">
+                  <span>审批：{{ repairApprovalStatusLabel(approval) }}</span>
+                  @if (isRepairApprovalActionable(approval) && canApproveRepair()) {
+                    <button
+                      type="button"
+                      (click)="decideRepairApproval(repair, true)"
+                      [disabled]="repairBusy()"
+                    >
+                      <mat-icon>check_circle</mat-icon>批准
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-outline"
+                      (click)="decideRepairApproval(repair, false)"
+                      [disabled]="repairBusy()"
+                    >
+                      <mat-icon>cancel</mat-icon>拒绝
+                    </button>
+                    @if (canWithdrawRepairApproval(approval)) {
+                      <button
+                        type="button"
+                        class="btn-outline"
+                        (click)="withdrawRepairApproval(approval)"
+                        [disabled]="repairBusy()"
+                      >
+                        <mat-icon>undo</mat-icon>撤回
+                      </button>
+                    }
+                  }
+                </div>
+              }
+              @if (repair.handoffs.length) {
+                <ul class="repair-handoff-list" aria-label="人工交接">
+                  @for (handoff of repair.handoffs; track handoff.id) {
+                    <li>{{ handoff.recommendation }}</li>
+                  }
+                </ul>
+              }
+              @if (repair.handoffReason) {
+                <p class="repair-handoff-reason" role="status">
+                  交接原因：{{ repairHandoffReasonLabel(repair.handoffReason) }}
+                </p>
+              }
+              <div class="repair-actions">
+                @if (canCancelRepair() && ['pending', 'claimed'].includes(repair.status)) {
+                  <button
+                    type="button"
+                    class="btn-outline"
+                    (click)="cancelRepair(repair)"
+                    [disabled]="repairBusy()"
+                  >
+                    <mat-icon>cancel</mat-icon>取消请求
+                  </button>
+                }
+                @if (
+                  canHandoffRepair() &&
+                  ['pending', 'claimed', 'dispatched', 'running'].includes(repair.status)
+                ) {
+                  <button
+                    type="button"
+                    class="btn-outline"
+                    (click)="handoffRepair(repair)"
+                    [disabled]="repairBusy()"
+                  >
+                    <mat-icon>person</mat-icon>转人工处理
+                  </button>
+                }
+                @if (canHandoffRepair() && repair.status === 'handed_off') {
+                  <button
+                    type="button"
+                    class="btn-outline"
+                    (click)="retryRepair(repair)"
+                    [disabled]="repairBusy()"
+                  >
+                    <mat-icon>replay</mat-icon>人工重试
+                  </button>
+                }
+              </div>
+            </li>
+          }
+        </ol>
+      } @else {
+        <p class="empty">暂无受控修复记录</p>
+      }
+      @if (canCreateRepair()) {
+        <button
+          type="button"
+          class="btn-primary"
+          (click)="createRepair()"
+          [disabled]="repairBusy()"
+        >
+          <mat-icon>build</mat-icon>{{ repairBusy() ? '正在提交' : '请求低风险修复' }}
+        </button>
+      }
+    </section>
     <section class="comments" aria-labelledby="dependency-title">
       <h2 id="dependency-title">任务依赖</h2>
       @if (current.blockedReason) {
@@ -252,6 +396,9 @@
             <option value="running">运行中</option>
             <option value="awaiting_approval">等待审批</option>
             <option value="continuation_pending">等待追加执行</option>
+            <option value="repair_pending">等待受控修复</option>
+            <option value="repair_running">受控修复运行中</option>
+            <option value="repair_handoff">等待人工处理</option>
             <option value="succeeded">已完成</option>
             <option value="failed">失败</option>
             <option value="cancelled">已取消</option>

@@ -6,10 +6,11 @@ use crate::models::*;
 use crate::permissions::devrail::*;
 use crate::services;
 use crate::AppState;
-use axum::body::Bytes;
+use axum::body::{Body, Bytes};
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::sse::{Event, KeepAlive, Sse};
+use axum::response::{IntoResponse, Response};
 use axum::Json;
 use futures_core::Stream;
 use std::convert::Infallible;
@@ -273,6 +274,16 @@ pub async fn pull_request_webhook(
     services::devrail::handle_pull_request_webhook(&s.pool, &headers, &body)
         .await
         .map(|_| StatusCode::NO_CONTENT)
+}
+
+pub async fn repair_callback(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Json<DevRailRepairResponse>, ApiError> {
+    services::devrail_repairs::handle_repair_callback(&s.pool, &headers, &body)
+        .await
+        .map(Json)
 }
 pub async fn create_repository(
     State(s): State<AppState>,
@@ -561,6 +572,107 @@ pub async fn cancel_continuation(
         .map(Json)
 }
 
+pub async fn list_repairs(
+    State(s): State<AppState>,
+    auth: RequirePermission<crate::permissions::devrail_repair::RepairRead>,
+    Query(query): Query<DevRailListQuery>,
+) -> Result<Json<DevRailRepairPage>, ApiError> {
+    services::devrail_repairs::list(&s.pool, &auth, &query)
+        .await
+        .map(Json)
+}
+
+pub async fn get_repair(
+    State(s): State<AppState>,
+    auth: RequirePermission<crate::permissions::devrail_repair::RepairRead>,
+    Path(id): Path<i64>,
+) -> Result<Json<DevRailRepairResponse>, ApiError> {
+    services::devrail_repairs::get(&s.pool, &auth, id)
+        .await
+        .map(Json)
+}
+
+pub async fn create_repair(
+    State(s): State<AppState>,
+    auth: RequirePermission<crate::permissions::devrail_repair::RepairCreate>,
+    Path(source_run_id): Path<i64>,
+    Json(request): Json<CreateDevRailRepairRequest>,
+) -> Result<(StatusCode, Json<DevRailRepairResponse>), ApiError> {
+    services::devrail_repairs::create_for_failed_quality_gates(
+        &s.pool,
+        &auth,
+        source_run_id,
+        &request,
+    )
+    .await
+    .map(|value| (StatusCode::ACCEPTED, Json(value)))
+}
+
+pub async fn cancel_repair(
+    State(s): State<AppState>,
+    auth: RequirePermission<crate::permissions::devrail_repair::RepairCancel>,
+    Path(id): Path<i64>,
+) -> Result<Json<DevRailRepairResponse>, ApiError> {
+    services::devrail_repairs::cancel(&s.pool, &auth, id)
+        .await
+        .map(Json)
+}
+
+pub async fn handoff_repair(
+    State(s): State<AppState>,
+    auth: RequirePermission<crate::permissions::devrail_repair::RepairHandoff>,
+    Path(id): Path<i64>,
+    Json(request): Json<DevRailRepairHandoffRequest>,
+) -> Result<Json<DevRailRepairResponse>, ApiError> {
+    services::devrail_repairs::handoff(&s.pool, &auth, id, &request)
+        .await
+        .map(Json)
+}
+
+pub async fn retry_repair(
+    State(s): State<AppState>,
+    auth: RequirePermission<crate::permissions::devrail_repair::RepairHandoff>,
+    Path(id): Path<i64>,
+    Json(request): Json<CreateDevRailRepairRequest>,
+) -> Result<(StatusCode, Json<DevRailRepairResponse>), ApiError> {
+    services::devrail_repairs::retry_after_handoff(&s.pool, &auth, id, &request)
+        .await
+        .map(|value| (StatusCode::ACCEPTED, Json(value)))
+}
+
+pub async fn approve_repair(
+    State(s): State<AppState>,
+    auth: RequirePermission<crate::permissions::devrail_repair::RepairApprove>,
+    Path(id): Path<i64>,
+    Json(request): Json<DevRailRepairApprovalDecisionRequest>,
+) -> Result<Json<DevRailRepairApprovalResponse>, ApiError> {
+    services::devrail_repairs::decide_approval(&s.pool, &auth, id, "approved", &request)
+        .await
+        .map(Json)
+}
+
+pub async fn reject_repair(
+    State(s): State<AppState>,
+    auth: RequirePermission<crate::permissions::devrail_repair::RepairApprove>,
+    Path(id): Path<i64>,
+    Json(request): Json<DevRailRepairApprovalDecisionRequest>,
+) -> Result<Json<DevRailRepairApprovalResponse>, ApiError> {
+    services::devrail_repairs::decide_approval(&s.pool, &auth, id, "rejected", &request)
+        .await
+        .map(Json)
+}
+
+pub async fn withdraw_repair_approval(
+    State(s): State<AppState>,
+    auth: RequirePermission<crate::permissions::devrail_repair::RepairApprove>,
+    Path(id): Path<i64>,
+    Json(request): Json<DevRailRepairApprovalDecisionRequest>,
+) -> Result<Json<DevRailRepairApprovalResponse>, ApiError> {
+    services::devrail_repairs::withdraw_approval(&s.pool, &auth, id, &request)
+        .await
+        .map(Json)
+}
+
 pub async fn list_runs(
     State(s): State<AppState>,
     auth: RequirePermission<RunRead>,
@@ -821,6 +933,47 @@ pub async fn get_run_changeset(
         .await
         .map(Json)
 }
+
+pub async fn list_artifacts(
+    State(s): State<AppState>,
+    auth: RequirePermission<ArtifactRead>,
+    Query(query): Query<DevRailArtifactQuery>,
+) -> Result<Json<DevRailArtifactPage>, ApiError> {
+    services::devrail_artifacts::list(&s.pool, &auth, &query)
+        .await
+        .map(Json)
+}
+
+pub async fn get_artifact(
+    State(s): State<AppState>,
+    auth: RequirePermission<ArtifactRead>,
+    Path(id): Path<i64>,
+) -> Result<Json<DevRailArtifactResponse>, ApiError> {
+    services::devrail_artifacts::get(&s.pool, &auth, id)
+        .await
+        .map(Json)
+}
+
+pub async fn download_artifact(
+    State(s): State<AppState>,
+    auth: RequirePermission<ArtifactRead>,
+    Path(id): Path<i64>,
+) -> Result<Response, ApiError> {
+    let artifact =
+        services::devrail_artifacts::download(&s.pool, &auth, id, s.run_workspace_root.as_path())
+            .await?;
+    let disposition = format!("attachment; filename=\"{}\"", artifact.file_name);
+    Ok((
+        StatusCode::OK,
+        [
+            (axum::http::header::CONTENT_TYPE, artifact.content_type),
+            (axum::http::header::CONTENT_DISPOSITION, disposition),
+        ],
+        Body::from(artifact.bytes),
+    )
+        .into_response())
+}
+
 pub async fn export_run_patch(
     State(s): State<AppState>,
     auth: RequirePermission<RunRead>,
@@ -862,9 +1015,14 @@ pub async fn execute_run_quality_gates(
     auth: RequirePermission<RunExecute>,
     Path(id): Path<i64>,
 ) -> Result<Json<DevRailQualityGatePage>, ApiError> {
-    services::devrail_runs::execute_quality_gates(&s.pool, &auth, id)
-        .await
-        .map(Json)
+    services::devrail_runs::execute_quality_gates(
+        &s.pool,
+        &auth,
+        id,
+        s.run_workspace_root.as_path(),
+    )
+    .await
+    .map(Json)
 }
 
 #[derive(Debug, serde::Deserialize, utoipa::IntoParams)]

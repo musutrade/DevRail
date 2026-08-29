@@ -974,9 +974,22 @@ pub(crate) async fn reconcile_scheduler_state(
     .rows_affected();
     let pending_interruptions = sqlx::query_as::<_, (i64, String)>(
         "SELECT r.id,
-                CASE WHEN t.status = 'cancelled'
-                     THEN 'task_cancelled'
-                     ELSE 'environment_invalid'
+                CASE
+                    WHEN t.status = 'cancelled' THEN 'task_cancelled'
+                    WHEN t.status IN ('failed', 'succeeded', 'skipped', 'archived')
+                        THEN 'task_state_drift'
+                    WHEN t.archived_at IS NOT NULL THEN 'task_state_drift'
+                    WHEN e.id IS NULL OR NOT e.enabled OR e.archived_at IS NOT NULL
+                        THEN 'environment_invalid'
+                    WHEN r.workflow_source IS DISTINCT FROM t.workflow_source
+                      OR r.workflow_version IS DISTINCT FROM t.workflow_version
+                      OR r.workflow_digest IS DISTINCT FROM t.workflow_digest
+                        THEN 'workflow_identity_drift'
+                    WHEN (r.run_kind IN ('primary', 'retry') AND r.task_revision <> t.revision)
+                      OR (r.run_kind IN ('continuation', 'repair')
+                          AND (r.task_revision > t.revision OR r.task_revision + 1 < t.revision))
+                        THEN 'task_revision_drift'
+                    ELSE 'reconciliation_required'
                 END AS reason
          FROM devrail_runs r
          JOIN devrail_tasks t ON t.id = r.task_id
@@ -985,9 +998,16 @@ pub(crate) async fn reconcile_scheduler_state(
            AND (
                t.status = 'cancelled'
                OR (
-                   r.status = 'starting'
-                   AND (t.archived_at IS NOT NULL OR e.id IS NULL OR NOT e.enabled OR e.archived_at IS NOT NULL)
+                   t.status IN ('failed', 'succeeded', 'skipped', 'archived')
                )
+               OR t.archived_at IS NOT NULL
+               OR e.id IS NULL OR NOT e.enabled OR e.archived_at IS NOT NULL
+               OR r.workflow_source IS DISTINCT FROM t.workflow_source
+               OR r.workflow_version IS DISTINCT FROM t.workflow_version
+               OR r.workflow_digest IS DISTINCT FROM t.workflow_digest
+               OR (r.run_kind IN ('primary', 'retry') AND r.task_revision <> t.revision)
+               OR (r.run_kind IN ('continuation', 'repair')
+                   AND (r.task_revision > t.revision OR r.task_revision + 1 < t.revision))
            )
          ORDER BY r.id",
     )
@@ -1002,6 +1022,10 @@ pub(crate) async fn reconcile_scheduler_state(
             .map(|pending| pending.run_id)
             .collect::<Vec<_>>();
         let interruption_trace = uuid::Uuid::new_v4().to_string();
+        let interruption_reasons = pending_interruptions
+            .iter()
+            .map(|pending| pending.reason.as_str())
+            .collect::<Vec<_>>();
         sqlx::query(
             "INSERT INTO audit_logs
                  (actor_user_id, action, target_type, target_id, details, trace_id,
@@ -1009,21 +1033,20 @@ pub(crate) async fn reconcile_scheduler_state(
              SELECT NULL, 'devrail.run.reconcile_interrupt', 'devrail_run', r.id,
                     jsonb_build_object(
                         'actorType', 'system',
-                        'reason', CASE WHEN t.status='cancelled'
-                                       THEN 'task_cancelled'
-                                       ELSE 'environment_invalid' END,
+                        'reason', reasons.reason,
                         'policyVersion', 'devrail-policy-v1'
-                    ), $2, r.organization_id, r.department_id
-             FROM devrail_runs r
-             JOIN devrail_tasks t ON t.id=r.task_id
-             WHERE r.id=ANY($1::bigint[])
+                    ), $3, r.organization_id, r.department_id
+             FROM unnest($1::bigint[], $2::text[]) AS reasons(run_id, reason)
+             JOIN devrail_runs r ON r.id=reasons.run_id
                AND NOT EXISTS (
                    SELECT 1 FROM audit_logs a
                    WHERE a.action='devrail.run.reconcile_interrupt'
                      AND a.target_type='devrail_run' AND a.target_id=r.id
+                     AND a.details->>'reason' = reasons.reason
                )",
         )
         .bind(&interruption_ids)
+        .bind(&interruption_reasons)
         .bind(interruption_trace)
         .execute(&mut *tx)
         .await?;
@@ -1793,6 +1816,18 @@ mod scheduler_integration_tests {
         let Some(pool) = test_pool().await else {
             return;
         };
+        // The shared integration database may contain an unfinished fixture
+        // from an earlier test process. Keep this focused restart assertion
+        // deterministic without changing production reconciliation scope.
+        sqlx::query(
+            "UPDATE devrail_runs
+             SET status='failed', exit_reason=COALESCE(exit_reason, 'test_reset'),
+                 completed_at=COALESCE(completed_at, now()), cleanup_status='completed'
+             WHERE status IN ('starting','active') AND thread_id IS NULL",
+        )
+        .execute(&pool)
+        .await
+        .expect("reset unfinished test runs");
         let fixture = scheduler_fixture(&pool).await;
         let task_id = queued_task(&pool, fixture, 3).await;
         let (project_id, _, owner_user_id, department_id) = fixture;
@@ -2125,6 +2160,182 @@ mod scheduler_integration_tests {
         .await
         .expect("restart audit count");
         assert_eq!(restart_audits, 1);
+    }
+
+    #[tokio::test]
+    async fn reconciliation_detects_terminal_environment_revision_and_workflow_drift() {
+        let _guard = DATABASE_TEST_LOCK.lock().await;
+        let Some(pool) = test_pool().await else {
+            return;
+        };
+        let fixture = scheduler_fixture(&pool).await;
+        let task_id = queued_task(&pool, fixture, 3).await;
+        let (project_id, environment_id, owner_user_id, department_id) = fixture;
+        let organization_id = sqlx::query_scalar::<_, i64>(
+            "SELECT organization_id FROM devrail_projects WHERE id=$1",
+        )
+        .bind(project_id)
+        .fetch_one(&pool)
+        .await
+        .expect("project organization");
+        sqlx::query("UPDATE devrail_tasks SET status='running' WHERE id=$1")
+            .bind(task_id)
+            .execute(&pool)
+            .await
+            .expect("mark task running");
+        let snapshot_id = sqlx::query_scalar::<_, i64>(
+            "INSERT INTO devrail_task_snapshots
+                 (organization_id,department_id,owner_user_id,task_id,snapshot)
+             VALUES ($1,$2,$3,$4,'{}') RETURNING id",
+        )
+        .bind(organization_id)
+        .bind(department_id)
+        .bind(owner_user_id)
+        .bind(task_id)
+        .fetch_one(&pool)
+        .await
+        .expect("create task snapshot");
+        let actor = ActorContext {
+            actor_type: ActorType::System,
+            user_id: owner_user_id,
+            session_id: 0,
+            organization_id,
+            department_id,
+            data_scope: DataScope::Organization,
+            permission_codes: BTreeSet::new(),
+        };
+        let workflow_snapshot = json!({
+            "source": "legacy",
+            "version": "legacy-v1",
+            "digest": "0000000000000000000000000000000000000000000000000000000000000000"
+        });
+        let policy = json!({"version":"reconciliation-drift-test"});
+        let startup_args = json!(["app-server"]);
+        let mut tx = pool.begin().await.expect("begin drift run");
+        let run = devrail_runs::create_run(
+            &mut tx,
+            &devrail_runs::NewRun {
+                actor: &actor,
+                task_id,
+                snapshot_id,
+                idempotency_key: &format!("reconcile-drift:{task_id}"),
+                attempt: 1,
+                task_revision: 1,
+                workflow_source: "legacy",
+                workflow_version: "legacy-v1",
+                workflow_digest: workflow_snapshot["digest"].as_str().unwrap_or_default(),
+                workflow_snapshot: &workflow_snapshot,
+                actor_type: "system",
+                parent_run_id: None,
+                parent_turn_id: None,
+                branch_name: None,
+                branch_expires_at: None,
+                cwd: "/tmp/reconcile-drift",
+                policy: &policy,
+                startup_args: &startup_args,
+                model_id: None,
+                department_id,
+            },
+        )
+        .await
+        .expect("create drift run")
+        .expect("drift run inserted");
+        tx.commit().await.expect("commit drift run");
+
+        sqlx::query("UPDATE devrail_tasks SET status='succeeded' WHERE id=$1")
+            .bind(task_id)
+            .execute(&pool)
+            .await
+            .expect("terminalize task");
+        let active = vec![run.id];
+        let terminal = reconcile_scheduler_state(&pool, &active, 300)
+            .await
+            .expect("terminal drift reconciliation");
+        assert_eq!(
+            terminal
+                .pending_interruptions
+                .iter()
+                .find(|item| item.run_id == run.id)
+                .map(|item| item.reason.as_str()),
+            Some("task_state_drift")
+        );
+
+        sqlx::query("UPDATE devrail_tasks SET status='running', revision=revision+1 WHERE id=$1")
+            .bind(task_id)
+            .execute(&pool)
+            .await
+            .expect("restore task and drift revision");
+        let revision = reconcile_scheduler_state(&pool, &active, 300)
+            .await
+            .expect("revision drift reconciliation");
+        assert_eq!(
+            revision
+                .pending_interruptions
+                .iter()
+                .find(|item| item.run_id == run.id)
+                .map(|item| item.reason.as_str()),
+            Some("task_revision_drift")
+        );
+
+        sqlx::query("UPDATE devrail_tasks SET revision=1, environment_id=$2 WHERE id=$1")
+            .bind(task_id)
+            .bind(environment_id)
+            .execute(&pool)
+            .await
+            .expect("restore task revision");
+        sqlx::query("UPDATE devrail_environments SET enabled=false WHERE id=$1")
+            .bind(environment_id)
+            .execute(&pool)
+            .await
+            .expect("disable environment");
+        let environment = reconcile_scheduler_state(&pool, &active, 300)
+            .await
+            .expect("environment drift reconciliation");
+        assert_eq!(
+            environment
+                .pending_interruptions
+                .iter()
+                .find(|item| item.run_id == run.id)
+                .map(|item| item.reason.as_str()),
+            Some("environment_invalid")
+        );
+        sqlx::query("UPDATE devrail_environments SET enabled=true WHERE id=$1")
+            .bind(environment_id)
+            .execute(&pool)
+            .await
+            .expect("restore environment");
+        sqlx::query("UPDATE devrail_tasks SET status='draft' WHERE id=$1")
+            .bind(task_id)
+            .execute(&pool)
+            .await
+            .expect("prepare workflow drift");
+        sqlx::query("UPDATE devrail_tasks SET workflow_digest=$2 WHERE id=$1")
+            .bind(task_id)
+            .bind("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+            .execute(&pool)
+            .await
+            .expect("introduce workflow drift");
+        let workflow = reconcile_scheduler_state(&pool, &active, 300)
+            .await
+            .expect("workflow drift reconciliation");
+        assert_eq!(
+            workflow
+                .pending_interruptions
+                .iter()
+                .find(|item| item.run_id == run.id)
+                .map(|item| item.reason.as_str()),
+            Some("workflow_identity_drift")
+        );
+
+        let audit_count: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM audit_logs
+             WHERE action='devrail.run.reconcile_interrupt' AND target_id=$1",
+        )
+        .bind(run.id)
+        .fetch_one(&pool)
+        .await
+        .expect("drift audit count");
+        assert_eq!(audit_count, 4);
     }
 
     #[tokio::test]

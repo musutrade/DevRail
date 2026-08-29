@@ -92,6 +92,10 @@ pub struct WorkspaceWrite;
 impl PermissionRequirement for WorkspaceWrite {
     const CODE: &'static str = "devrail:workspace:write";
 }
+pub struct ArtifactRead;
+impl PermissionRequirement for ArtifactRead {
+    const CODE: &'static str = "devrail:artifact:read";
+}
 pub struct ApprovalRead;
 impl PermissionRequirement for ApprovalRead {
     const CODE: &'static str = "devrail:approval:read";

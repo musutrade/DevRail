@@ -531,6 +531,14 @@ fn task_response(row: DevRailTaskRow, actor: &ActorContext) -> DevRailTaskRespon
         .cloned()
         .and_then(|value| serde_json::from_value(value).ok())
         .unwrap_or_default();
+    let repair_policy = row
+        .dispatch_snapshot
+        .get("workflow")
+        .and_then(|workflow| workflow.get("config"))
+        .and_then(|config| config.get("repair"))
+        .cloned()
+        .and_then(|value| serde_json::from_value(value).ok())
+        .unwrap_or_default();
     DevRailTaskResponse {
         id: row.id,
         organization_id: row.organization_id,
@@ -552,6 +560,7 @@ fn task_response(row: DevRailTaskRow, actor: &ActorContext) -> DevRailTaskRespon
         workflow_version: row.workflow_version,
         workflow_digest: row.workflow_digest,
         continuation_policy,
+        repair_policy,
         continuation_capabilities: DevRailContinuationCapabilities {
             can_read: actor.has_permission("devrail:continuation:read"),
             can_create: actor.has_permission("devrail:continuation:create"),

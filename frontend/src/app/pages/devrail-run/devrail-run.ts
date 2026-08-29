@@ -26,6 +26,8 @@ import type {
   DevRailExternalReviewCommentResponse,
   DevRailTaskWorkspaceResponse,
   DevRailContinuationResponse,
+  DevRailRepairResponse,
+  DevRailArtifactResponse,
 } from '../../generated/api/models';
 
 @Component({
@@ -40,6 +42,7 @@ export class DevRailRunPage implements OnInit, OnDestroy {
   readonly events = signal<DevRailRunEventResponse[]>([]);
   readonly changes = signal<DevRailChangeFileResponse[]>([]);
   readonly qualityGates = signal<DevRailQualityGateResponse[]>([]);
+  readonly artifacts = signal<DevRailArtifactResponse[]>([]);
   readonly reviews = signal<DevRailReviewResponse[]>([]);
   readonly reviewerUserId = signal('');
   readonly reviewSummary = signal('');
@@ -48,6 +51,7 @@ export class DevRailRunPage implements OnInit, OnDestroy {
   readonly externalReviewComments = signal<DevRailExternalReviewCommentResponse[]>([]);
   readonly workspace = signal<DevRailTaskWorkspaceResponse | null>(null);
   readonly continuations = signal<DevRailContinuationResponse[]>([]);
+  readonly repair = signal<DevRailRepairResponse | null>(null);
   readonly externalProjectId = signal('');
   readonly externalRepositoryId = signal('');
   readonly externalNumber = signal('');
@@ -148,6 +152,15 @@ export class DevRailRunPage implements OnInit, OnDestroy {
     } finally {
       this.busy.set(false);
     }
+  }
+
+  downloadArtifact(artifact: DevRailArtifactResponse): void {
+    if (this.busy()) return;
+    const link = document.createElement('a');
+    link.href = artifact.downloadUrl;
+    link.download = artifact.fileName;
+    link.rel = 'noopener';
+    link.click();
   }
 
   onReviewerUserIdInput(event: Event): void {
@@ -306,7 +319,52 @@ export class DevRailRunPage implements OnInit, OnDestroy {
         retry: '失败重试',
         continuation: '追加执行',
         follow_up: '后续任务运行',
+        repair: '受控修复',
       }[kind] ?? kind
+    );
+  }
+
+  repairStatusLabel(status: string): string {
+    return (
+      {
+        pending: '待派发',
+        claimed: '已领取',
+        dispatched: '已派发',
+        running: '修复运行中',
+        succeeded: '修复成功',
+        failed: '修复失败',
+        cancelled: '已取消',
+        handed_off: '等待人工处理',
+        rejected: '已拒绝',
+      }[status] ?? status
+    );
+  }
+
+  repairRiskLabel(category: string): string {
+    return (
+      {
+        low_risk: '低风险',
+        logical_change: '逻辑修改',
+        dependency_change: '依赖修改',
+        remote_write: '远端写入',
+        security_change: '安全策略修改',
+        forbidden: '禁止自动处理',
+      }[category] ?? category
+    );
+  }
+
+  repairHandoffReasonLabel(reason: string): string {
+    return (
+      {
+        policy_disabled: '当前任务策略未启用自动修复',
+        approval_required: '修复操作需要审批',
+        approval_expired: '修复审批已过期或撤回',
+        approval_rejected: '修复审批未通过',
+        budget_exceeded: '修复次数或成本已达到上限',
+        hook_failure_circuit_open: 'Hook 失败熔断已打开',
+        gate_failed: '受影响门禁未通过',
+        manual_handoff: '已由人工转交处理',
+      }[reason] ?? '修复自动化无法继续执行'
     );
   }
 
@@ -363,27 +421,46 @@ export class DevRailRunPage implements OnInit, OnDestroy {
     this.loading.set(true);
     this.error.set(null);
     try {
-      this.run.set(await this.api.getRun(this.runId));
+      const currentRun = await this.api.getRun(this.runId);
+      this.run.set(currentRun);
+      const repairPromise = currentRun.repairRequestId
+        ? this.api.getRepair(currentRun.repairRequestId).catch(() => null)
+        : this.api
+            .listRepairs(undefined, this.runId, 1, 50)
+            .then((page) => page.items[0] ?? null)
+            .catch(() => null);
       const workspacePromise =
         typeof this.api.getRunWorkspace === 'function'
           ? this.api.getRunWorkspace(this.runId).catch(() => null)
           : Promise.resolve(null);
-      const [page, changeset, gates, workspace, continuations] = await Promise.all([
-        this.api.listRunEvents(this.runId),
-        this.api.getRunChangeset(this.runId),
-        this.api.getRunQualityGates(this.runId),
-        workspacePromise,
-        typeof this.api.listContinuations === 'function'
-          ? this.api
-              .listContinuations(undefined, this.runId, 1, 50)
-              .catch(() => ({ items: [], total: 0, page: 1, pageSize: 50 }))
-          : Promise.resolve({ items: [], total: 0, page: 1, pageSize: 50 }),
-      ]);
+      const [page, changeset, gates, workspace, continuations, repair, artifacts] =
+        await Promise.all([
+          this.api.listRunEvents(this.runId),
+          this.api.getRunChangeset(this.runId),
+          this.api.getRunQualityGates(this.runId),
+          workspacePromise,
+          typeof this.api.listContinuations === 'function'
+            ? this.api
+                .listContinuations(undefined, this.runId, 1, 50)
+                .catch(() => ({ items: [], total: 0, page: 1, pageSize: 50 }))
+            : Promise.resolve({ items: [], total: 0, page: 1, pageSize: 50 }),
+          repairPromise,
+          typeof this.api.listArtifacts === 'function'
+            ? this.api.listArtifacts(undefined, this.runId, 1, 100).catch(() => ({
+                items: [],
+                total: 0,
+                page: 1,
+                pageSize: 100,
+              }))
+            : Promise.resolve({ items: [], total: 0, page: 1, pageSize: 100 }),
+        ]);
       this.events.set(page.items);
       this.changes.set(changeset.files);
       this.qualityGates.set(gates.items);
       this.workspace.set(workspace);
       this.continuations.set(continuations.items);
+      this.repair.set(repair);
+      this.artifacts.set(artifacts.items);
       await this.loadReviews();
       this.connectEvents();
     } catch (error) {
@@ -427,6 +504,26 @@ export class DevRailRunPage implements OnInit, OnDestroy {
             .then((page) => this.continuations.set(page.items))
             .catch(() => undefined);
         }
+        void this.api
+          .getRun(this.runId)
+          .then((run) => this.run.set(run))
+          .catch(() => undefined);
+      });
+    }
+    for (const eventType of [
+      'devrail.repair.created',
+      'devrail.repair.dispatched',
+      'devrail.repair.completed',
+      'devrail.repair.handoff',
+    ]) {
+      this.eventSource.addEventListener(eventType, () => {
+        const repairRequestId = this.run()?.repairRequestId;
+        const request = repairRequestId
+          ? this.api.getRepair(repairRequestId)
+          : this.api
+              .listRepairs(undefined, this.runId, 1, 50)
+              .then((page) => page.items[0] ?? null);
+        void request.then((repair) => this.repair.set(repair)).catch(() => undefined);
         void this.api
           .getRun(this.runId)
           .then((run) => this.run.set(run))

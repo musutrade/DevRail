@@ -45,6 +45,62 @@
   gap: 1rem;
   margin-top: 1.5rem;
 }
+.repair-section {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  min-width: 0;
+}
+.repair-section p,
+.repair-section small,
+.repair-section a {
+  overflow-wrap: anywhere;
+}
+.repair-list,
+.repair-gate-list,
+.repair-handoff-list {
+  display: grid;
+  gap: 0.65rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.repair-list > li {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.9rem;
+  border: 1px solid var(--outline-variant);
+  border-radius: 0.4rem;
+}
+.repair-meta,
+.repair-actions,
+.repair-approval {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.repair-meta span,
+.repair-gates,
+.repair-list small,
+.repair-handoff-list {
+  color: var(--on-surface-variant);
+}
+.repair-gate-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.25rem 0.75rem;
+  padding: 0.65rem;
+  border-left: 3px solid var(--outline-variant);
+  background: var(--surface-container);
+}
+.repair-gate-list small {
+  grid-column: 1 / -1;
+}
+.repair-handoff-list li {
+  padding: 0.65rem;
+  border-left: 3px solid var(--error);
+}
 .continuation-list {
   display: grid;
   gap: 0.75rem;
@@ -161,6 +217,15 @@
   .continuation-form-footer {
     align-items: stretch;
     flex-direction: column;
+  }
+  .repair-actions > button {
+    width: 100%;
+  }
+  .repair-approval > button {
+    width: 100%;
+  }
+  .repair-gate-list li {
+    grid-template-columns: 1fr;
   }
   .continuation-form-footer button {
     width: 100%;

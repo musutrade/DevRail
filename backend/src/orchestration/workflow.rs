@@ -1,6 +1,6 @@
 //! Strict, fail-closed repository workflow loading and snapshot rendering.
 
-use crate::models::ContinuationPolicy;
+use crate::models::{ContinuationPolicy, RepairPolicy};
 use minijinja::value::Value as TemplateValue;
 use minijinja::{Environment, UndefinedBehavior};
 use serde::{Deserialize, Serialize};
@@ -103,6 +103,8 @@ pub struct WorkflowConfig {
     pub notifications: WorkflowNotifications,
     #[serde(default)]
     pub continuation: ContinuationPolicy,
+    #[serde(default)]
+    pub repair: RepairPolicy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -463,6 +465,7 @@ fn validate_config(
         return Err(policy_error("workflow hook 不在平台白名单内"));
     }
     validate_continuation_policy(&config.continuation)?;
+    validate_repair_policy(&config.repair)?;
     Ok(())
 }
 
@@ -479,6 +482,37 @@ fn validate_continuation_policy(policy: &ContinuationPolicy) -> Result<(), Workf
         || policy.retry_max_delay_seconds > 3_600
     {
         return Err(policy_error("continuation 策略超出平台范围"));
+    }
+    Ok(())
+}
+
+fn validate_repair_policy(policy: &RepairPolicy) -> Result<(), WorkflowError> {
+    let auto_allowed = policy
+        .auto_categories
+        .iter()
+        .all(|category| matches!(category, crate::models::DevRailRepairRiskCategory::LowRisk));
+    let approval_allowed = policy.approval_categories.iter().all(|category| {
+        matches!(
+            category,
+            crate::models::DevRailRepairRiskCategory::LogicalChange
+                | crate::models::DevRailRepairRiskCategory::DependencyChange
+                | crate::models::DevRailRepairRiskCategory::RemoteWrite
+                | crate::models::DevRailRepairRiskCategory::SecurityChange
+        )
+    });
+    if !(1..=5).contains(&policy.max_repairs)
+        || !(1..=1_000).contains(&policy.max_cost_units)
+        || !(256..=64 * 1024).contains(&policy.max_diagnostic_bytes)
+        || !(60..=86_400).contains(&policy.evidence_max_age_seconds)
+        || !(10..=3_600).contains(&policy.claim_lease_seconds)
+        || !(1..=10).contains(&policy.max_dispatch_attempts)
+        || policy.retry_base_delay_seconds < 1
+        || policy.retry_max_delay_seconds < policy.retry_base_delay_seconds
+        || policy.retry_max_delay_seconds > 3_600
+        || !auto_allowed
+        || !approval_allowed
+    {
+        return Err(policy_error("repair 策略超出平台范围"));
     }
     Ok(())
 }
@@ -621,6 +655,39 @@ mod tests {
                 .expect_err("unknown continuation trigger")
                 .kind(),
             WorkflowErrorKind::Schema
+        );
+    }
+
+    #[test]
+    fn repair_policy_defaults_and_rejects_privilege_expansion() {
+        let parsed = parse_workflow(valid_workflow(), WorkflowSource::Repository, &policy())
+            .expect("default repair policy");
+        assert!(!parsed.config.repair.enabled);
+        assert_eq!(
+            parsed.config.repair.max_diagnostic_bytes,
+            crate::models::DEFAULT_REPAIR_MAX_DIAGNOSTIC_BYTES
+        );
+
+        let enabled = valid_workflow().replace(
+            "quality_gates:\n",
+            "repair:\n  enabled: true\n  max_repairs: 2\n  max_cost_units: 10\n  max_diagnostic_bytes: 4096\n  evidence_max_age_seconds: 600\n  claim_lease_seconds: 30\n  max_dispatch_attempts: 2\n  retry_base_delay_seconds: 2\n  retry_max_delay_seconds: 60\n  auto_categories:\n    - low_risk\n  approval_categories:\n    - logical_change\nquality_gates:\n",
+        );
+        let parsed_policy = parse_workflow(&enabled, WorkflowSource::Repository, &policy())
+            .expect("bounded repair policy")
+            .config
+            .repair;
+        let decoded: RepairPolicy = serde_json::from_value(
+            serde_json::to_value(&parsed_policy).expect("encode repair policy"),
+        )
+        .expect("decode repair policy");
+        assert_eq!(decoded, parsed_policy);
+
+        let unsafe_auto = enabled.replace("- low_risk", "- dependency_change");
+        assert_eq!(
+            parse_workflow(&unsafe_auto, WorkflowSource::Repository, &policy())
+                .expect_err("reject dependency auto repair")
+                .kind(),
+            WorkflowErrorKind::Policy
         );
     }
 

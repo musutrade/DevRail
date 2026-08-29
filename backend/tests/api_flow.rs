@@ -635,6 +635,47 @@ async fn login_and_user_crud_flow() {
     assert!(token.session_set_cookie.contains("SameSite=Strict"));
     assert!(!token.csrf_set_cookie.contains("HttpOnly"));
     assert!(token.csrf_set_cookie.contains("SameSite=Strict"));
+
+    let (status, unauthenticated_repairs) =
+        send(&app, Method::GET, "/api/v1/repairs", None, None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(unauthenticated_repairs["error"]["code"], "UNAUTHORIZED");
+
+    let (status, invalid_repair) = send(
+        &app,
+        Method::POST,
+        "/api/v1/runs/1/repairs",
+        Some(&token),
+        Some(json!({
+            "idempotencyKey": "invalid key",
+            "riskCategory": "low_risk"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(invalid_repair["error"]["code"], "VALIDATION_ERROR");
+
+    let (status, repair_conflict) = send(
+        &app,
+        Method::POST,
+        "/api/v1/repairs/9223372036854775807/cancel",
+        Some(&token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(repair_conflict["error"]["code"], "CONFLICT");
+
+    let (status, missing_repair) = send(
+        &app,
+        Method::GET,
+        "/api/v1/repairs/9223372036854775807",
+        Some(&token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(missing_repair["error"]["code"], "NOT_FOUND");
     let (status, mfa_status) =
         send(&app, Method::GET, "/api/v1/auth/me/mfa", Some(&token), None).await;
     assert_eq!(status, StatusCode::OK);
@@ -1034,6 +1075,12 @@ async fn login_and_user_crud_flow() {
             "devrail:continuation:read",
             "devrail:continuation:create",
             "devrail:continuation:cancel",
+            "devrail:repair:read",
+            "devrail:repair:create",
+            "devrail:repair:cancel",
+            "devrail:repair:approve",
+            "devrail:repair:handoff",
+            "devrail:artifact:read",
             "devrail:comment:read",
             "devrail:comment:write",
             "devrail:run:read",
@@ -1824,6 +1871,20 @@ async fn login_and_user_crud_flow() {
     assert_eq!(status, StatusCode::OK);
     let viewer_token = viewer_token.expect("viewer session cookies");
     let viewer_token = &viewer_token;
+
+    let (status, repair_create_forbidden) = send(
+        &app,
+        Method::POST,
+        "/api/v1/runs/1/repairs",
+        Some(viewer_token),
+        Some(json!({
+            "idempotencyKey": "viewer-repair-request",
+            "riskCategory": "low_risk"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(repair_create_forbidden["error"]["code"], "FORBIDDEN");
 
     let (status, deactivated_role) = send(
         &app,

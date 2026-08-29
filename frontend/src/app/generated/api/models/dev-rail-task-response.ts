@@ -5,6 +5,7 @@ import { ContinuationPolicy } from '../models/continuation-policy';
 import { DevRailContinuationCapabilities } from '../models/dev-rail-continuation-capabilities';
 import { DevRailTaskDependencyResponse } from '../models/dev-rail-task-dependency-response';
 import { DevRailTaskDependentResponse } from '../models/dev-rail-task-dependent-response';
+import { RepairPolicy } from '../models/repair-policy';
 export interface DevRailTaskResponse {
   acceptanceCriteria?: (string | null);
   archivedAt?: (string | null);
@@ -29,6 +30,7 @@ export interface DevRailTaskResponse {
   prerequisites: Array<DevRailTaskDependencyResponse>;
   priority: string;
   projectId: number;
+  repairPolicy: RepairPolicy;
   repositoryId?: (number | null);
   revision: number;
   schedulerAttempt: number;

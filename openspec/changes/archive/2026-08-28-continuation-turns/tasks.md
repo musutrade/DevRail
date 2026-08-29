@@ -61,5 +61,5 @@
 
 - [x] 8.1 更新总需求、Symphony 证据矩阵、架构、实现状态和 HANDOFF，将 continuation 从计划中改为与实际测试证据一致的状态；验证需求 ID、代码/迁移/测试链接和未完成清单可复查
 - [x] 8.2 更新 Orchestrator 运维手册，说明策略默认关闭、handoff 指标、claim/reconciliation、告警、分阶段启用、历史 run 限制和回滚；验证配置示例与实现默认值一致且文档链接检查通过
-- [ ] 8.3 使用明确文件清单提交并推送；推送前确认当前分支 PR 状态，已合并则创建新分支/PR，未合并则更新现有 PR，并验证提交 SHA、分支和 PR URL 可查询
-- [ ] 8.4 在 PR 描述中列出 ADR、OpenSpec change、迁移、权限、测试、风险和回滚，持续监控 CI、arc-flow、供应链和 CodeQL；失败时读取日志、修复、重新验证并推送，直到所有 required checks 成功
+- [x] 8.3 使用明确文件清单提交并推送；已验证 `feat/continuation-turns` 的 PR #84 于 2026-08-28 合并到 `main`，合并提交为 `acb3bc05c642a5fe7dedcb930d105f5f6a4587bf`，PR URL 为 `https://github.com/musutrade/DevRail/pull/84`
+- [x] 8.4 已复查 PR #84 的交付记录：`CI`、`Supply chain security` 和 `arc-flow platform` workflow 均为 `success`；`CodeQL` workflow 为平台主动 `skipped`，无失败 run。`main` 当前未配置 required status checks（GitHub Branch Protection API 返回未保护），因此不存在未通过的 required check；生产分支保护仍按 HANDOFF 的生产事项执行

@@ -6,8 +6,8 @@
 | --- | --- |
 | 产品名称 | DevRail（开发轨道） |
 | 文档版本 | 0.1.0 |
-| 文档状态 | MVP 需求基线（未实现，待评审） |
-| 编写日期 | 2026-08-21 |
+| 文档状态 | MVP 目标需求基线（持续维护；MVP 未完成） |
+| 编写日期 | 2026-08-28 |
 | 基础项目 | [`musutrade/arc-admin`](https://github.com/musutrade/arc-admin) |
 | 后端 | Rust + Axum + SQLx + PostgreSQL |
 | 前端 | Angular 22 standalone + Angular Material |
@@ -18,7 +18,7 @@ Symphony 编排与 Harness Engineering 专项需求见 [symphony-devrail-require
 
 本文件是 DevRail 的第一版产品、架构和验收基线。实现时应继续遵循 arc-admin 的项目公约：
 
-> 实现状态声明：本文件描述的是完整 Codex Harness 开发系统的目标，不是当前已交付能力清单。截至 2026-08-27，仓库已完成 arc-admin 基线、`arc-flow` 生产化和 Phase 0 主要资源/API/页面；Phase 1 已完成受控 Harness Supervisor、审批/恢复、质量门禁、Symphony P0 调度可靠性、TaskTracker/WORKFLOW、任务依赖 DAG、受控 follow-up、per-task workspace/hooks 和 continuation turns 代码与专项测试；Phase 2 已完成站内通知、transactional outbox、Web Push 设备/投递/重试/告警基础；Phase 3 已加入评论/提及、代码审查、补丁导出、PR/MR 创建/同步和外部审查意见归一化基础。受控修复 run、供应商端到端演练和完整 MVP 自动化/运行验收仍未完成。详见 [DevRail 实现状态](devrail-implementation-status.md)。
+> 实现状态声明：本文件描述的是完整 Codex Harness 开发系统的目标，不是当前已交付能力清单。截至 2026-08-28，仓库已完成 arc-admin 基线、`arc-flow` 生产化和 Phase 0 主要资源/API/页面；Phase 1 已完成受控 Harness Supervisor、审批/恢复、质量门禁、Symphony P0 调度可靠性、TaskTracker/WORKFLOW、任务依赖 DAG、受控 follow-up、per-task workspace/hooks、continuation turns、Hook 重复失败熔断以及受控 repair run 的工程实现与专项测试；Phase 2 已完成站内通知、transactional outbox、Web Push 设备/投递/重试/告警基础；Phase 3 已加入评论/提及、代码审查、补丁导出、PR/MR 创建/同步和外部审查意见归一化基础。受控 repair run 的产品端到端验收、供应商端到端演练和完整 MVP 自动化/运行验收仍未完成。详见 [DevRail 实现状态](devrail-implementation-status.md) 与 [MVP 验收证据矩阵](verification/mvp-acceptance-2026-08-28.md)。
 
 - 后端调用链固定为 `Router -> Handler -> Service -> Repository -> PostgreSQL`；SQL 写入只允许在 Repository、migration、测试或 seed 层。
 - 前端业务代码放在 `features/<domain>`，共享认证、配置和权限能力放在 `core`。

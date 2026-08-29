@@ -30,6 +30,7 @@ import { getDevRailRunChangeset } from '../../../generated/api/fn/devrail/get-de
 import { getDevRailRunQualityGates } from '../../../generated/api/fn/devrail/get-dev-rail-run-quality-gates';
 import { executeDevRailRunQualityGates } from '../../../generated/api/fn/devrail/execute-dev-rail-run-quality-gates';
 import { getDevRailRunQualityGateLog } from '../../../generated/api/fn/devrail/get-dev-rail-run-quality-gate-log';
+import { listDevRailArtifacts } from '../../../generated/api/fn/devrail/list-dev-rail-artifacts';
 import { listDevRailProjectMembers } from '../../../generated/api/fn/devrail/list-dev-rail-project-members';
 import { addDevRailProjectMember } from '../../../generated/api/fn/devrail/add-dev-rail-project-member';
 import { removeDevRailProjectMember } from '../../../generated/api/fn/devrail/remove-dev-rail-project-member';
@@ -77,6 +78,15 @@ import { getDevRailContinuation } from '../../../generated/api/fn/devrail/get-de
 import { createDevRailContinuation } from '../../../generated/api/fn/devrail/create-dev-rail-continuation';
 import { cancelDevRailContinuation } from '../../../generated/api/fn/devrail/cancel-dev-rail-continuation';
 import { listDevRailRuns } from '../../../generated/api/fn/devrail/list-dev-rail-runs';
+import { listDevRailRepairs } from '../../../generated/api/fn/devrail/list-dev-rail-repairs';
+import { getDevRailRepair } from '../../../generated/api/fn/devrail/get-dev-rail-repair';
+import { createDevRailRepair } from '../../../generated/api/fn/devrail/create-dev-rail-repair';
+import { cancelDevRailRepair } from '../../../generated/api/fn/devrail/cancel-dev-rail-repair';
+import { handoffDevRailRepair } from '../../../generated/api/fn/devrail/handoff-dev-rail-repair';
+import { retryDevRailRepair } from '../../../generated/api/fn/devrail/retry-dev-rail-repair';
+import { approveDevRailRepair } from '../../../generated/api/fn/devrail/approve-dev-rail-repair';
+import { rejectDevRailRepair } from '../../../generated/api/fn/devrail/reject-dev-rail-repair';
+import { withdrawDevRailRepairApproval } from '../../../generated/api/fn/devrail/withdraw-dev-rail-repair-approval';
 import type {
   CreateDevRailEnvironmentRequest,
   CreateDevRailProjectRequest,
@@ -100,6 +110,7 @@ import type {
   DevRailChangesetResponse,
   DevRailQualityGatePage,
   DevRailQualityGateLogPage,
+  DevRailArtifactPage,
   RetryDevRailRunRequest,
   AddDevRailProjectMemberRequest,
   DevRailProjectMemberPage,
@@ -139,6 +150,12 @@ import type {
   DevRailContinuationResponse,
   CreateDevRailContinuationRequest,
   DevRailRunPage,
+  DevRailRepairPage,
+  DevRailRepairResponse,
+  CreateDevRailRepairRequest,
+  DevRailRepairHandoffRequest,
+  DevRailRepairApprovalDecisionRequest,
+  DevRailRepairApprovalResponse,
 } from '../../../generated/api/models';
 
 @Injectable({ providedIn: 'root' })
@@ -408,6 +425,50 @@ export class DevRailApiService {
   cancelContinuation(id: number): Promise<DevRailContinuationResponse> {
     return this.api.invoke(cancelDevRailContinuation, { id });
   }
+  listRepairs(
+    taskId?: number,
+    runId?: number,
+    page = 1,
+    pageSize = 50,
+  ): Promise<DevRailRepairPage> {
+    return this.api.invoke(listDevRailRepairs, { taskId, runId, page, pageSize });
+  }
+  getRepair(id: number): Promise<DevRailRepairResponse> {
+    return this.api.invoke(getDevRailRepair, { id });
+  }
+  createRepair(
+    sourceRunId: number,
+    body: CreateDevRailRepairRequest,
+  ): Promise<DevRailRepairResponse> {
+    return this.api.invoke(createDevRailRepair, { id: sourceRunId, body });
+  }
+  cancelRepair(id: number): Promise<DevRailRepairResponse> {
+    return this.api.invoke(cancelDevRailRepair, { id });
+  }
+  handoffRepair(id: number, body: DevRailRepairHandoffRequest): Promise<DevRailRepairResponse> {
+    return this.api.invoke(handoffDevRailRepair, { id, body });
+  }
+  retryRepair(id: number, body: CreateDevRailRepairRequest): Promise<DevRailRepairResponse> {
+    return this.api.invoke(retryDevRailRepair, { id, body });
+  }
+  approveRepair(
+    id: number,
+    body: DevRailRepairApprovalDecisionRequest,
+  ): Promise<DevRailRepairApprovalResponse> {
+    return this.api.invoke(approveDevRailRepair, { id, body });
+  }
+  rejectRepair(
+    id: number,
+    body: DevRailRepairApprovalDecisionRequest,
+  ): Promise<DevRailRepairApprovalResponse> {
+    return this.api.invoke(rejectDevRailRepair, { id, body });
+  }
+  withdrawRepairApproval(
+    id: number,
+    body: DevRailRepairApprovalDecisionRequest,
+  ): Promise<DevRailRepairApprovalResponse> {
+    return this.api.invoke(withdrawDevRailRepairApproval, { id, body });
+  }
   rebuildTaskWorkspace(
     taskId: number,
     body: RebuildDevRailTaskWorkspaceRequest = {},
@@ -460,6 +521,19 @@ export class DevRailApiService {
   }
   getRunQualityGates(id: number): Promise<DevRailQualityGatePage> {
     return this.api.invoke(getDevRailRunQualityGates, { id });
+  }
+  listArtifacts(
+    taskId?: number,
+    runId?: number,
+    page = 1,
+    pageSize = 50,
+  ): Promise<DevRailArtifactPage> {
+    return this.api.invoke(listDevRailArtifacts, {
+      task_id: taskId,
+      run_id: runId,
+      page,
+      page_size: pageSize,
+    });
   }
   getRunQualityGateLog(
     id: number,

@@ -201,6 +201,61 @@
         </ul>
       </section>
     }
+    @if (repair(); as currentRepair) {
+      <section class="event-card" aria-labelledby="run-repair-title">
+        <div class="section-heading">
+          <h2 id="run-repair-title">受控修复谱系</h2>
+          <span
+            >第 {{ currentRepair.repairSequence }} 次 ·
+            {{ repairStatusLabel(currentRepair.status) }}</span
+          >
+        </div>
+        <div class="repair-summary">
+          <p>{{ currentRepair.diagnosis.errorSummary }}</p>
+          <small>
+            风险：{{ repairRiskLabel(currentRepair.riskCategory) }} · 证据：{{
+              currentRepair.diagnosis.evidenceRef
+            }}
+          </small>
+          <p>受影响门禁：{{ currentRepair.diagnosis.affectedGates.join('、') }}</p>
+          <div class="run-actions">
+            <a [routerLink]="['/devrail/runs', currentRepair.sourceRunId]"
+              >查看来源运行 #{{ currentRepair.sourceRunId }}</a
+            >
+            @if (currentRepair.childRunId && currentRepair.childRunId !== current.id) {
+              <a [routerLink]="['/devrail/runs', currentRepair.childRunId]"
+                >查看修复子运行 #{{ currentRepair.childRunId }}</a
+              >
+            }
+          </div>
+        </div>
+        @if (currentRepair.gateReruns.length) {
+          <ul class="event-list" aria-label="门禁重跑结果">
+            @for (gate of currentRepair.gateReruns; track gate.id) {
+              <li>
+                <div class="event-meta">
+                  <strong>{{ gate.gateId }}</strong
+                  ><span>{{ gate.status }}</span>
+                </div>
+                @if (gate.summary) {
+                  <p>{{ gate.summary }}</p>
+                }
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="table-empty">暂无门禁重跑结果</p>
+        }
+        @if (currentRepair.handoffs.length) {
+          <p class="run-message" role="status">{{ currentRepair.handoffs[0].recommendation }}</p>
+        }
+        @if (currentRepair.handoffReason) {
+          <p class="run-message" role="status">
+            交接原因：{{ repairHandoffReasonLabel(currentRepair.handoffReason) }}
+          </p>
+        }
+      </section>
+    }
     <section class="event-card" aria-labelledby="changeset-title">
       <div class="section-heading">
         <h2 id="changeset-title">文件变更</h2>
@@ -247,6 +302,31 @@
           </li>
         } @empty {
           <li class="table-empty">暂无质量门禁结果</li>
+        }
+      </ul>
+    </section>
+    <section class="event-card" aria-labelledby="artifacts-title">
+      <div class="section-heading">
+        <h2 id="artifacts-title">受控产物</h2>
+        <span>{{ artifacts().length }} 项</span>
+      </div>
+      <ul class="event-list">
+        @for (artifact of artifacts(); track artifact.id) {
+          <li>
+            <div class="event-meta">
+              <strong>{{ artifact.fileName }}</strong>
+              <span>{{ artifact.artifactType }}</span>
+            </div>
+            <p>{{ artifact.summary || '暂无摘要' }}</p>
+            <small>
+              {{ artifact.byteSize }} 字节 · 保留至 {{ artifact.expiresAt | date: 'yyyy-MM-dd' }}
+            </small>
+            <button class="btn-outline" type="button" (click)="downloadArtifact(artifact)">
+              <mat-icon>download</mat-icon>下载产物
+            </button>
+          </li>
+        } @empty {
+          <li class="table-empty">暂无受控产物</li>
         }
       </ul>
     </section>

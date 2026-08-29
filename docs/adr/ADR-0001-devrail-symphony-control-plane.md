@@ -41,7 +41,7 @@ DevRail 在现有单体控制平面内实现 Symphony 能力：
 
 ## 关联实现
 
-本 ADR 的第一批实现由 `symphony-orchestrator-reconciliation` OpenSpec change 跟踪。
+本 ADR 的第一批实现由已归档的 `2026-08-26-symphony-orchestrator-reconciliation` OpenSpec change 跟踪，当前行为以 [Symphony Orchestrator 主规格](../../openspec/specs/symphony-orchestrator/spec.md) 为准。
 
 - 控制循环：`backend/src/workers/task_scheduler.rs`。
 - Agent 进程边界：`backend/src/workers/harness_supervisor.rs`。

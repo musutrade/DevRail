@@ -1,11 +1,13 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   OnDestroy,
   OnInit,
   computed,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -24,6 +26,7 @@ import type {
   DevRailTaskResponse,
   DevRailTaskWorkspaceResponse,
   DevRailContinuationResponse,
+  DevRailRepairResponse,
   DevRailRunResponse,
 } from '../../generated/api/models';
 import type { DevRailTaskCommentResponse } from '../../generated/api/models';
@@ -45,9 +48,11 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
   readonly taskEvents = signal<import('../../generated/api/models').DevRailTaskEventResponse[]>([]);
   readonly workspace = signal<DevRailTaskWorkspaceResponse | null>(null);
   readonly continuations = signal<DevRailContinuationResponse[]>([]);
+  readonly repairs = signal<DevRailRepairResponse[]>([]);
   readonly runs = signal<DevRailRunResponse[]>([]);
   readonly continuationInput = signal('');
   readonly continuationBusy = signal(false);
+  readonly repairBusy = signal(false);
   readonly continuationByteLimit = computed(
     () => this.task()?.continuationPolicy.max_context_bytes ?? 16_384,
   );
@@ -76,6 +81,9 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
       this.runs().find((run) => ['completed', 'failed'].includes(run.status) && !!run.turnId) ??
       null,
   );
+  readonly repairSourceRun = computed(
+    () => this.runs().find((run) => run.status === 'failed' && run.runKind !== 'repair') ?? null,
+  );
   readonly canCreateContinuation = computed(
     () =>
       this.auth.hasPermission(DEVRAIL_PERMISSIONS.continuationCreate) &&
@@ -89,11 +97,28 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
       this.auth.hasPermission(DEVRAIL_PERMISSIONS.continuationCancel) &&
       this.task()?.continuationCapabilities.canCancel === true,
   );
+  readonly canCreateRepair = computed(
+    () =>
+      this.auth.hasPermission(DEVRAIL_PERMISSIONS.repairCreate) &&
+      !!this.repairSourceRun() &&
+      this.task()?.repairPolicy.enabled === true &&
+      this.task()?.status === 'failed',
+  );
+  readonly canCancelRepair = computed(() =>
+    this.auth.hasPermission(DEVRAIL_PERMISSIONS.repairCancel),
+  );
+  readonly canApproveRepair = computed(() =>
+    this.auth.hasPermission(DEVRAIL_PERMISSIONS.repairApprove),
+  );
+  readonly canHandoffRepair = computed(() =>
+    this.auth.hasPermission(DEVRAIL_PERMISSIONS.repairHandoff),
+  );
   readonly editingCommentId = signal<number | null>(null);
   private readonly route = inject(ActivatedRoute);
   private readonly auth = inject(AuthService);
   private readonly api = inject(DevRailApiService);
   private readonly snack = inject(MatSnackBar);
+  private readonly repairHeading = viewChild<ElementRef<HTMLElement>>('repairHeading');
   projectId = 0;
   private taskId = 0;
   private eventSource?: EventSource;
@@ -214,6 +239,213 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
     } finally {
       this.continuationBusy.set(false);
     }
+  }
+
+  repairStatusLabel(status: string): string {
+    return (
+      {
+        pending: '待派发',
+        claimed: '已领取',
+        dispatched: '已派发',
+        running: '修复运行中',
+        succeeded: '修复成功',
+        failed: '修复失败',
+        cancelled: '已取消',
+        handed_off: '等待人工处理',
+        rejected: '已拒绝',
+      }[status] ?? status
+    );
+  }
+
+  repairRiskLabel(category: string): string {
+    return (
+      {
+        low_risk: '低风险',
+        logical_change: '逻辑修改',
+        dependency_change: '依赖修改',
+        remote_write: '远端写入',
+        security_change: '安全策略修改',
+        forbidden: '禁止自动处理',
+      }[category] ?? category
+    );
+  }
+
+  repairHandoffReasonLabel(reason: string): string {
+    return (
+      {
+        policy_disabled: '当前任务策略未启用自动修复',
+        approval_required: '修复操作需要审批',
+        approval_expired: '修复审批已过期或撤回',
+        approval_rejected: '修复审批未通过',
+        budget_exceeded: '修复次数或成本已达到上限',
+        hook_failure_circuit_open: 'Hook 失败熔断已打开',
+        gate_failed: '受影响门禁未通过',
+        manual_handoff: '已由人工转交处理',
+      }[reason] ?? '修复自动化无法继续执行'
+    );
+  }
+
+  repairApprovalStatusLabel(approval: DevRailRepairResponse['approval']): string {
+    if (!approval) return '无审批';
+    if (approval.status === 'pending' && new Date(approval.expiresAt).getTime() <= Date.now()) {
+      return '已过期';
+    }
+    return (
+      {
+        pending: '待审批',
+        approved: '已批准',
+        rejected: '已拒绝',
+        expired: '已过期',
+        withdrawn: '已撤回',
+      }[approval.status] ?? approval.status
+    );
+  }
+
+  isRepairApprovalActionable(approval: NonNullable<DevRailRepairResponse['approval']>): boolean {
+    return approval.status === 'pending' && new Date(approval.expiresAt).getTime() > Date.now();
+  }
+
+  canWithdrawRepairApproval(approval: NonNullable<DevRailRepairResponse['approval']>): boolean {
+    const currentUser = this.auth.currentUser?.();
+    return (
+      this.canApproveRepair() &&
+      this.isRepairApprovalActionable(approval) &&
+      currentUser?.id === approval.requestedBy
+    );
+  }
+
+  async createRepair(): Promise<void> {
+    const source = this.repairSourceRun();
+    if (!source || this.repairBusy() || !this.canCreateRepair()) return;
+    this.repairBusy.set(true);
+    try {
+      const repair = await this.api.createRepair(source.id, {
+        idempotencyKey: `ui-repair-${source.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        riskCategory: 'low_risk',
+      });
+      this.repairs.update((items) => [repair, ...items.filter((item) => item.id !== repair.id)]);
+      this.snack.open('低风险修复请求已提交', '关闭', { duration: 3000 });
+      await this.refreshRepairData();
+      this.restoreRepairFocus();
+    } catch (error) {
+      this.snack.open(apiErrorMessage(error, '提交受控修复请求失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.repairBusy.set(false);
+    }
+  }
+
+  async cancelRepair(item: DevRailRepairResponse): Promise<void> {
+    if (
+      this.repairBusy() ||
+      !this.canCancelRepair() ||
+      !['pending', 'claimed'].includes(item.status)
+    )
+      return;
+    this.repairBusy.set(true);
+    try {
+      const updated = await this.api.cancelRepair(item.id);
+      this.replaceRepair(updated);
+      this.snack.open('受控修复请求已取消', '关闭', { duration: 2500 });
+      await this.refreshRepairData();
+      this.restoreRepairFocus();
+    } catch (error) {
+      this.snack.open(apiErrorMessage(error, '取消受控修复请求失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.repairBusy.set(false);
+    }
+  }
+
+  async handoffRepair(item: DevRailRepairResponse): Promise<void> {
+    if (
+      this.repairBusy() ||
+      !this.canHandoffRepair() ||
+      !['pending', 'claimed', 'dispatched', 'running'].includes(item.status)
+    )
+      return;
+    this.repairBusy.set(true);
+    try {
+      const updated = await this.api.handoffRepair(item.id, {
+        reasonCode: 'manual_handoff',
+        recommendation: '请由授权人员复核失败诊断、策略和质量门禁结果。',
+      });
+      this.replaceRepair(updated);
+      this.snack.open('受控修复已转人工处理', '关闭', { duration: 2500 });
+      await this.refreshRepairData();
+      this.restoreRepairFocus();
+    } catch (error) {
+      this.snack.open(apiErrorMessage(error, '转人工处理失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.repairBusy.set(false);
+    }
+  }
+
+  async retryRepair(item: DevRailRepairResponse): Promise<void> {
+    if (this.repairBusy() || !this.canHandoffRepair() || item.status !== 'handed_off') return;
+    this.repairBusy.set(true);
+    try {
+      const updated = await this.api.retryRepair(item.id, {
+        idempotencyKey: `ui-repair-retry-${item.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        riskCategory: item.riskCategory,
+      });
+      this.repairs.update((items) => [
+        updated,
+        ...items.filter((current) => current.id !== updated.id),
+      ]);
+      this.snack.open('人工重试请求已提交', '关闭', { duration: 2500 });
+      await this.refreshRepairData();
+      this.restoreRepairFocus();
+    } catch (error) {
+      this.snack.open(apiErrorMessage(error, '提交人工重试失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.repairBusy.set(false);
+    }
+  }
+
+  async withdrawRepairApproval(
+    approval: NonNullable<DevRailRepairResponse['approval']>,
+  ): Promise<void> {
+    if (this.repairBusy() || !this.canWithdrawRepairApproval(approval)) return;
+    this.repairBusy.set(true);
+    try {
+      await this.api.withdrawRepairApproval(approval.id, { reason: '申请人主动撤回审批' });
+      await this.refreshRepairData();
+      this.restoreRepairFocus();
+      this.snack.open('修复审批已撤回', '关闭', { duration: 2500 });
+    } catch (error) {
+      this.snack.open(apiErrorMessage(error, '撤回修复审批失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.repairBusy.set(false);
+    }
+  }
+
+  async decideRepairApproval(item: DevRailRepairResponse, approved: boolean): Promise<void> {
+    const approval = item.approval;
+    if (
+      !approval ||
+      !this.isRepairApprovalActionable(approval) ||
+      this.repairBusy() ||
+      !this.canApproveRepair()
+    )
+      return;
+    this.repairBusy.set(true);
+    try {
+      if (approved) {
+        await this.api.approveRepair(approval.id, {});
+      } else {
+        await this.api.rejectRepair(approval.id, { reason: '人工审核未通过' });
+      }
+      await this.refreshRepairData();
+      this.restoreRepairFocus();
+      this.snack.open(approved ? '修复审批已通过' : '修复审批已拒绝', '关闭', { duration: 2500 });
+    } catch (error) {
+      this.snack.open(apiErrorMessage(error, '处理修复审批失败'), '关闭', { duration: 5000 });
+    } finally {
+      this.repairBusy.set(false);
+    }
+  }
+
+  private restoreRepairFocus(): void {
+    queueMicrotask(() => this.repairHeading()?.nativeElement.focus());
   }
 
   async addComment(form: HTMLFormElement): Promise<void> {
@@ -349,6 +581,12 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
               .listContinuations(this.taskId, undefined, 1, 100)
               .catch(() => ({ items: [], total: 0, page: 1, pageSize: 100 }))
           : Promise.resolve({ items: [], total: 0, page: 1, pageSize: 100 });
+      const repairsPromise =
+        typeof this.api.listRepairs === 'function'
+          ? this.api
+              .listRepairs(this.taskId, undefined, 1, 100)
+              .catch(() => ({ items: [], total: 0, page: 1, pageSize: 100 }))
+          : Promise.resolve({ items: [], total: 0, page: 1, pageSize: 100 });
       const [
         task,
         repositories,
@@ -359,6 +597,7 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
         workspace,
         runs,
         continuations,
+        repairs,
       ] = await Promise.all([
         this.api.getTask(this.projectId, this.taskId),
         this.api.listRepositories(this.projectId),
@@ -369,6 +608,7 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
         workspacePromise,
         runsPromise,
         continuationsPromise,
+        repairsPromise,
       ]);
       this.task.set(task);
       this.repositories.set(repositories.items);
@@ -378,6 +618,7 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
       this.workspace.set(workspace);
       this.runs.set(runs.items);
       this.continuations.set(continuations.items);
+      this.repairs.set(repairs.items);
       this.dependencyDraft.set(
         task.prerequisites.map((dependency) => ({
           prerequisiteTaskId: dependency.prerequisiteTaskId,
@@ -419,6 +660,11 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
       'continuation.cancelled',
       'continuation.rejected',
       'continuation.completed',
+      'repair.created',
+      'repair.dispatched',
+      'repair.completed',
+      'repair.cancelled',
+      'repair.handed_off',
     ]) {
       source.addEventListener(eventType, () => {
         refresh();
@@ -434,11 +680,27 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
             .then((page) => this.continuations.set(page.items))
             .catch(() => undefined);
         }
+        void this.refreshRepairData();
       });
     }
     source.onerror = () => {
       source.close();
     };
     this.eventSource = source;
+  }
+
+  private replaceRepair(updated: DevRailRepairResponse): void {
+    this.repairs.update((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+  }
+
+  private async refreshRepairData(): Promise<void> {
+    const [repairs, task, runs] = await Promise.all([
+      this.api.listRepairs(this.taskId, undefined, 1, 100),
+      this.api.getTask(this.projectId, this.taskId),
+      this.api.listRuns(this.taskId, 1, 100),
+    ]);
+    this.repairs.set(repairs.items);
+    this.task.set(task);
+    this.runs.set(runs.items);
   }
 }

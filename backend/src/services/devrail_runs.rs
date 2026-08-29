@@ -2,6 +2,7 @@ use crate::access::{ActorContext, ActorType, DataScope};
 use crate::error::ApiError;
 use crate::models::*;
 use crate::repositories::{self, devrail, devrail_runs, devrail_workspaces};
+use crate::services::devrail_artifacts::{self, StoreArtifactInput};
 use crate::workers::harness_supervisor::{HarnessSupervisor, RunLaunch, SupervisorError};
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -60,6 +61,8 @@ fn run_response(row: DevRailRunRow) -> DevRailRunResponse {
         root_run_id: row.root_run_id,
         continuation_sequence: row.continuation_sequence,
         continuation_request_id: row.continuation_request_id,
+        repair_request_id: row.repair_request_id,
+        repair_sequence: row.repair_sequence,
         handoff_evidence_status: None,
         handoff_error_code: None,
         cleanup_status: row.cleanup_status,
@@ -217,6 +220,35 @@ pub async fn export_patch(
         return Err(ApiError::conflict("补丁超过 1MB 限制，无法导出"));
     }
     let content = redact_patch(&String::from_utf8_lossy(&output.stdout));
+    let task = devrail::find_task_by_id(pool, actor, run.task_id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("任务不存在或超出数据范围"))?;
+    let artifact_id = if content.is_empty() {
+        None
+    } else {
+        Some(
+            devrail_artifacts::store(
+                pool,
+                actor,
+                controlled_workspace_root,
+                &StoreArtifactInput {
+                    project_id: task.project_id,
+                    task_id: task.id,
+                    run_id: Some(run.id),
+                    quality_gate_id: None,
+                    artifact_type: "patch",
+                    file_name: &format!("devrail-run-{}.patch", run.id),
+                    content_type: "text/x-diff",
+                    summary: Some("运行变更补丁"),
+                    bytes: content.as_bytes(),
+                    retention_days: 30,
+                },
+            )
+            .await?
+            .id,
+        )
+    };
     let mut tx = pool.begin().await.map_err(db_error)?;
     repositories::audit_logs::record(
         &mut tx,
@@ -224,7 +256,7 @@ pub async fn export_patch(
         "devrail.run.patch_export",
         "devrail_run",
         Some(id),
-        json!({"bytes":content.len(),"redacted":content.contains("[已脱敏的敏感字段]")}),
+        json!({"bytes":content.len(),"redacted":content.contains("[已脱敏的敏感字段]"),"artifactId":artifact_id}),
     )
     .await
     .map_err(db_error)?;
@@ -278,7 +310,7 @@ fn bounded_input(value: Option<&str>, fallback: &str) -> Result<String, ApiError
     Ok(input.to_string())
 }
 
-fn quality_gate_commands(
+pub(crate) fn quality_gate_commands(
     template: &serde_json::Value,
 ) -> Result<Vec<(String, Vec<String>)>, ApiError> {
     let gates = template
@@ -1037,6 +1069,7 @@ pub async fn execute_quality_gates(
     pool: &PgPool,
     actor: &ActorContext,
     id: i64,
+    controlled_artifact_root: &std::path::Path,
 ) -> Result<DevRailQualityGatePage, ApiError> {
     let run = get_run(pool, actor, id).await?;
     if !matches!(run.status.as_str(), "completed" | "failed") {
@@ -1084,18 +1117,49 @@ pub async fn execute_quality_gates(
                 ("failed", None, "质量门禁执行超时".to_string())
             }
         };
+        let safe_log = gate_log_lines(match &output {
+            Ok(Ok(output)) => {
+                if output.status.success() {
+                    &output.stdout
+                } else {
+                    &output.stderr
+                }
+            }
+            _ => &[],
+        });
+        let safe_log_content = if safe_log.is_empty() {
+            "命令未输出摘要".to_string()
+        } else {
+            safe_log.join("\n")
+        };
+        let artifact = devrail_artifacts::store(
+            pool,
+            actor,
+            controlled_artifact_root,
+            &StoreArtifactInput {
+                project_id: task.project_id,
+                task_id: task.id,
+                run_id: Some(run.id),
+                quality_gate_id: Some(name),
+                artifact_type: "log",
+                file_name: &format!("devrail-run-{}-gate-{}.log", run.id, index),
+                content_type: "text/plain; charset=utf-8",
+                summary: Some("质量门禁输出摘要"),
+                bytes: safe_log_content.as_bytes(),
+                retention_days: 30,
+            },
+        )
+        .await?;
         let payload = json!({
             "name": name,
             "status": status,
             "command_summary": args.join(" "),
             "executor_version": "devrail-gate-v1",
             "log_ref": format!("run-event:{id}:quality-gate:{index}"),
+            "artifact_id": artifact.id,
             "exit_code": exit_code,
             "duration_ms": started.elapsed().as_millis() as i64,
-            "log_lines": gate_log_lines(match &output {
-                Ok(Ok(output)) => if output.status.success() { &output.stdout } else { &output.stderr },
-                _ => &[],
-            }),
+            "log_lines": safe_log,
         });
         let mut tx = pool.begin().await.map_err(db_error)?;
         devrail_runs::append_event(

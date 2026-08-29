@@ -53,7 +53,7 @@ DevRail 已具备 PostgreSQL TaskTracker、原子 claim、稳定 attempt、workf
 
 ## 关联实施
 
-本 ADR 由 `task-dependency-dag-and-followups` OpenSpec change 跟踪。实现证据包括：
+本 ADR 由已归档的 `2026-08-26-task-dependency-dag-and-followups` OpenSpec change 跟踪；当前行为以 [任务依赖 DAG 主规格](../../openspec/specs/task-dependency-dag/spec.md) 为准。实现证据包括：
 
 - 迁移：`20260905100000_add_task_dependency_dag_and_followups.sql`；
 - 核心模块：`repositories/devrail.rs`、`services/devrail.rs`、

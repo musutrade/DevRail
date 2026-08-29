@@ -39,7 +39,7 @@
 
 ## 关联实现
 
-本 ADR 由 `symphony-orchestrator-reconciliation` OpenSpec change 实现。
+本 ADR 由已归档的 `2026-08-26-symphony-orchestrator-reconciliation` OpenSpec change 实现；当前行为以 [Symphony Orchestrator 主规格](../../openspec/specs/symphony-orchestrator/spec.md) 为准。
 
 实现证据：
 

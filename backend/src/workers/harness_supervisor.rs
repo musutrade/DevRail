@@ -3,7 +3,7 @@
 
 use crate::access::{ActorContext, ActorType, DataScope};
 use crate::models::CreateDevRailFollowupTaskRequest;
-use crate::repositories::{devrail_runs, devrail_workspaces};
+use crate::repositories::{devrail_repairs, devrail_runs, devrail_workspaces};
 use crate::services;
 use crate::workers::task_scheduler::SchedulerPolicy;
 use serde_json::{json, Map, Value};
@@ -76,6 +76,7 @@ enum ControlMessage {
 enum InterruptCause {
     User,
     TaskCancelled,
+    TaskStateDrift,
     EnvironmentInvalid,
 }
 
@@ -87,6 +88,11 @@ impl InterruptCause {
                 "cancelled",
                 "task_cancelled",
                 "任务已取消；调度器已清理 Harness 进程",
+            ),
+            Self::TaskStateDrift => (
+                "cancelled",
+                "task_state_drift",
+                "任务状态已终态；调度器已中断未完成运行",
             ),
             Self::EnvironmentInvalid => (
                 "failed",
@@ -283,6 +289,7 @@ impl HarnessSupervisor {
     ) -> Result<(), SupervisorError> {
         let cause = match reason {
             "task_cancelled" => InterruptCause::TaskCancelled,
+            "task_state_drift" => InterruptCause::TaskStateDrift,
             _ => InterruptCause::EnvironmentInvalid,
         };
         self.send_interrupt(run_id, cause).await
@@ -565,7 +572,7 @@ async fn run_process(context: ProcessContext) {
         &launch,
         "run_started",
         None,
-        json!({"cwd": launch.cwd}),
+        json!({"automatic": launch.automatic}),
         Some(if launch.resume_thread_id.is_some() {
             "Harness 已恢复原线程"
         } else {
@@ -1027,7 +1034,9 @@ impl FollowupRejection {
 
 fn followup_rejection_reason(error: &crate::error::ApiError) -> FollowupRejection {
     match error {
-        crate::error::ApiError::Internal(_) => FollowupRejection::Unavailable,
+        crate::error::ApiError::Internal(_) | crate::error::ApiError::Unavailable => {
+            FollowupRejection::Unavailable
+        }
         _ => FollowupRejection::Policy,
     }
 }
@@ -1094,6 +1103,14 @@ fn sanitize(value: &Value) -> Value {
                         "credential",
                         "private_key",
                         "database_url",
+                        "command",
+                        "cmd",
+                        "args",
+                        "argv",
+                        "cwd",
+                        "path",
+                        "workspace",
+                        "working_directory",
                     ]
                     .iter()
                     .any(|needle| lower.contains(needle))
@@ -1200,6 +1217,9 @@ async fn finish_run(
         data_scope: DataScope::All,
         permission_codes: BTreeSet::new(),
     };
+    let is_repair_run = devrail_runs::find_for_recovery(&supervisor.pool, launch.run_id)
+        .await?
+        .is_some_and(|run| run.run_kind == "repair");
     // Resolve quality-gate effects before handoff so the evidence captures the
     // final terminal outcome while the source run remains immutable.
     let quality_gate_failed = if status == "completed" {
@@ -1283,7 +1303,8 @@ async fn finish_run(
         None
     };
     let hook_breaker_open = hook_breaker_count.is_some_and(devrail_runs::hook_failure_breaker_open);
-    let retryable = !hook_breaker_open && should_retry_automatically(launch, status, reason);
+    let retryable =
+        !is_repair_run && !hook_breaker_open && should_retry_automatically(launch, status, reason);
     let (status, reason, recovery) = if hook_breaker_open {
         (
             "failed",
@@ -1311,7 +1332,7 @@ async fn finish_run(
         tx.rollback().await?;
         return Ok(());
     }
-    if handoff_ready {
+    if handoff_ready && !(is_repair_run && status == "completed") {
         devrail_workspaces::mark_cleanup_pending_for_run(
             &mut tx,
             launch.organization_id,
@@ -1348,7 +1369,49 @@ async fn finish_run(
         _ if retryable => "queued",
         _ => "failed",
     };
-    let continuation_completed = if retryable {
+    let repair_terminal_handled = if is_repair_run {
+        if status == "completed" {
+            match devrail_repairs::begin_gate_reruns_for_child_run(
+                &mut tx,
+                &system_actor,
+                launch.run_id,
+            )
+            .await
+            {
+                Ok(true) => true,
+                Ok(false) => {
+                    let _ = devrail_repairs::complete_for_child_run(
+                        &mut tx,
+                        &system_actor,
+                        launch.run_id,
+                        "gate_evidence_invalid",
+                        "failed",
+                    )
+                    .await?;
+                    true
+                }
+                Err(error) => return Err(error),
+            }
+        } else {
+            let result_code = match reason {
+                "hook_failure_circuit_open" => "hook_failure_circuit_open",
+                "quality_gate_failed" => "gate_failed",
+                _ => "manual_handoff",
+            };
+            let _ = devrail_repairs::complete_for_child_run(
+                &mut tx,
+                &system_actor,
+                launch.run_id,
+                result_code,
+                task_status,
+            )
+            .await?;
+            true
+        }
+    } else {
+        false
+    };
+    let continuation_completed = if retryable || repair_terminal_handled {
         false
     } else {
         crate::repositories::devrail_continuations::complete_for_child_run(
@@ -1366,7 +1429,7 @@ async fn finish_run(
             + crate::workers::task_scheduler::retry_delay(launch.attempt, launch.scheduler_policy);
         devrail_runs::requeue_task_after_run(&mut tx, launch.task_id, retry_at, reason).await?;
         crate::app_metrics::record_scheduler_retry();
-    } else if !continuation_completed {
+    } else if !continuation_completed && !repair_terminal_handled && reason != "task_state_drift" {
         devrail_runs::update_task_status(&mut tx, launch.task_id, task_status).await?;
     }
     let event_idempotency = format!("terminal:{status}:{reason}");
@@ -1427,6 +1490,9 @@ async fn finish_run(
     if continuation_completed {
         crate::app_metrics::record_continuation_event("completed", "completed", "other");
         crate::app_metrics::record_continuation_child_result(status);
+    }
+    if is_repair_run {
+        crate::app_metrics::record_repair_child_result(status);
     }
     Ok(())
 }

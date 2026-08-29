@@ -34,6 +34,11 @@
   border-left: 4px solid var(--color-primary);
   background: var(--surface-container-low);
 }
+.repair-summary {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
 .event-card,
 .run-summary {
   margin-top: 1.25rem;

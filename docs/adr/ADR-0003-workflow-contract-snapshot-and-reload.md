@@ -41,10 +41,10 @@ DevRail 的调度可靠性已由数据库事实、claim 租约和 Harness Superv
 
 ## 关联实施
 
-本 ADR 由 `tasktracker-workflow-foundation` OpenSpec change 跟踪，已完成实现与验证：
+本 ADR 由已归档的 `2026-08-26-tasktracker-workflow-foundation` OpenSpec change 跟踪，已完成实现与验证：
 
 - 迁移：[`20260904100000_add_tasktracker_workflow_foundation.sql`](../../backend/migrations/20260904100000_add_tasktracker_workflow_foundation.sql)
 - 模块：[`workflow.rs`](../../backend/src/orchestration/workflow.rs)、[`task_tracker.rs`](../../backend/src/orchestration/task_tracker.rs)、[`workflow_reloader.rs`](../../backend/src/workers/workflow_reloader.rs)
 - 端到端与回归测试：`queued_workflow_snapshot_reaches_harness_once_without_drift`、`reload_persists_last_known_good_and_deduplicates_failures`、`run_insert_requires_and_copies_exact_task_workflow_identity`
 - 运维与使用：[Symphony Orchestrator 运行手册](../symphony-orchestrator-operations.md)、[仓库工作流契约](../workflow-contract.md)
-- OpenSpec：[`tasktracker-workflow-foundation`](../../openspec/changes/tasktracker-workflow-foundation/)
+- OpenSpec：[`2026-08-26-tasktracker-workflow-foundation`](../../openspec/changes/archive/2026-08-26-tasktracker-workflow-foundation/)

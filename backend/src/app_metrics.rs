@@ -117,6 +117,42 @@ pub fn initialize() {
             "arc_admin_continuation_child_result_total",
             "DevRail continuation child 终态结果总数"
         );
+        describe_counter!(
+            "arc_admin_repair_requests_total",
+            "DevRail repair 请求生命周期事件总数"
+        );
+        describe_counter!(
+            "arc_admin_repair_diagnosis_rejected_total",
+            "DevRail repair 诊断拒绝总数"
+        );
+        describe_counter!(
+            "arc_admin_repair_claim_conflict_total",
+            "DevRail repair claim 冲突总数"
+        );
+        describe_histogram!(
+            "arc_admin_repair_dispatch_latency_seconds",
+            "DevRail repair 请求创建到派发延迟（秒）"
+        );
+        describe_counter!(
+            "arc_admin_repair_gate_rerun_total",
+            "DevRail repair 门禁重跑结果总数"
+        );
+        describe_counter!(
+            "arc_admin_repair_handoff_total",
+            "DevRail repair 人工交接总数"
+        );
+        describe_counter!(
+            "arc_admin_repair_budget_rejected_total",
+            "DevRail repair 预算拒绝总数"
+        );
+        describe_counter!(
+            "arc_admin_repair_hook_circuit_total",
+            "DevRail repair Hook 熔断协同总数"
+        );
+        describe_counter!(
+            "arc_admin_repair_child_result_total",
+            "DevRail repair child 终态结果总数"
+        );
     });
 }
 
@@ -286,6 +322,114 @@ pub fn record_continuation_child_result(result: &str) {
     .increment(1);
 }
 
+pub fn record_repair_request(event: &str, status: &str, risk: &str) {
+    counter!(
+        "arc_admin_repair_requests_total",
+        "event" => repair_event(event),
+        "status" => repair_status(status),
+        "risk" => repair_risk(risk)
+    )
+    .increment(1);
+}
+
+pub fn record_repair_diagnosis_rejected(reason: &str) {
+    counter!("arc_admin_repair_diagnosis_rejected_total", "reason" => repair_reason(reason))
+        .increment(1);
+}
+
+pub fn record_repair_claim_conflict() {
+    counter!("arc_admin_repair_claim_conflict_total").increment(1);
+}
+
+pub fn record_repair_dispatch_latency(seconds: f64) {
+    histogram!("arc_admin_repair_dispatch_latency_seconds").record(seconds.max(0.0));
+}
+
+pub fn record_repair_gate_rerun(result: &str) {
+    counter!("arc_admin_repair_gate_rerun_total", "result" => repair_result(result)).increment(1);
+}
+
+pub fn record_repair_handoff(reason: &str) {
+    counter!("arc_admin_repair_handoff_total", "reason" => repair_reason(reason)).increment(1);
+}
+
+pub fn record_repair_budget_rejected() {
+    counter!("arc_admin_repair_budget_rejected_total").increment(1);
+}
+
+pub fn record_repair_hook_circuit() {
+    counter!("arc_admin_repair_hook_circuit_total").increment(1);
+}
+
+pub fn record_repair_child_result(result: &str) {
+    counter!("arc_admin_repair_child_result_total", "result" => repair_result(result)).increment(1);
+}
+
+fn repair_event(event: &str) -> &'static str {
+    match event {
+        "created" => "created",
+        "claimed" => "claimed",
+        "dispatched" => "dispatched",
+        "completed" => "completed",
+        "cancelled" => "cancelled",
+        "handed_off" => "handed_off",
+        "replayed" => "replayed",
+        _ => "other",
+    }
+}
+
+fn repair_status(status: &str) -> &'static str {
+    match status {
+        "pending" => "pending",
+        "claimed" => "claimed",
+        "dispatched" => "dispatched",
+        "running" => "running",
+        "succeeded" => "succeeded",
+        "failed" => "failed",
+        "cancelled" => "cancelled",
+        "handed_off" => "handed_off",
+        _ => "other",
+    }
+}
+
+fn repair_risk(risk: &str) -> &'static str {
+    match risk {
+        "low_risk" => "low_risk",
+        "logical_change" => "logical_change",
+        "dependency_change" => "dependency_change",
+        "remote_write" => "remote_write",
+        "security_change" => "security_change",
+        "forbidden" => "forbidden",
+        _ => "other",
+    }
+}
+
+fn repair_result(result: &str) -> &'static str {
+    match result {
+        "succeeded" | "passed" | "completed" => "succeeded",
+        "failed" | "gate_failed" => "failed",
+        "cancelled" => "cancelled",
+        "manual_handoff" | "handed_off" => "manual_handoff",
+        _ => "other",
+    }
+}
+
+fn repair_reason(reason: &str) -> &'static str {
+    match reason {
+        "policy_disabled" => "policy_disabled",
+        "budget_exceeded" => "budget_exceeded",
+        "hook_failure_circuit_open" => "hook_failure_circuit_open",
+        "forbidden_operation" => "forbidden_operation",
+        "evidence_expired" => "evidence_expired",
+        "evidence_mismatch" => "evidence_mismatch",
+        "evidence_missing" => "evidence_missing",
+        "diagnostic_too_large" => "diagnostic_too_large",
+        "source_missing" => "source_missing",
+        "approval_required" => "approval_required",
+        _ => "other",
+    }
+}
+
 fn continuation_event(event: &str) -> &'static str {
     match event {
         "created" => "created",
@@ -431,5 +575,15 @@ mod tests {
         assert_eq!(continuation_status("pending"), "pending");
         assert_eq!(continuation_trigger("quality_gate"), "quality_gate");
         assert_eq!(continuation_result("run-42"), "other");
+        assert_eq!(repair_event("created"), "created");
+        assert_eq!(repair_event("request-42"), "other");
+        assert_eq!(repair_status("running"), "running");
+        assert_eq!(repair_status("request-42"), "other");
+        assert_eq!(repair_risk("low_risk"), "low_risk");
+        assert_eq!(repair_risk("request-42"), "other");
+        assert_eq!(repair_result("gate_failed"), "failed");
+        assert_eq!(repair_result("run-42"), "other");
+        assert_eq!(repair_reason("evidence_mismatch"), "evidence_mismatch");
+        assert_eq!(repair_reason("request-42"), "other");
     }
 }

@@ -63,6 +63,40 @@
 - **WHEN** run 进入成功、失败、取消或中断终态
 - **THEN** reconciliation 按稳定 run/workspace 键只执行一次终态 hook 和 cleanup；清理失败不会覆盖原 run 结论，且 workspace 保持不可复用直到清理成功
 
+### Requirement: Continuation reconciliation and dispatch
+
+每一轮 reconciliation MUST 在普通 queued task 派发前处理符合资格的 continuation 请求，并以请求幂等身份领取执行权。Orchestrator MUST 在确认任务状态、来源 run 终态、同 thread 身份、活动 run、策略限额和 workspace 准备结果后，创建一个具有新 turn 序号、continuation 运行种类和完整父级谱系的 child run；Agent 只能在请求、任务、run 和 workspace 绑定原子可恢复后启动。
+
+#### Scenario: Eligible continuation is dispatched
+
+- **WHEN** 待处理 continuation 满足任务、thread、限额、容量和 workspace 前置条件
+- **THEN** Orchestrator 创建并绑定唯一 child run，在同一 Codex thread 启动新 turn，并将任务投影为运行中
+
+#### Scenario: Concurrent workers claim one continuation
+
+- **WHEN** 两个或更多 worker 同时领取同一 continuation 请求
+- **THEN** 只有一个 worker 获得有效执行权，其余 worker 返回原请求或可重试冲突，且不会创建第二个 child run
+
+#### Scenario: Restart finds an existing child run
+
+- **WHEN** reconciliation 在重启后发现请求未标记已派发但幂等身份已关联 child run
+- **THEN** Orchestrator 复用并修正现有绑定与任务投影，不新建 run 或重复启动 Agent
+
+#### Scenario: Dispatch prerequisites become invalid
+
+- **WHEN** 请求领取后、Agent 启动前出现任务取消、活动 run、策略超限、thread 不匹配、workspace 失败或来源证据失效
+- **THEN** Orchestrator 不启动 Agent，释放或终结请求，按错误分类恢复原任务投影、延后重试或明确拒绝，并记录脱敏原因
+
+#### Scenario: Continuation child run terminates
+
+- **WHEN** continuation child run 成功、失败、取消或中断
+- **THEN** Orchestrator 幂等完成请求、任务状态、终态 hook、workspace 清理、审计、指标和 outbox 处理，重复终态事件不重复产生副作用
+
+#### Scenario: Pending request loses its claim
+
+- **WHEN** continuation claim 因 worker 丢失心跳而过期且尚无已启动 child run
+- **THEN** 另一个 worker 可重新领取同一请求并继续确定性派发，不增加 continuation 序号或累计次数
+
 ### Requirement: Retry backoff and stall recovery
 
 对于标记为可重试的失败，系统 MUST 使用带抖动的指数退避、最大 attempt 和最大延迟。系统 MUST 检测无心跳、无事件、进程退出和传输断流等 stall，并在恢复、重新排队或失败之间作出可审计的确定性选择。
@@ -81,6 +115,30 @@
 
 - **WHEN** run 在配置的 stall 阈值内没有心跳或有效事件
 - **THEN** 系统按策略中断并清理子进程，随后恢复、重新排队或标记失败，且清理结果可查询
+
+### Requirement: Hook failure circuit breaker
+
+系统 MUST 为每个任务持久化最近一次 Hook 错误的脱敏 fingerprint 和连续失败次数。相同 fingerprint 连续失败达到 5 次时，系统 MUST 将当前 run 标记为 `hook_failure_circuit_open`、保持任务失败并停止自动启动 Agent；第 1 至第 4 次仅允许自动调度场景按策略重试，手工触发不得自动重试。fingerprint 变化或 Hook 成功完成时 MUST 重置连续计数，重复终态事件不得重复累计失败次数或产生副作用。
+
+#### Scenario: Repeated Hook failure opens the circuit
+
+- **WHEN** 同一任务的同一 Hook fingerprint 连续失败达到第五次
+- **THEN** 当前 run 以 `hook_failure_circuit_open` 失败，任务保持失败，后续自动调度停止并生成要求人工介入的脱敏原因
+
+#### Scenario: Hook failure remains retryable below the threshold
+
+- **WHEN** 同一 fingerprint 连续失败次数为 1 至 4 次且 run 来自自动调度
+- **THEN** 系统按 Hook 重试策略重新排队，不因普通 scheduler attempt 上限提前终止该 Hook 重试窗口
+
+#### Scenario: Hook success or fingerprint change resets the counter
+
+- **WHEN** Hook 成功完成或下一次失败产生不同 fingerprint
+- **THEN** 系统将连续失败计数重置为零或一，并允许后续行为按当前策略重新评估
+
+#### Scenario: Duplicate terminal event does not increment Hook failures
+
+- **WHEN** 同一 run 的 Hook 失败终态事件被重复接收
+- **THEN** 系统只保留一次计数、终态、通知和清理结果，后续事件记录为幂等重放
 
 ### Requirement: System actor and auditable terminal handling
 
@@ -109,3 +167,36 @@
 
 - **WHEN** 任务因容量、环境或退避时间无法立即派发
 - **THEN** 指标和任务详情均显示队列原因、等待时长和下一次调度时间
+
+### Requirement: Repair dispatch is bounded and restart-safe
+
+Orchestrator MUST 在普通 queued task 派发前后，以 repair 请求的稳定幂等身份处理符合资格的 repair run，并在派发前重新验证来源失败、固化策略、审批、Hook 熔断、活动 run、容量与 workspace 条件。并发 worker、重复事件、claim 过期和重启 MUST 最多创建一个 repair run；临时错误只能释放 claim 并按固化退避重试，确定性拒绝或人工交接不得启动 Agent。
+
+#### Scenario: Eligible repair is dispatched
+
+- **WHEN** repair 请求具备可信诊断、已满足审批、未超过策略限额、未触发 Hook 熔断且 workspace 已安全准备
+- **THEN** Orchestrator 原子绑定唯一 repair run、workspace 和任务投影后才启动 Agent，并记录稳定 start key
+
+#### Scenario: Repair dispatch becomes ineligible
+
+- **WHEN** claim 后发现来源证据漂移、审批撤回/过期、任务取消、已有活动 run、策略限额耗尽或 Hook 熔断打开
+- **THEN** Orchestrator 不启动 Agent，将请求明确拒绝或交接人工，并恢复或保持符合来源结论的任务投影
+
+#### Scenario: Worker restarts during repair dispatch
+
+- **WHEN** worker 在 repair run 创建、workspace 绑定、请求派发标记或 Agent 启动之间重启
+- **THEN** reconciliation 复用已存在的 repair run 与稳定 start key，修正可恢复绑定或安全终结请求，不产生重复进程
+
+### Requirement: Repair terminal handling revalidates without rewriting source history
+
+repair run 终态 MUST 驱动受影响门禁的重新执行、repair 请求结果、任务投影、审计、指标和 outbox 的幂等处理。来源 run 的终态与失败证据 MUST 保持不可变；终态重放不得重复执行门��、通知、清理、递增修复次数或创建后续 repair run。
+
+#### Scenario: Repair terminal event is replayed
+
+- **WHEN** Orchestrator 多次收到同一 repair run 的退出、超时或门禁终态事件
+- **THEN** 系统保留唯一 repair 结果、唯一门禁重跑记录和唯一通知/审计副作用，并记录重放事实
+
+#### Scenario: Repair gate fails again
+
+- **WHEN** repair run 完成后受影响门禁仍失败
+- **THEN** Orchestrator 仅在策略允许且存在新的可信失败证据时处理下一次 repair；否则停止自动化并交接人工

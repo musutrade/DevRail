@@ -356,6 +356,8 @@ pub struct DevRailRunRow {
     pub root_run_id: Option<i64>,
     pub continuation_sequence: Option<i16>,
     pub continuation_request_id: Option<i64>,
+    pub repair_request_id: Option<i64>,
+    pub repair_sequence: Option<i16>,
     pub harness_start_key: Option<String>,
     pub harness_start_claim_owner: Option<String>,
     pub harness_start_claim_token: Option<Uuid>,
@@ -427,6 +429,132 @@ pub struct DevRailContinuationRequestRow {
     pub completed_at: Option<DateTime<Utc>>,
     pub cancelled_at: Option<DateTime<Utc>>,
     pub rejected_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct DevRailRepairRequestRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub project_id: i64,
+    pub task_id: i64,
+    pub source_run_id: i64,
+    pub root_run_id: i64,
+    pub diagnosis_id: i64,
+    pub failure_evidence_ref: String,
+    pub failure_evidence_digest: String,
+    pub changeset_digest: Option<String>,
+    pub idempotency_key: String,
+    pub repair_sequence: i16,
+    pub risk_category: String,
+    pub strategy_version: String,
+    pub policy_snapshot: Value,
+    pub source_task_status: String,
+    pub status: String,
+    pub status_version: i64,
+    pub claim_owner: Option<String>,
+    pub claim_token: Option<Uuid>,
+    pub claim_expires_at: Option<DateTime<Utc>>,
+    pub dispatch_attempts: i32,
+    pub next_attempt_at: Option<DateTime<Utc>>,
+    pub child_run_id: Option<i64>,
+    pub cost_units: i32,
+    pub result_code: Option<String>,
+    pub handoff_reason: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub claimed_at: Option<DateTime<Utc>>,
+    pub dispatched_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub cancelled_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct DevRailRepairDiagnosisRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub project_id: i64,
+    pub task_id: i64,
+    pub source_run_id: i64,
+    pub evidence_ref: String,
+    pub evidence_digest: String,
+    pub evidence_observed_at: DateTime<Utc>,
+    pub evidence_expires_at: Option<DateTime<Utc>>,
+    pub affected_gates: Value,
+    pub error_summary: String,
+    pub structured_error: Value,
+    pub log_ref: Option<String>,
+    pub changeset_digest: Option<String>,
+    pub environment_summary: Value,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct DevRailRepairGateRerunRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub project_id: i64,
+    pub task_id: i64,
+    pub repair_request_id: i64,
+    pub child_run_id: Option<i64>,
+    pub gate_id: String,
+    pub changeset_digest: String,
+    pub idempotency_key: String,
+    pub status: String,
+    pub claim_owner: Option<String>,
+    pub claim_token: Option<Uuid>,
+    pub claim_expires_at: Option<DateTime<Utc>>,
+    pub result_code: Option<String>,
+    pub log_ref: Option<String>,
+    pub summary: Option<String>,
+    pub duration_ms: Option<i64>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub started_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct DevRailRepairHandoffRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub project_id: i64,
+    pub task_id: i64,
+    pub repair_request_id: i64,
+    pub reason_code: String,
+    pub recommendation: String,
+    pub status: String,
+    pub resolved_by: Option<i64>,
+    pub resolved_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct DevRailRepairApprovalRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub project_id: i64,
+    pub task_id: i64,
+    pub repair_request_id: i64,
+    pub idempotency_key: String,
+    pub risk_category: String,
+    pub policy_version: String,
+    pub status: String,
+    pub requested_by: i64,
+    pub decided_by: Option<i64>,
+    pub decision_reason: Option<String>,
+    pub expires_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -540,6 +668,14 @@ pub const DEFAULT_CONTINUATION_CLAIM_LEASE_SECONDS: i64 = 60;
 pub const DEFAULT_CONTINUATION_MAX_DISPATCH_ATTEMPTS: i32 = 3;
 pub const DEFAULT_CONTINUATION_RETRY_BASE_DELAY_SECONDS: i64 = 5;
 pub const DEFAULT_CONTINUATION_RETRY_MAX_DELAY_SECONDS: i64 = 300;
+pub const DEFAULT_REPAIR_MAX_COUNT: u16 = 2;
+pub const DEFAULT_REPAIR_MAX_COST_UNITS: u32 = 20;
+pub const DEFAULT_REPAIR_MAX_DIAGNOSTIC_BYTES: usize = 8 * 1024;
+pub const DEFAULT_REPAIR_EVIDENCE_MAX_AGE_SECONDS: i64 = 3_600;
+pub const DEFAULT_REPAIR_CLAIM_LEASE_SECONDS: i64 = 60;
+pub const DEFAULT_REPAIR_MAX_DISPATCH_ATTEMPTS: i32 = 3;
+pub const DEFAULT_REPAIR_RETRY_BASE_DELAY_SECONDS: i64 = 5;
+pub const DEFAULT_REPAIR_RETRY_MAX_DELAY_SECONDS: i64 = 300;
 
 #[derive(
     Debug, Clone, Copy, Serialize, Deserialize, utoipa::ToSchema, PartialEq, Eq, PartialOrd, Ord,
@@ -569,6 +705,58 @@ pub enum DevRailRunKind {
     Retry,
     Continuation,
     FollowUp,
+    Repair,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, utoipa::ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DevRailRepairRequestStatus {
+    Pending,
+    Claimed,
+    Dispatched,
+    Running,
+    Succeeded,
+    Failed,
+    Cancelled,
+    HandedOff,
+    Rejected,
+}
+
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, utoipa::ToSchema, PartialEq, Eq, PartialOrd, Ord,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum DevRailRepairRiskCategory {
+    LowRisk,
+    LogicalChange,
+    DependencyChange,
+    RemoteWrite,
+    SecurityChange,
+    Forbidden,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, utoipa::ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DevRailRepairErrorCode {
+    PolicyDisabled,
+    InvalidSource,
+    EvidenceMissing,
+    EvidenceExpired,
+    EvidenceMismatch,
+    ApprovalRequired,
+    ApprovalExpired,
+    ApprovalRejected,
+    ActiveRun,
+    BudgetExceeded,
+    CapacityUnavailable,
+    HookFailureCircuitOpen,
+    ClaimConflict,
+    DispatchUnavailable,
+    Cancelled,
+    GateFailed,
+    ForbiddenOperation,
+    ManualHandoff,
+    DiagnosticRejected,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, utoipa::ToSchema, PartialEq, Eq)]
@@ -620,6 +808,33 @@ pub struct ContinuationPolicy {
     pub retry_max_delay_seconds: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct RepairPolicy {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_repair_max_count")]
+    pub max_repairs: u16,
+    #[serde(default = "default_repair_max_cost_units")]
+    pub max_cost_units: u32,
+    #[serde(default = "default_repair_max_diagnostic_bytes")]
+    pub max_diagnostic_bytes: usize,
+    #[serde(default = "default_repair_evidence_max_age_seconds")]
+    pub evidence_max_age_seconds: i64,
+    #[serde(default = "default_repair_claim_lease_seconds")]
+    pub claim_lease_seconds: i64,
+    #[serde(default = "default_repair_max_dispatch_attempts")]
+    pub max_dispatch_attempts: i32,
+    #[serde(default = "default_repair_retry_base_delay_seconds")]
+    pub retry_base_delay_seconds: i64,
+    #[serde(default = "default_repair_retry_max_delay_seconds")]
+    pub retry_max_delay_seconds: i64,
+    #[serde(default = "default_repair_auto_categories")]
+    pub auto_categories: BTreeSet<DevRailRepairRiskCategory>,
+    #[serde(default = "default_repair_approval_categories")]
+    pub approval_categories: BTreeSet<DevRailRepairRiskCategory>,
+}
+
 const fn default_continuation_max_count() -> u16 {
     DEFAULT_CONTINUATION_MAX_COUNT
 }
@@ -656,6 +871,71 @@ fn default_continuation_triggers() -> BTreeSet<DevRailContinuationTrigger> {
     ]
     .into_iter()
     .collect()
+}
+
+const fn default_repair_max_count() -> u16 {
+    DEFAULT_REPAIR_MAX_COUNT
+}
+
+const fn default_repair_max_cost_units() -> u32 {
+    DEFAULT_REPAIR_MAX_COST_UNITS
+}
+
+const fn default_repair_max_diagnostic_bytes() -> usize {
+    DEFAULT_REPAIR_MAX_DIAGNOSTIC_BYTES
+}
+
+const fn default_repair_evidence_max_age_seconds() -> i64 {
+    DEFAULT_REPAIR_EVIDENCE_MAX_AGE_SECONDS
+}
+
+const fn default_repair_claim_lease_seconds() -> i64 {
+    DEFAULT_REPAIR_CLAIM_LEASE_SECONDS
+}
+
+const fn default_repair_max_dispatch_attempts() -> i32 {
+    DEFAULT_REPAIR_MAX_DISPATCH_ATTEMPTS
+}
+
+const fn default_repair_retry_base_delay_seconds() -> i64 {
+    DEFAULT_REPAIR_RETRY_BASE_DELAY_SECONDS
+}
+
+const fn default_repair_retry_max_delay_seconds() -> i64 {
+    DEFAULT_REPAIR_RETRY_MAX_DELAY_SECONDS
+}
+
+fn default_repair_auto_categories() -> BTreeSet<DevRailRepairRiskCategory> {
+    [DevRailRepairRiskCategory::LowRisk].into_iter().collect()
+}
+
+fn default_repair_approval_categories() -> BTreeSet<DevRailRepairRiskCategory> {
+    [
+        DevRailRepairRiskCategory::LogicalChange,
+        DevRailRepairRiskCategory::DependencyChange,
+        DevRailRepairRiskCategory::RemoteWrite,
+        DevRailRepairRiskCategory::SecurityChange,
+    ]
+    .into_iter()
+    .collect()
+}
+
+impl Default for RepairPolicy {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_repairs: DEFAULT_REPAIR_MAX_COUNT,
+            max_cost_units: DEFAULT_REPAIR_MAX_COST_UNITS,
+            max_diagnostic_bytes: DEFAULT_REPAIR_MAX_DIAGNOSTIC_BYTES,
+            evidence_max_age_seconds: DEFAULT_REPAIR_EVIDENCE_MAX_AGE_SECONDS,
+            claim_lease_seconds: DEFAULT_REPAIR_CLAIM_LEASE_SECONDS,
+            max_dispatch_attempts: DEFAULT_REPAIR_MAX_DISPATCH_ATTEMPTS,
+            retry_base_delay_seconds: DEFAULT_REPAIR_RETRY_BASE_DELAY_SECONDS,
+            retry_max_delay_seconds: DEFAULT_REPAIR_RETRY_MAX_DELAY_SECONDS,
+            auto_categories: default_repair_auto_categories(),
+            approval_categories: default_repair_approval_categories(),
+        }
+    }
 }
 
 impl Default for ContinuationPolicy {
@@ -696,6 +976,148 @@ pub struct DevRailContinuationResponse {
     pub dispatched_at: Option<DateTime<Utc>>,
     pub completed_at: Option<DateTime<Utc>>,
     pub cancelled_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailRepairDiagnosisResponse {
+    pub id: i64,
+    pub source_run_id: i64,
+    pub evidence_ref: String,
+    pub evidence_observed_at: DateTime<Utc>,
+    pub evidence_expires_at: Option<DateTime<Utc>>,
+    pub affected_gates: Vec<String>,
+    pub error_summary: String,
+    pub structured_error: Value,
+    pub log_ref: Option<String>,
+    pub changeset_digest: Option<String>,
+    pub environment_summary: Value,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailRepairGateRerunResponse {
+    pub id: i64,
+    pub gate_id: String,
+    pub changeset_digest: String,
+    pub status: String,
+    pub result_code: Option<String>,
+    pub log_ref: Option<String>,
+    pub summary: Option<String>,
+    pub duration_ms: Option<i64>,
+    pub child_run_id: Option<i64>,
+    pub created_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailRepairHandoffResponse {
+    pub id: i64,
+    pub reason_code: String,
+    pub recommendation: String,
+    pub status: String,
+    pub resolved_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailRepairApprovalResponse {
+    pub id: i64,
+    pub repair_request_id: i64,
+    pub risk_category: String,
+    pub policy_version: String,
+    pub status: String,
+    pub requested_by: i64,
+    pub decided_by: Option<i64>,
+    pub decision_reason: Option<String>,
+    pub expires_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailRepairResponse {
+    pub id: i64,
+    pub task_id: i64,
+    pub source_run_id: i64,
+    pub root_run_id: i64,
+    pub diagnosis_id: i64,
+    pub repair_sequence: i16,
+    #[schema(value_type = DevRailRepairRiskCategory)]
+    pub risk_category: String,
+    pub strategy_version: String,
+    #[schema(value_type = DevRailRepairRequestStatus)]
+    pub status: String,
+    pub child_run_id: Option<i64>,
+    pub cost_units: i32,
+    #[schema(value_type = Option<DevRailRepairErrorCode>)]
+    pub result_code: Option<String>,
+    pub handoff_reason: Option<String>,
+    pub diagnosis: DevRailRepairDiagnosisResponse,
+    pub gate_reruns: Vec<DevRailRepairGateRerunResponse>,
+    pub handoffs: Vec<DevRailRepairHandoffResponse>,
+    pub approval: Option<DevRailRepairApprovalResponse>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub dispatched_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub cancelled_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailRepairPage {
+    pub items: Vec<DevRailRepairResponse>,
+    pub total: i64,
+    pub page: i64,
+    pub page_size: i64,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CreateDevRailRepairRequest {
+    pub idempotency_key: String,
+    #[schema(value_type = DevRailRepairRiskCategory)]
+    pub risk_category: DevRailRepairRiskCategory,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DevRailRepairCallbackRequest {
+    pub source: String,
+    pub event_id: String,
+    pub organization_id: i64,
+    pub project_id: i64,
+    pub task_id: i64,
+    pub source_run_id: i64,
+    pub evidence_observed_at: DateTime<Utc>,
+    pub evidence_expires_at: DateTime<Utc>,
+    pub changeset_digest: String,
+    pub affected_gates: Value,
+    pub error_summary: String,
+    pub structured_error: Value,
+    pub log_ref: Option<String>,
+    pub environment_summary: Value,
+    #[schema(value_type = DevRailRepairRiskCategory)]
+    pub risk_category: DevRailRepairRiskCategory,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DevRailRepairApprovalDecisionRequest {
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DevRailRepairHandoffRequest {
+    #[schema(value_type = DevRailRepairErrorCode)]
+    pub reason_code: String,
+    pub recommendation: String,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -1484,6 +1906,7 @@ pub struct DevRailTaskResponse {
     pub workflow_version: String,
     pub workflow_digest: String,
     pub continuation_policy: ContinuationPolicy,
+    pub repair_policy: RepairPolicy,
     pub continuation_capabilities: DevRailContinuationCapabilities,
     pub scheduler_attempt: i32,
     pub scheduler_retry_count: i32,
@@ -1616,6 +2039,8 @@ pub struct DevRailRunResponse {
     pub root_run_id: Option<i64>,
     pub continuation_sequence: Option<i16>,
     pub continuation_request_id: Option<i64>,
+    pub repair_request_id: Option<i64>,
+    pub repair_sequence: Option<i16>,
     #[schema(value_type = Option<DevRailHandoffEvidenceStatus>)]
     pub handoff_evidence_status: Option<String>,
     pub handoff_error_code: Option<String>,
@@ -1727,6 +2152,76 @@ pub struct DevRailPatchExportResponse {
     pub file_name: String,
     pub content: String,
 }
+
+#[derive(Debug, Clone, FromRow)]
+pub struct DevRailArtifactRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub owner_user_id: i64,
+    pub project_id: i64,
+    pub task_id: i64,
+    pub run_id: Option<i64>,
+    pub quality_gate_id: Option<String>,
+    pub artifact_type: String,
+    pub storage_key: String,
+    pub file_name: String,
+    pub content_type: String,
+    pub byte_size: i64,
+    pub sha256: String,
+    pub summary: Option<String>,
+    pub cleanup_status: String,
+    pub cleanup_attempts: i32,
+    pub next_cleanup_at: Option<DateTime<Utc>>,
+    pub last_cleanup_error: Option<String>,
+    pub expires_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct DevRailArtifactQuery {
+    pub page: Option<i64>,
+    pub page_size: Option<i64>,
+    pub task_id: Option<i64>,
+    pub run_id: Option<i64>,
+    pub artifact_type: Option<String>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailArtifactResponse {
+    pub id: i64,
+    pub project_id: i64,
+    pub task_id: i64,
+    pub run_id: Option<i64>,
+    pub quality_gate_id: Option<String>,
+    pub artifact_type: String,
+    pub file_name: String,
+    pub content_type: String,
+    pub byte_size: i64,
+    pub sha256: String,
+    pub summary: Option<String>,
+    pub cleanup_status: String,
+    pub cleanup_attempts: i32,
+    pub expires_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub download_url: String,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DevRailArtifactPage {
+    pub items: Vec<DevRailArtifactResponse>,
+    pub total: i64,
+    pub page: i64,
+    pub page_size: i64,
+}
+
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DevRailChangeFileResponse {
@@ -1877,6 +2372,7 @@ pub struct DevRailPushDispatchRow {
     pub summary: String,
     pub deep_link: Option<String>,
     pub notification_id: i64,
+    pub event_type: String,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -2518,5 +3014,23 @@ mod dependency_contract_tests {
         );
         assert!(serde_json::from_str::<DevRailContinuationStatus>("\"started\"").is_err());
         assert!(serde_json::from_str::<DevRailContinuationTrigger>("\"manual\"").is_err());
+    }
+
+    #[test]
+    fn repair_policy_defaults_are_closed_and_bounded() {
+        let policy = RepairPolicy::default();
+        assert!(!policy.enabled);
+        assert_eq!(policy.max_repairs, DEFAULT_REPAIR_MAX_COUNT);
+        assert_eq!(policy.max_cost_units, DEFAULT_REPAIR_MAX_COST_UNITS);
+        assert!(policy
+            .auto_categories
+            .contains(&DevRailRepairRiskCategory::LowRisk));
+        let encoded = serde_json::to_value(&policy).expect("encode repair policy");
+        let decoded: RepairPolicy = serde_json::from_value(encoded).expect("decode repair policy");
+        assert_eq!(decoded, policy);
+        assert!(
+            serde_json::from_value::<DevRailRepairRiskCategory>(serde_json::json!("unknown"))
+                .is_err()
+        );
     }
 }
