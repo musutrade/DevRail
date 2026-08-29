@@ -1591,12 +1591,10 @@ mod tests {
 
     #[tokio::test]
     async fn controlled_repair_fake_app_server_workspace_and_gate_e2e() {
-        let _guard = crate::db::DATABASE_TEST_LOCK.lock().await;
-        let Some(pool) =
-            crate::repositories::devrail_continuations::integration_tests::test_pool().await
-        else {
+        let Ok(schema_fixture) = crate::db::test_schema_pool().await else {
             return;
         };
+        let pool = schema_fixture.pool().clone();
         let fixture =
             crate::repositories::devrail_repairs::integration_tests::failed_fixture(&pool).await;
         let root = std::env::temp_dir().join(format!("devrail-repair-e2e-{}", Uuid::new_v4()));
@@ -1971,5 +1969,10 @@ exit 0
         tokio::fs::remove_dir_all(&root)
             .await
             .expect("cleanup repair e2e root");
+        drop(pool);
+        schema_fixture
+            .cleanup()
+            .await
+            .expect("cleanup repair E2E schema");
     }
 }

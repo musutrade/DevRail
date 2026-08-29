@@ -565,16 +565,15 @@ mod tests {
 mod integration_tests {
     use super::*;
     use crate::access::{ActorType, DataScope};
-    use crate::db::DATABASE_TEST_LOCK;
     use crate::repositories::devrail_continuations::integration_tests as repository_tests;
     use std::collections::BTreeSet;
 
     #[tokio::test]
     async fn user_context_enforces_policy_redaction_limits_and_handoff() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Some(pool) = repository_tests::test_pool().await else {
+        let Ok(schema_fixture) = crate::db::test_schema_pool().await else {
             return;
         };
+        let pool = schema_fixture.pool().clone();
         let disabled = repository_tests::fixture(&pool).await;
         repository_tests::set_continuation_policy(&pool, &disabled, false, 16_384).await;
         let request = CreateDevRailContinuationRequest {
@@ -633,14 +632,19 @@ mod integration_tests {
         assert_eq!(accepted.status, "pending");
         let stored_context = repository_tests::stored_context(&pool, accepted.id).await;
         assert_eq!(stored_context, "请继续验证修复");
+        drop(pool);
+        schema_fixture
+            .cleanup()
+            .await
+            .expect("cleanup continuation service schema");
     }
 
     #[tokio::test]
     async fn trusted_trigger_rejects_forgery_expiry_and_digest_drift() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Some(pool) = repository_tests::test_pool().await else {
+        let Ok(schema_fixture) = crate::db::test_schema_pool().await else {
             return;
         };
+        let pool = schema_fixture.pool().clone();
         let fixture = repository_tests::fixture(&pool).await;
         repository_tests::set_continuation_policy(&pool, &fixture, true, 16_384).await;
         let changeset_digest = "8".repeat(64);
@@ -717,5 +721,10 @@ mod integration_tests {
             .await,
             Err(ApiError::Conflict(message)) if message.contains("摘要不匹配")
         ));
+        drop(pool);
+        schema_fixture
+            .cleanup()
+            .await
+            .expect("cleanup trusted continuation schema");
     }
 }

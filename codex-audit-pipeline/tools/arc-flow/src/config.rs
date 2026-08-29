@@ -229,6 +229,22 @@ pub struct StepConfig {
     pub services: Vec<String>,
     #[serde(default)]
     pub remove_env: Vec<String>,
+    /// Maximum Rust test harness threads for test steps. The value is appended after `--`.
+    #[serde(default)]
+    pub test_threads: Option<u64>,
+    /// Environment variable that overrides `test_threads` when the workflow is loaded.
+    #[serde(default)]
+    pub test_threads_env: Option<String>,
+    /// Declares whether a test step isolates database state per schema or shares it.
+    #[serde(default)]
+    pub test_isolation: Option<TestIsolationMode>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TestIsolationMode {
+    Schema,
+    Shared,
 }
 
 impl FlowConfig {
@@ -364,6 +380,11 @@ impl FlowConfig {
         for step in &mut self.steps {
             if let Some(name) = &step.timeout_env {
                 override_u64(name, &mut step.timeout_secs)?;
+            }
+            if let Some(name) = &step.test_threads_env {
+                if let Some(value) = step.test_threads.as_mut() {
+                    override_u64(name, value)?;
+                }
             }
         }
         Ok(())
@@ -625,6 +646,28 @@ fn validate_step(config: &FlowConfig, step: &StepConfig) -> Result<()> {
     }
     if let Some(name) = &step.timeout_env {
         validate_env_name("step timeout_env", name)?;
+    }
+    if let Some(test_threads) = step.test_threads {
+        if !(1..=64).contains(&test_threads) {
+            bail!("step {:?} test_threads must be between 1 and 64", step.id);
+        }
+    }
+    if let Some(name) = &step.test_threads_env {
+        validate_env_name("step test_threads_env", name)?;
+    }
+    if step.test_threads.is_some() && step.test_isolation.is_none() {
+        bail!(
+            "step {:?} must declare test_isolation when test_threads is configured",
+            step.id
+        );
+    }
+    if matches!(step.test_isolation, Some(TestIsolationMode::Shared))
+        && step.test_threads.is_some_and(|threads| threads > 1)
+    {
+        bail!(
+            "step {:?} cannot run shared test state with more than one thread",
+            step.id
+        );
     }
     if let Some(parser) = &step.parser {
         if !config.parsers.contains_key(parser) {
@@ -984,6 +1027,9 @@ pub fn migrate_v1(source: &str, project_name: &str) -> Result<FlowConfig> {
                 .then(|| "DATABASE_URL".to_string())
                 .into_iter()
                 .collect(),
+            test_threads: None,
+            test_threads_env: None,
+            test_isolation: None,
         })
         .collect::<Vec<_>>();
     let required_steps = steps.iter().map(|step| step.id.clone()).collect();
@@ -1120,6 +1166,53 @@ mod tests {
     #[test]
     fn repository_configuration_is_valid() {
         repository_config().validate().expect("validate config");
+    }
+
+    #[test]
+    fn test_thread_limit_must_be_bounded() {
+        let mut config = repository_config();
+        let step = config
+            .steps
+            .iter_mut()
+            .find(|step| step.id == "backend.tests")
+            .expect("backend tests step");
+        step.test_threads = Some(65);
+        let error = config.validate().expect_err("thread limit must fail");
+        assert!(error
+            .to_string()
+            .contains("test_threads must be between 1 and 64"));
+    }
+
+    #[test]
+    fn parallel_test_step_must_declare_an_isolation_mode() {
+        let mut config = repository_config();
+        let step = config
+            .steps
+            .iter_mut()
+            .find(|step| step.id == "backend.tests")
+            .expect("backend tests step");
+        step.test_isolation = None;
+        let error = config
+            .validate()
+            .expect_err("parallel test configuration must declare isolation");
+        assert!(error
+            .to_string()
+            .contains("must declare test_isolation when test_threads is configured"));
+    }
+
+    #[test]
+    fn shared_test_state_rejects_parallel_threads() {
+        let mut config = repository_config();
+        let step = config
+            .steps
+            .iter_mut()
+            .find(|step| step.id == "backend.tests")
+            .expect("backend tests step");
+        step.test_isolation = Some(TestIsolationMode::Shared);
+        let error = config.validate().expect_err("shared state must be serial");
+        assert!(error
+            .to_string()
+            .contains("cannot run shared test state with more than one thread"));
     }
 
     #[test]

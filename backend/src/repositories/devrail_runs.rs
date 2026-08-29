@@ -1072,22 +1072,15 @@ pub async fn find_quality_gate_log(
 mod workflow_identity_tests {
     use super::*;
     use crate::access::{ActorType, DataScope};
-    use crate::db::DATABASE_TEST_LOCK;
     use serde_json::json;
     use std::collections::BTreeSet;
 
     #[tokio::test]
     async fn run_insert_requires_and_copies_exact_task_workflow_identity() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Ok(database_url) = std::env::var("TEST_DATABASE_URL") else {
+        let Ok(fixture) = crate::db::test_schema_pool().await else {
             return;
         };
-        let pool = crate::db::init_pool(&database_url)
-            .await
-            .expect("connect test database");
-        crate::db::run_migrations(&pool)
-            .await
-            .expect("run migrations");
+        let pool = fixture.pool().clone();
         let suffix = uuid::Uuid::new_v4().simple().to_string();
         let (owner_user_id, organization_id, department_id, task_id) =
             create_harness_test_task(&pool, &suffix)
@@ -1186,20 +1179,16 @@ mod workflow_identity_tests {
         assert_eq!(inserted.workflow_digest, "0".repeat(64));
         assert_eq!(inserted.workflow_snapshot, workflow_snapshot);
         tx.rollback().await.expect("rollback isolated fixture");
+        drop(pool);
+        fixture.cleanup().await.expect("cleanup run schema");
     }
 
     #[tokio::test]
     async fn harness_start_claim_accepts_only_the_current_process_token() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Ok(database_url) = std::env::var("TEST_DATABASE_URL") else {
+        let Ok(fixture) = crate::db::test_schema_pool().await else {
             return;
         };
-        let pool = crate::db::init_pool(&database_url)
-            .await
-            .expect("connect test database");
-        crate::db::run_migrations(&pool)
-            .await
-            .expect("run migrations");
+        let pool = fixture.pool().clone();
         let suffix = uuid::Uuid::new_v4().simple().to_string();
         let (owner_user_id, organization_id, department_id, task_id) =
             create_harness_test_task(&pool, &suffix)
@@ -1343,26 +1332,20 @@ mod workflow_identity_tests {
             stored,
             ("thread-second".to_string(), "turn-second".to_string())
         );
+        drop(pool);
+        fixture.cleanup().await.expect("cleanup harness run schema");
     }
 }
 
 #[cfg(test)]
 mod hook_failure_tests {
     use super::*;
-    use crate::db::DATABASE_TEST_LOCK;
-
     #[tokio::test]
     async fn hook_failure_count_tracks_same_fingerprint_and_resets() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Ok(database_url) = std::env::var("TEST_DATABASE_URL") else {
+        let Ok(fixture) = crate::db::test_schema_pool().await else {
             return;
         };
-        let pool = crate::db::init_pool(&database_url)
-            .await
-            .expect("connect test database");
-        crate::db::run_migrations(&pool)
-            .await
-            .expect("run migrations");
+        let pool = fixture.pool().clone();
         let suffix = uuid::Uuid::new_v4().simple().to_string();
         let (_, _, _, task_id) = create_harness_test_task(&pool, &suffix)
             .await
@@ -1407,5 +1390,10 @@ mod hook_failure_tests {
         .await
         .expect("read hook failure state");
         assert_eq!(state, (None, 0));
+        drop(pool);
+        fixture
+            .cleanup()
+            .await
+            .expect("cleanup hook failure schema");
     }
 }

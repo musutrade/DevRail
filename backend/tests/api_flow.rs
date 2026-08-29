@@ -11,9 +11,9 @@ use axum::Router;
 use chrono::{Duration, Utc};
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::Arc;
 use totp_rs::{Algorithm, Builder, Secret, Totp};
 use tower::ServiceExt;
 
@@ -28,6 +28,7 @@ struct TestSession {
     session_token: String,
     session_set_cookie: String,
     csrf_set_cookie: String,
+    totp_secret: Option<String>,
 }
 
 async fn request(
@@ -273,15 +274,11 @@ async fn issue_module_unlock(app: &Router, session: &TestSession, module: &str) 
 }
 
 fn current_totp_code(session: &TestSession) -> Option<String> {
-    MFA_TEST_SECRETS
-        .get()
-        .and_then(|secrets| secrets.lock().ok())
-        .and_then(|secrets| secrets.get(&session.username).cloned())
-        .map(|secret| {
-            test_totp(&session.username, &secret)
-                .generate_current()
-                .to_string()
-        })
+    session.totp_secret.as_deref().map(|secret| {
+        test_totp(&session.username, secret)
+            .generate_current()
+            .to_string()
+    })
 }
 
 fn test_totp(account_name: &str, secret: &str) -> Totp {
@@ -339,6 +336,16 @@ async fn login(
     password: &str,
     remember: bool,
 ) -> (StatusCode, Value, Option<TestSession>) {
+    login_with_totp_secret(app, username, password, remember, None).await
+}
+
+async fn login_with_totp_secret(
+    app: &Router,
+    username: &str,
+    password: &str,
+    remember: bool,
+    existing_secret: Option<&str>,
+) -> (StatusCode, Value, Option<TestSession>) {
     let response = request(
         app,
         Method::POST,
@@ -353,7 +360,7 @@ async fn login(
         None,
     )
     .await;
-    let (status, body, session) = decode_login_response(response, username, password).await;
+    let (status, body, session) = decode_login_response(response, username, password, None).await;
     if status != StatusCode::OK || session.is_some() || body["status"] == "authenticated" {
         return (status, body, session);
     }
@@ -363,20 +370,11 @@ async fn login(
             .as_str()
             .expect("TOTP enrollment secret")
             .to_string();
-        MFA_TEST_SECRETS
-            .get_or_init(|| Mutex::new(HashMap::new()))
-            .lock()
-            .expect("MFA test secrets")
-            .insert(username.to_string(), secret.clone());
         secret
     } else {
-        MFA_TEST_SECRETS
-            .get_or_init(|| Mutex::new(HashMap::new()))
-            .lock()
-            .expect("MFA test secrets")
-            .get(username)
-            .cloned()
-            .expect("enrolled TOTP test secret")
+        existing_secret.map(str::to_string).unwrap_or_else(|| {
+            panic!("login requires an existing session TOTP secret for {username}")
+        })
     };
     let code = test_totp(username, &secret).generate_current().to_string();
     let response = request(
@@ -392,15 +390,14 @@ async fn login(
         None,
     )
     .await;
-    decode_login_response(response, username, password).await
+    decode_login_response(response, username, password, Some(secret)).await
 }
-
-static MFA_TEST_SECRETS: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
 
 async fn decode_login_response(
     response: Response<Body>,
     username: &str,
     password: &str,
+    totp_secret: Option<String>,
 ) -> (StatusCode, Value, Option<TestSession>) {
     let cookies = response
         .headers()
@@ -444,19 +441,25 @@ async fn decode_login_response(
                     session_token,
                     session_set_cookie,
                     csrf_set_cookie,
+                    totp_secret,
                 }
             });
     let (status, body) = response_json(response).await;
     (status, body, test_session)
 }
 
-#[tokio::test]
-async fn login_and_user_crud_flow() {
-    let database_url = std::env::var("TEST_DATABASE_URL")
-        .expect("TEST_DATABASE_URL must point to an isolated test database");
-    let pool = db::init_pool(&database_url).await.expect("test pool");
-    db::run_migrations(&pool).await.expect("test migrations");
+struct ApiTestFixture {
+    schema: db::TestSchemaPool,
+    pool: sqlx::PgPool,
+    app: Router,
+}
 
+async fn api_test_fixture() -> ApiTestFixture {
+    db::report_test_threads();
+    let schema = db::test_schema_pool()
+        .await
+        .expect("schema-isolated test pool");
+    let pool = schema.pool().clone();
     let app = build_router(AppState {
         pool: pool.clone(),
         auth: Arc::new(AuthSessionConfig {
@@ -500,6 +503,39 @@ async fn login_and_user_crud_flow() {
             .parse::<SocketAddr>()
             .expect("mock peer address"),
     ));
+    ApiTestFixture { schema, pool, app }
+}
+
+async fn admin_fixture() -> (ApiTestFixture, Value, TestSession) {
+    let fixture = api_test_fixture().await;
+    services::auth::bootstrap_super_admin(
+        &fixture.pool,
+        "admin",
+        "integration-admin-password",
+        "Integration Administrator",
+        Some("admin@example.test".to_string()),
+    )
+    .await
+    .expect("bootstrap test administrator");
+    let (status, admin_login, token) =
+        login(&fixture.app, "admin", "integration-admin-password", false).await;
+    assert_eq!(status, StatusCode::OK);
+    let token = token.expect("administrator session cookies");
+    (fixture, admin_login, token)
+}
+
+async fn permission_id(pool: &sqlx::PgPool, code: &str) -> i64 {
+    sqlx::query_scalar("SELECT id FROM permissions WHERE code = $1")
+        .bind(code)
+        .fetch_one(pool)
+        .await
+        .unwrap_or_else(|error| panic!("permission {code} lookup failed: {error}"))
+}
+
+#[tokio::test]
+async fn authentication_and_mfa_flow() {
+    let fixture = api_test_fixture().await;
+    let ApiTestFixture { schema, pool, app } = fixture;
 
     let metrics_response = request(&app, Method::GET, "/metrics", None, None, false, None).await;
     assert_eq!(metrics_response.status(), StatusCode::OK);
@@ -976,14 +1012,26 @@ async fn login_and_user_crud_flow() {
     .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 
-    let (status, _refreshed_login, token) =
-        login(&app, "admin", "updated-integration-admin-password", false).await;
+    let (status, _refreshed_login, token) = login_with_totp_secret(
+        &app,
+        "admin",
+        "updated-integration-admin-password",
+        false,
+        token.totp_secret.as_deref(),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
     let token = token.expect("refreshed session cookies");
     let token = &token;
 
-    let (status, _, logout_session) =
-        login(&app, "admin", "updated-integration-admin-password", true).await;
+    let (status, _, logout_session) = login_with_totp_secret(
+        &app,
+        "admin",
+        "updated-integration-admin-password",
+        true,
+        token.totp_secret.as_deref(),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
     let logout_session = logout_session.expect("persistent session cookies");
     assert!(logout_session.session_set_cookie.contains("Max-Age="));
@@ -1005,6 +1053,19 @@ async fn login_and_user_crud_flow() {
     )
     .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    drop(app);
+    schema
+        .cleanup()
+        .await
+        .expect("cleanup authentication schema");
+}
+
+#[tokio::test]
+async fn organization_and_permissions_flow() {
+    let (fixture, _admin_login, token) = admin_fixture().await;
+    let ApiTestFixture { schema, app, .. } = fixture;
+    let token = &token;
 
     let (status, permission_groups) = send(
         &app,
@@ -1103,22 +1164,6 @@ async fn login_and_user_crud_flow() {
             "devrail:workspace:write",
         ])
     );
-    let permission_id = |code: &str| {
-        groups
-            .iter()
-            .flat_map(|group| group["permissions"].as_array().into_iter().flatten())
-            .find(|permission| permission["code"] == code)
-            .and_then(|permission| permission["id"].as_i64())
-            .unwrap_or_else(|| panic!("missing permission {code}"))
-    };
-    let user_read_id = permission_id("user:directory:read");
-    let user_write_id = permission_id("user:write");
-    let user_roles_write_id = permission_id("user:roles:write");
-    let role_read_id = permission_id("role:directory:read");
-    let role_write_id = permission_id("role:write");
-    let role_permission_write_id = permission_id("role:permissions:write");
-    let permission_read_id = permission_id("permission:directory:read");
-
     let (status, departments) =
         send(&app, Method::GET, "/api/v1/departments", Some(token), None).await;
     assert_eq!(status, StatusCode::OK);
@@ -1299,6 +1344,27 @@ async fn login_and_user_crud_flow() {
         .await;
         assert_eq!(status, StatusCode::NO_CONTENT);
     }
+
+    drop(app);
+    schema.cleanup().await.expect("cleanup organization schema");
+}
+
+#[tokio::test]
+async fn devrail_resources_and_audit_flow() {
+    let (fixture, admin_login, token) = admin_fixture().await;
+    let ApiTestFixture { schema, pool, app } = fixture;
+    let token = &token;
+    let user_read_id = permission_id(&pool, "user:directory:read").await;
+    let user_write_id = permission_id(&pool, "user:write").await;
+    let user_roles_write_id = permission_id(&pool, "user:roles:write").await;
+    let role_read_id = permission_id(&pool, "role:directory:read").await;
+    let role_write_id = permission_id(&pool, "role:write").await;
+    let role_permission_write_id = permission_id(&pool, "role:permissions:write").await;
+    let permission_read_id = permission_id(&pool, "permission:directory:read").await;
+    let first_recovery_code = admin_login["recoveryCodes"][0]
+        .as_str()
+        .expect("administrator recovery code")
+        .to_string();
 
     let (status, roles) = send(&app, Method::GET, "/api/v1/roles", Some(token), None).await;
     assert_eq!(status, StatusCode::OK);
@@ -2031,6 +2097,43 @@ async fn login_and_user_crud_flow() {
     assert_eq!(status, StatusCode::CREATED);
     let second_admin_id = second_admin["id"].as_i64().expect("second admin id");
 
+    let (status, _, second_admin_session) =
+        login(&app, "second_admin", "integration-pass", false).await;
+    assert_eq!(status, StatusCode::OK);
+    let second_admin_session = second_admin_session.expect("second admin session cookies");
+    let second_admin_totp_secret = second_admin_session.totp_secret.clone();
+    let (status, _) = send(
+        &app,
+        Method::PUT,
+        "/api/v1/auth/me/password",
+        Some(&second_admin_session),
+        Some(json!({
+            "currentPassword": "integration-pass",
+            "newPassword": "updated-second-admin-password"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _, refreshed_second_admin) = login_with_totp_secret(
+        &app,
+        "second_admin",
+        "updated-second-admin-password",
+        false,
+        second_admin_totp_secret.as_deref(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let refreshed_second_admin = refreshed_second_admin.expect("refreshed second admin session");
+    let (status, _) = send(
+        &app,
+        Method::POST,
+        "/api/v1/auth/logout",
+        Some(&refreshed_second_admin),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
     let (status, error) = send(
         &app,
         Method::PUT,
@@ -2153,7 +2256,7 @@ async fn login_and_user_crud_flow() {
         None,
         Some(json!({
             "username": "admin",
-            "password": "updated-integration-admin-password",
+            "password": "integration-admin-password",
             "remember": false,
         })),
     )
@@ -2189,7 +2292,7 @@ async fn login_and_user_crud_flow() {
         None,
         Some(json!({
             "username": "admin",
-            "password": "updated-integration-admin-password",
+            "password": "integration-admin-password",
             "remember": false,
         })),
     )
@@ -2289,4 +2392,7 @@ async fn login_and_user_crud_flow() {
         .await
         .expect("delete exported audit row through retention repository");
     assert_eq!(deleted, 1);
+
+    drop(app);
+    schema.cleanup().await.expect("cleanup DevRail schema");
 }

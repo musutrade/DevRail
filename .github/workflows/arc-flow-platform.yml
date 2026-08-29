@@ -50,7 +50,9 @@ jobs:
         with:
           toolchain: 1.97.1
           components: rustfmt, clippy
-          cache: false
+          cache: true
+          cache-key: v1-arc-flow-${{ hashFiles('codex-audit-pipeline/tools/arc-flow/Cargo.lock', 'rust-toolchain.toml') }}
+          cache-workspaces: codex-audit-pipeline/tools/arc-flow -> codex-audit-pipeline/tools/arc-flow/target
       - name: Rust format
         run: cargo fmt --manifest-path codex-audit-pipeline/tools/arc-flow/Cargo.toml -- --check
       - name: Rust Clippy
@@ -70,7 +72,9 @@ jobs:
         with:
           toolchain: 1.97.1
           components: rustfmt, clippy
-          cache: false
+          cache: true
+          cache-key: v1-arc-flow-${{ hashFiles('codex-audit-pipeline/tools/arc-flow/Cargo.lock', 'rust-toolchain.toml') }}
+          cache-workspaces: codex-audit-pipeline/tools/arc-flow -> codex-audit-pipeline/tools/arc-flow/target
       - name: Run 10,000-file benchmark
         env:
           ARC_FLOW_BENCH_FILES: 10000

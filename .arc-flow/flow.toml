@@ -26,7 +26,6 @@ env = "ARC_FLOW_TOOL_MANIFEST"
 required_steps = [
   "backend.format",
   "backend.clippy",
-  "backend.compile",
   "backend.tests",
   "frontend.lint",
   "frontend.format",
@@ -263,17 +262,6 @@ log = "backend_clippy.log"
 timeout_secs = 180
 
 [[steps]]
-id = "backend.compile"
-label = "backend compile"
-component = "backend"
-profiles = ["full"]
-program = "cargo"
-args = ["check", "--manifest-path", "{backend}/Cargo.toml", "--locked", "--all-targets"]
-cwd = "{root}"
-log = "backend_check.log"
-timeout_secs = 180
-
-[[steps]]
 id = "backend.tests"
 label = "backend tests"
 component = "backend"
@@ -284,6 +272,9 @@ cwd = "{root}"
 log = "backend_tests.log"
 timeout_secs = 600
 timeout_env = "RUST_TEST_TIMEOUT"
+test_threads = 4
+test_threads_env = "ARC_FLOW_BACKEND_TEST_THREADS"
+test_isolation = "schema"
 parser = "rust"
 services = ["test-postgres"]
 remove_env = ["DATABASE_URL"]

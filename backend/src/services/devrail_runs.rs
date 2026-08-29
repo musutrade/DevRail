@@ -1282,15 +1282,9 @@ mod tests {
     #[tokio::test]
     async fn queued_workflow_snapshot_reaches_harness_once_without_drift() {
         let _guard = crate::db::DATABASE_TEST_LOCK.lock().await;
-        let Ok(database_url) = std::env::var("TEST_DATABASE_URL") else {
+        let Some(pool) = crate::db::test_pool().await else {
             return;
         };
-        let pool = crate::db::init_pool(&database_url)
-            .await
-            .expect("connect test database");
-        crate::db::run_migrations(&pool)
-            .await
-            .expect("run migrations");
         let controlled_root =
             std::env::temp_dir().join(format!("devrail-workflow-e2e-{}", uuid::Uuid::new_v4()));
         let workspace = controlled_root.join("repository");

@@ -191,17 +191,10 @@ pub(crate) async fn record_reload_failure(
 mod tests {
     use super::*;
     use crate::access::{ActorContext, ActorType, DataScope};
-    use crate::db::DATABASE_TEST_LOCK;
+    use crate::db::test_schema_pool;
     use serde_json::json;
     use std::collections::BTreeSet;
     use uuid::Uuid;
-
-    async fn test_pool() -> Option<PgPool> {
-        let database_url = std::env::var("TEST_DATABASE_URL").ok()?;
-        let pool = crate::db::init_pool(&database_url).await.ok()?;
-        crate::db::run_migrations(&pool).await.ok()?;
-        Some(pool)
-    }
 
     async fn workflow_target(pool: &PgPool) -> WorkflowEnvironmentTarget {
         let (owner_user_id, organization_id, department_id) =
@@ -254,11 +247,11 @@ mod tests {
 
     #[tokio::test]
     async fn workflow_versions_and_failures_are_deduplicated_and_scoped() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Some(pool) = test_pool().await else {
+        let Ok(fixture) = test_schema_pool().await else {
             return;
         };
-        let target = workflow_target(&pool).await;
+        let pool = fixture.pool();
+        let target = workflow_target(pool).await;
         let snapshot = json!({"source":"repository","declaredVersion":"v1","digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"});
         let input = NewWorkflowVersion {
             organization_id: target.organization_id,
@@ -306,7 +299,7 @@ mod tests {
             data_scope: DataScope::Organization,
             permission_codes: BTreeSet::new(),
         };
-        let found = last_known_good(&pool, &actor, target.environment_id)
+        let found = last_known_good(pool, &actor, target.environment_id)
             .await
             .expect("scoped workflow lookup")
             .expect("workflow exists");
@@ -315,7 +308,7 @@ mod tests {
             organization_id: target.organization_id + 1,
             ..actor
         };
-        assert!(last_known_good(&pool, &other_actor, target.environment_id)
+        assert!(last_known_good(pool, &other_actor, target.environment_id)
             .await
             .expect("cross organization lookup")
             .is_none());
@@ -325,19 +318,20 @@ mod tests {
         )
         .bind(target.organization_id)
         .bind(target.environment_id)
-        .fetch_one(&pool)
+        .fetch_one(pool)
         .await
         .expect("failure occurrence count");
         assert_eq!(occurrence_count, 2);
+        fixture.cleanup().await.expect("cleanup workflow schema");
     }
 
     #[tokio::test]
     async fn reload_persists_last_known_good_and_deduplicates_failures() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Some(pool) = test_pool().await else {
+        let Ok(fixture) = test_schema_pool().await else {
             return;
         };
-        let target = workflow_target(&pool).await;
+        let pool = fixture.pool();
+        let target = workflow_target(pool).await;
         let controlled_root =
             std::env::temp_dir().join(format!("devrail-reloader-{}", Uuid::new_v4()));
         let workspace = controlled_root.join("repository");
@@ -351,35 +345,34 @@ mod tests {
         .bind(workspace.to_string_lossy().as_ref())
         .bind(target.organization_id)
         .bind(target.environment_id)
-        .execute(&pool)
+        .execute(pool)
         .await
         .expect("bind controlled workspace");
         let valid = include_str!("../../../WORKFLOW.md");
         tokio::fs::write(workspace.join("WORKFLOW.md"), valid)
             .await
             .expect("write valid workflow");
-        crate::workers::workflow_reloader::reload_once(&pool, &controlled_root)
+        crate::workers::workflow_reloader::reload_once(pool, &controlled_root)
             .await
             .expect("accept valid workflow");
-        let first =
-            last_known_good_for_target(&pool, target.organization_id, target.environment_id)
-                .await
-                .expect("last known good")
-                .expect("accepted workflow");
+        let first = last_known_good_for_target(pool, target.organization_id, target.environment_id)
+            .await
+            .expect("last known good")
+            .expect("accepted workflow");
         assert_eq!(first.source, "repository");
 
         let invalid = valid.replacen("version:", "unknown: true\nversion:", 1);
         tokio::fs::write(workspace.join("WORKFLOW.md"), invalid)
             .await
             .expect("write invalid workflow");
-        crate::workers::workflow_reloader::reload_once(&pool, &controlled_root)
+        crate::workers::workflow_reloader::reload_once(pool, &controlled_root)
             .await
             .expect("invalid workflow retains fallback");
-        crate::workers::workflow_reloader::reload_once(&pool, &controlled_root)
+        crate::workers::workflow_reloader::reload_once(pool, &controlled_root)
             .await
             .expect("repeated invalid workflow is idempotent");
         let still_valid =
-            last_known_good_for_target(&pool, target.organization_id, target.environment_id)
+            last_known_good_for_target(pool, target.organization_id, target.environment_id)
                 .await
                 .expect("fallback query")
                 .expect("fallback exists");
@@ -391,7 +384,7 @@ mod tests {
         )
         .bind(target.organization_id)
         .bind(target.environment_id)
-        .fetch_one(&pool)
+        .fetch_one(pool)
         .await
         .expect("reload failure evidence");
         assert_eq!(failure, (1, Some(2)));
@@ -401,7 +394,7 @@ mod tests {
                AND target_type='devrail_environment' AND target_id=$1",
         )
         .bind(target.environment_id)
-        .fetch_one(&pool)
+        .fetch_one(pool)
         .await
         .expect("rejection audit count");
         assert_eq!(rejection_audits, 1);
@@ -409,11 +402,11 @@ mod tests {
         tokio::fs::remove_file(workspace.join("WORKFLOW.md"))
             .await
             .expect("remove workflow");
-        crate::workers::workflow_reloader::reload_once(&pool, &controlled_root)
+        crate::workers::workflow_reloader::reload_once(pool, &controlled_root)
             .await
             .expect("load safe default after deletion");
         let default_version =
-            last_known_good_for_target(&pool, target.organization_id, target.environment_id)
+            last_known_good_for_target(pool, target.organization_id, target.environment_id)
                 .await
                 .expect("default query")
                 .expect("default exists");
@@ -421,5 +414,6 @@ mod tests {
         tokio::fs::remove_dir_all(&controlled_root)
             .await
             .expect("cleanup workflow workspace");
+        fixture.cleanup().await.expect("cleanup workflow schema");
     }
 }

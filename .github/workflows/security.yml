@@ -9,6 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: read
   pull-requests: read
 
@@ -57,7 +58,9 @@ jobs:
         with:
           toolchain: 1.97.1
           components: rustfmt, clippy
-          cache: false
+          cache: true
+          cache-key: v1-backend-${{ hashFiles('backend/Cargo.lock', 'rust-toolchain.toml') }}
+          cache-workspaces: backend -> backend/target
       - name: Audit RustSec advisories
         uses: rustsec/audit-check@v2.0.0
         with:
@@ -89,14 +92,24 @@ jobs:
           - image: arc-admin-backend:ci
             dockerfile: backend/Dockerfile
             artifact: arc-admin-backend.spdx.json
+            cache_scope: backend-image
           - image: arc-admin-frontend:ci
             dockerfile: frontend/Dockerfile
             artifact: arc-admin-frontend.spdx.json
+            cache_scope: frontend-image
     steps:
       - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v3
       - name: Build production image
         id: build-image
-        run: docker build --file "${{ matrix.dockerfile }}" --tag "${{ matrix.image }}" .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          tags: ${{ matrix.image }}
+          load: true
+          cache-from: type=gha,scope=${{ matrix.cache_scope }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.cache_scope }}
       - name: Scan high and critical vulnerabilities
         uses: aquasecurity/trivy-action@v0.36.0
         with:

@@ -2472,10 +2472,10 @@ pub(crate) mod integration_tests {
 
     #[tokio::test]
     async fn repair_requests_are_invisible_across_organizations() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Some(pool) = test_pool().await else {
+        let Ok(schema_fixture) = crate::db::test_schema_pool().await else {
             return;
         };
+        let pool = schema_fixture.pool().clone();
         let fixture = failed_fixture(&pool).await;
         let request = create_request(&pool, &fixture, "cross-organization").await;
         let suffix = Uuid::new_v4().simple().to_string();
@@ -2517,14 +2517,19 @@ pub(crate) mod integration_tests {
             .await
             .expect("cross-organization lookup")
             .is_none());
+        drop(pool);
+        schema_fixture
+            .cleanup()
+            .await
+            .expect("cleanup repair isolation schema");
     }
 
     #[tokio::test]
     async fn handoff_retry_requires_the_current_request_and_creates_a_new_sequence() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Some(pool) = test_pool().await else {
+        let Ok(schema_fixture) = crate::db::test_schema_pool().await else {
             return;
         };
+        let pool = schema_fixture.pool().clone();
         let fixture = failed_fixture(&pool).await;
         let previous = create_request(&pool, &fixture, "handoff-retry-first").await;
         sqlx::query("UPDATE devrail_repair_requests SET status='handed_off' WHERE id=$1")
@@ -2593,14 +2598,19 @@ pub(crate) mod integration_tests {
                 .await
                 .expect("read source status");
         assert_eq!(source_status, "failed");
+        drop(pool);
+        schema_fixture
+            .cleanup()
+            .await
+            .expect("cleanup handoff retry schema");
     }
 
     #[tokio::test]
     async fn repair_claim_child_creation_and_terminal_projection_are_idempotent() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Some(pool) = test_pool().await else {
+        let Ok(schema_fixture) = crate::db::test_schema_pool().await else {
             return;
         };
+        let pool = schema_fixture.pool().clone();
         let fixture = failed_fixture(&pool).await;
         let request = create_request(&pool, &fixture, "repair-child").await;
         let claim_token = Uuid::new_v4();
@@ -2783,14 +2793,19 @@ pub(crate) mod integration_tests {
                 .await
                 .expect("source status");
         assert_eq!(source_status, "failed");
+        drop(pool);
+        schema_fixture
+            .cleanup()
+            .await
+            .expect("cleanup repair child schema");
     }
 
     #[tokio::test]
     async fn repair_lifecycle_outbox_contains_only_safe_fields_and_is_idempotent() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Some(pool) = test_pool().await else {
+        let Ok(schema_fixture) = crate::db::test_schema_pool().await else {
             return;
         };
+        let pool = schema_fixture.pool().clone();
         let fixture = failed_fixture(&pool).await;
         let request = create_request(&pool, &fixture, "repair-payload").await;
         let (notification_id, payload): (i64, Value) = sqlx::query_as(
@@ -2847,14 +2862,19 @@ pub(crate) mod integration_tests {
         .await
         .expect("count lifecycle outbox");
         assert_eq!(count, 1);
+        drop(pool);
+        schema_fixture
+            .cleanup()
+            .await
+            .expect("cleanup repair lifecycle schema");
     }
 
     #[tokio::test]
     async fn repair_approval_decision_records_idempotent_lifecycle_side_effects() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Some(pool) = test_pool().await else {
+        let Ok(schema_fixture) = crate::db::test_schema_pool().await else {
             return;
         };
+        let pool = schema_fixture.pool().clone();
         let fixture = failed_fixture(&pool).await;
         let request = create_request(&pool, &fixture, "repair-approval-lifecycle").await;
         let mut transaction = pool.begin().await.expect("begin repair approval create");
@@ -2966,14 +2986,19 @@ pub(crate) mod integration_tests {
         .await
         .expect("count repair approval side effects");
         assert_eq!((event_count, outbox_count), (1, 1));
+        drop(pool);
+        schema_fixture
+            .cleanup()
+            .await
+            .expect("cleanup repair approval schema");
     }
 
     #[tokio::test]
     async fn repair_transaction_rolls_back_when_outbox_write_fails() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Some(pool) = test_pool().await else {
+        let Ok(schema_fixture) = crate::db::test_schema_pool().await else {
             return;
         };
+        let pool = schema_fixture.pool().clone();
         let fixture = failed_fixture(&pool).await;
         let safe = json!({"code": "quality_gate_failed"});
         let mut transaction = pool.begin().await.expect("begin repair fault injection");
@@ -3040,5 +3065,10 @@ pub(crate) mod integration_tests {
         .await
         .expect("rolled back repair facts");
         assert_eq!(facts, ("failed".to_string(), 0, 0, 0, 0, 0));
+        drop(pool);
+        schema_fixture
+            .cleanup()
+            .await
+            .expect("cleanup repair rollback schema");
     }
 }

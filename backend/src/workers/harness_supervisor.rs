@@ -1501,16 +1501,8 @@ async fn finish_run(
 mod tests {
     use super::*;
     use crate::access::{ActorContext, ActorType, DataScope};
-    use crate::db::DATABASE_TEST_LOCK;
     use crate::repositories::devrail_runs;
     use std::collections::BTreeSet;
-
-    async fn test_pool() -> Option<PgPool> {
-        let database_url = std::env::var("TEST_DATABASE_URL").ok()?;
-        let pool = crate::db::init_pool(&database_url).await.ok()?;
-        crate::db::run_migrations(&pool).await.ok()?;
-        Some(pool)
-    }
 
     #[test]
     fn continuation_start_uses_same_thread_and_new_turn() {
@@ -1652,10 +1644,10 @@ mod tests {
 
     #[tokio::test]
     async fn stalled_and_disconnected_processes_recover_without_duplicate_runs() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Some(pool) = test_pool().await else {
+        let Ok(schema_fixture) = crate::db::test_schema_pool().await else {
             return;
         };
+        let pool = schema_fixture.pool().clone();
         let suffix = uuid::Uuid::new_v4().simple().to_string();
         let (owner_user_id, organization_id, department_id, task_id) =
             devrail_runs::create_harness_test_task(&pool, &suffix)
@@ -2017,5 +2009,10 @@ sleep 30
         tokio::fs::remove_dir_all(&workspace)
             .await
             .expect("remove controlled test workspace");
+        drop(pool);
+        schema_fixture
+            .cleanup()
+            .await
+            .expect("cleanup harness supervisor schema");
     }
 }

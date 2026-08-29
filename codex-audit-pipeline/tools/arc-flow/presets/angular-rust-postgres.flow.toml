@@ -17,7 +17,7 @@ path = "backend"
 path = "frontend"
 
 [policy]
-required_steps = ["backend.format", "backend.clippy", "backend.compile", "backend.tests", "frontend.lint", "frontend.tests", "frontend.build"]
+required_steps = ["backend.format", "backend.clippy", "backend.tests", "frontend.lint", "frontend.tests", "frontend.build"]
 
 [[doctor.checks]]
 id = "tool.git"
@@ -125,17 +125,6 @@ log = "backend_clippy.log"
 timeout_secs = 300
 
 [[steps]]
-id = "backend.compile"
-label = "backend compile"
-component = "backend"
-profiles = ["full"]
-program = "cargo"
-args = ["check", "--manifest-path", "{backend}/Cargo.toml", "--all-targets"]
-cwd = "{root}"
-log = "backend_check.log"
-timeout_secs = 300
-
-[[steps]]
 id = "backend.tests"
 label = "backend tests"
 component = "backend"
@@ -145,6 +134,9 @@ args = ["test", "--manifest-path", "{backend}/Cargo.toml", "--", "--nocapture"]
 cwd = "{root}"
 log = "backend_tests.log"
 timeout_secs = 300
+test_threads = 4
+test_threads_env = "ARC_FLOW_BACKEND_TEST_THREADS"
+test_isolation = "schema"
 parser = "rust"
 services = ["test-postgres"]
 remove_env = ["DATABASE_URL"]

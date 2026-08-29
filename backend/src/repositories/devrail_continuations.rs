@@ -1383,10 +1383,7 @@ pub(crate) mod integration_tests {
     }
 
     pub(crate) async fn test_pool() -> Option<PgPool> {
-        let database_url = std::env::var("TEST_DATABASE_URL").ok()?;
-        let pool = crate::db::init_pool(&database_url).await.ok()?;
-        crate::db::run_migrations(&pool).await.ok()?;
-        Some(pool)
+        crate::db::test_pool().await
     }
 
     pub(crate) async fn fixture(pool: &PgPool) -> Fixture {
@@ -1772,10 +1769,10 @@ pub(crate) mod integration_tests {
 
     #[tokio::test]
     async fn replay_scope_pagination_and_cancel_are_deterministic() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Some(pool) = test_pool().await else {
+        let Ok(schema_fixture) = crate::db::test_schema_pool().await else {
             return;
         };
+        let pool = schema_fixture.pool().clone();
         let fixture = fixture(&pool).await;
         let source_turn_id: String =
             sqlx::query_scalar("SELECT turn_id FROM devrail_runs WHERE id=$1")
@@ -1955,14 +1952,19 @@ pub(crate) mod integration_tests {
             .commit()
             .await
             .expect("commit cross scope cancel");
+        drop(pool);
+        schema_fixture
+            .cleanup()
+            .await
+            .expect("cleanup continuation pagination schema");
     }
 
     #[tokio::test]
     async fn trusted_evidence_replays_return_the_original_request() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Some(pool) = test_pool().await else {
+        let Ok(schema_fixture) = crate::db::test_schema_pool().await else {
             return;
         };
+        let pool = schema_fixture.pool().clone();
         let fixture = fixture(&pool).await;
         for (sequence, trigger_type, evidence_ref) in [
             (1, "quality_gate", "gate-result:stable-1"),
@@ -1999,14 +2001,19 @@ pub(crate) mod integration_tests {
                 .is_some());
             cancel_tx.commit().await.expect("commit trigger cancel");
         }
+        drop(pool);
+        schema_fixture
+            .cleanup()
+            .await
+            .expect("cleanup continuation evidence schema");
     }
 
     #[tokio::test]
     async fn claims_reject_stale_tokens_and_recover_after_expiry() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Some(pool) = test_pool().await else {
+        let Ok(schema_fixture) = crate::db::test_schema_pool().await else {
             return;
         };
+        let pool = schema_fixture.pool().clone();
         let fixture = fixture(&pool).await;
         let request = create_request(&pool, &fixture, 1).await;
         let first_token = Uuid::new_v4();
@@ -2096,14 +2103,19 @@ pub(crate) mod integration_tests {
         .await
         .expect("rejected continuation projection");
         assert_eq!(restored, ("succeeded".to_string(), 1));
+        drop(pool);
+        schema_fixture
+            .cleanup()
+            .await
+            .expect("cleanup continuation claim schema");
     }
 
     #[tokio::test]
     async fn dispatch_and_child_terminal_projection_are_atomic_and_idempotent() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Some(pool) = test_pool().await else {
+        let Ok(schema_fixture) = crate::db::test_schema_pool().await else {
             return;
         };
+        let pool = schema_fixture.pool().clone();
         let fixture = fixture(&pool).await;
         let source_terminal = sqlx::query_as::<_, (String, Option<DateTime<Utc>>)>(
             "SELECT status,completed_at FROM devrail_runs WHERE id=$1",
@@ -2261,14 +2273,19 @@ pub(crate) mod integration_tests {
         .await
         .expect("source terminal after continuation");
         assert_eq!(source_after, source_terminal);
+        drop(pool);
+        schema_fixture
+            .cleanup()
+            .await
+            .expect("cleanup continuation dispatch schema");
     }
 
     #[tokio::test]
     async fn concurrent_child_creation_reuses_one_run_and_preserves_source_terminal() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Some(pool) = test_pool().await else {
+        let Ok(schema_fixture) = crate::db::test_schema_pool().await else {
             return;
         };
+        let pool = schema_fixture.pool().clone();
         let fixture = fixture(&pool).await;
         let source_before = sqlx::query_as::<_, (String, Option<DateTime<Utc>>)>(
             "SELECT status,completed_at FROM devrail_runs WHERE id=$1",
@@ -2325,14 +2342,19 @@ pub(crate) mod integration_tests {
         .await
         .expect("source terminal after concurrent create");
         assert_eq!(source_after, source_before);
+        drop(pool);
+        schema_fixture
+            .cleanup()
+            .await
+            .expect("cleanup concurrent continuation schema");
     }
 
     #[tokio::test]
     async fn restart_reconciles_threadless_continuation_child_terminally() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Some(pool) = test_pool().await else {
+        let Ok(schema_fixture) = crate::db::test_schema_pool().await else {
             return;
         };
+        let pool = schema_fixture.pool().clone();
         let fixture = fixture(&pool).await;
         let request = create_request(&pool, &fixture, 1).await;
         let claim_token = Uuid::new_v4();
@@ -2394,14 +2416,19 @@ pub(crate) mod integration_tests {
                 1
             )
         );
+        drop(pool);
+        schema_fixture
+            .cleanup()
+            .await
+            .expect("cleanup continuation restart schema");
     }
 
     #[tokio::test]
     async fn handoff_is_scoped_immutable_and_rejects_digest_drift() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Some(pool) = test_pool().await else {
+        let Ok(schema_fixture) = crate::db::test_schema_pool().await else {
             return;
         };
+        let pool = schema_fixture.pool().clone();
         let fixture = fixture(&pool).await;
         assert!(find_handoff(&pool, &fixture.actor, fixture.source_run_id)
             .await
@@ -2476,14 +2503,19 @@ pub(crate) mod integration_tests {
             .await
             .expect("cross organization handoff")
             .is_none());
+        drop(pool);
+        schema_fixture
+            .cleanup()
+            .await
+            .expect("cleanup continuation handoff schema");
     }
 
     #[tokio::test]
     async fn continuation_transaction_rolls_back_when_outbox_write_fails() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Some(pool) = test_pool().await else {
+        let Ok(schema_fixture) = crate::db::test_schema_pool().await else {
             return;
         };
+        let pool = schema_fixture.pool().clone();
         let fixture = fixture(&pool).await;
         let digest = "7".repeat(64);
         let policy_snapshot = json!({"enabled":true});
@@ -2561,6 +2593,11 @@ pub(crate) mod integration_tests {
         .await
         .expect("rolled back continuation facts");
         assert_eq!(facts, ("succeeded".to_string(), 0, 0, 0, 0, 0));
+        drop(pool);
+        schema_fixture
+            .cleanup()
+            .await
+            .expect("cleanup continuation rollback schema");
     }
 
     #[test]
@@ -2619,10 +2656,10 @@ pub(crate) mod integration_tests {
 
     #[tokio::test]
     async fn stale_task_version_and_active_run_leave_no_continuation_facts() {
-        let _guard = DATABASE_TEST_LOCK.lock().await;
-        let Some(pool) = test_pool().await else {
+        let Ok(schema_fixture) = crate::db::test_schema_pool().await else {
             return;
         };
+        let pool = schema_fixture.pool().clone();
         let fixture = fixture(&pool).await;
         sqlx::query("UPDATE devrail_tasks SET revision=revision+1 WHERE id=$1")
             .bind(fixture.task_id)
@@ -2681,6 +2718,11 @@ pub(crate) mod integration_tests {
             .execute(&pool)
             .await
             .expect("remove active test run");
+        drop(pool);
+        schema_fixture
+            .cleanup()
+            .await
+            .expect("cleanup continuation stale schema");
     }
 
     #[tokio::test]
