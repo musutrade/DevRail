@@ -76,6 +76,14 @@ cargo flow verify --components backend
 默认只接受本机回环地址；使用已确认隔离的远程测试库时，还需显式设置
 `ARC_FLOW_ALLOW_REMOTE_TEST_DATABASE=1`。
 
+后端库测试当前只共享迁移初始化，不共享数据库连接池；仍依赖公共 schema 全局事实的测试由 `DATABASE_TEST_LOCK` 串行执行。需要并发数据库访问的测试使用 `db::test_schema_pool()`，它为每个 fixture 创建唯一 schema、设置 `search_path`、执行迁移并在 `cleanup()` 中关闭连接和删除 schema。后端门禁默认使用 4 个 Rust 测试线程，可通过 `ARC_FLOW_BACKEND_TEST_THREADS=1|2|4` 覆盖；该配置只改变 Rust 测试调度，不会解除公共 schema 锁。不要同时启动多个指向同一 `TEST_DATABASE_URL` 的公共 schema 测试进程。基线、依赖分组和后续验证命令见[后端测试吞吐基线](verification/backend-test-throughput-2026-08-29.md)与[后端测试依赖清单](verification/backend-test-inventory-2026-08-29.md)。
+
+后端测试会输出 `DEVRAIL_TEST_THREADS=<数量>`，表示本次测试进程使用的线程配置。通过 `cargo flow` 时该值与实际传给 Rust harness 的 `--test-threads` 一致；公共 schema 测试仍由 `DATABASE_TEST_LOCK` 保护。
+
+`cargo flow` 以顺序步骤写入同一报告目录和管理测试服务生命周期，不在步骤间做并发调度。`test_isolation = "shared"` 与大于 1 的 `test_threads` 会在配置加载时被拒绝；`test_threads` 必须介于 1 和 64，并且必须显式声明隔离模式。`RUST_TEST_TIMEOUT` 仍可覆盖后端测试的 600 秒上限。
+
+后端门禁保留 `cargo fmt`、`cargo clippy --all-targets --all-features` 和完整 `cargo test`。不再单独执行冗余的 `cargo check`：Clippy 已覆盖其类型检查范围，测试步骤仍会编译并执行测试目标。
+
 前端依赖的 CI 门禁只阻断生产依赖的 high/critical 漏洞：
 
 ```bash

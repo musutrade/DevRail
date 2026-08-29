@@ -1,5 +1,5 @@
 use crate::audit;
-use crate::config::{ParserConfig, StepConfig};
+use crate::config::{ParserConfig, StepConfig, TestIsolationMode};
 use crate::process::{Task, TaskResult};
 use crate::project::Project;
 use crate::scope::ScopeResult;
@@ -257,14 +257,32 @@ fn configured_task(
     service_env: Vec<(String, String)>,
 ) -> Task {
     let cwd = std::path::PathBuf::from(project.expand(&step.cwd));
-    let args = step
+    let mut args = step
         .args
         .iter()
         .map(|argument| project.expand(argument))
         .collect::<Vec<_>>();
-    let mut task = Task::new(&step.label, &step.program, &cwd, log(project, &step.log))
+    let label = step
+        .test_threads
+        .map(|threads| {
+            let isolation = match step.test_isolation {
+                Some(TestIsolationMode::Schema) => ", isolation: schema",
+                Some(TestIsolationMode::Shared) => ", isolation: shared",
+                None => "",
+            };
+            format!("{} (threads: {threads}{isolation})", step.label)
+        })
+        .unwrap_or_else(|| step.label.clone());
+    if let Some(test_threads) = step.test_threads {
+        args.push("--test-threads".into());
+        args.push(test_threads.to_string());
+    }
+    let mut task = Task::new(label, &step.program, &cwd, log(project, &step.log))
         .args(args)
         .timeout(step.timeout_secs);
+    if let Some(test_threads) = step.test_threads {
+        task = task.env("DEVRAIL_TEST_THREADS", test_threads.to_string());
+    }
     for (name, value) in service_env {
         task = task.env(name, value);
     }
@@ -289,7 +307,13 @@ fn execute(task: Task, parser: Option<&ParserConfig>, steps: &mut Vec<TaskResult
                     "parsed {count} result(s), expected at least {minimum}"
                 ));
             } else {
-                result.detail = Some(format!("{count} result(s)"));
+                let serial_reason = content
+                    .lines()
+                    .find_map(|line| line.strip_prefix("DEVRAIL_TEST_SERIAL_DATABASE_FACTS="));
+                result.detail = Some(match serial_reason {
+                    Some(reason) => format!("{count} result(s); serial database facts: {reason}"),
+                    None => format!("{count} result(s)"),
+                });
             }
         }
     }

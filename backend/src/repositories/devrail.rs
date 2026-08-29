@@ -1496,10 +1496,7 @@ mod scheduler_integration_tests {
     use uuid::Uuid;
 
     async fn test_pool() -> Option<PgPool> {
-        let database_url = std::env::var("TEST_DATABASE_URL").ok()?;
-        let pool = crate::db::init_pool(&database_url).await.ok()?;
-        crate::db::run_migrations(&pool).await.ok()?;
-        Some(pool)
+        crate::db::test_pool().await
     }
 
     async fn scheduler_fixture(pool: &PgPool) -> (i64, i64, i64, Option<i64>) {
@@ -2615,15 +2612,6 @@ mod scheduler_integration_tests {
         let fixture = scheduler_fixture(&pool).await;
         let downstream_id = queued_task(&pool, fixture, 3).await;
         let (project_id, environment_id, owner_user_id, department_id) = fixture;
-        let Some((other_owner, other_department)) = sqlx::query_as::<_, (i64, Option<i64>)>(
-            "SELECT id, department_id FROM users WHERE id <> $1 ORDER BY id LIMIT 1",
-        )
-        .bind(owner_user_id)
-        .fetch_optional(&pool)
-        .await
-        .expect("other owner query") else {
-            return;
-        };
         let organization_id = sqlx::query_scalar::<_, i64>(
             "SELECT organization_id FROM devrail_projects WHERE id=$1",
         )
@@ -2631,11 +2619,32 @@ mod scheduler_integration_tests {
         .fetch_one(&pool)
         .await
         .expect("project organization");
+        let suffix = Uuid::new_v4().simple().to_string();
+        let other_department = sqlx::query_scalar::<_, i64>(
+            "INSERT INTO departments (organization_id,code,name)
+             VALUES ($1,$2,'范围外部门') RETURNING id",
+        )
+        .bind(organization_id)
+        .bind(format!("scope-out-{suffix}"))
+        .fetch_one(&pool)
+        .await
+        .expect("other department");
+        let other_owner = sqlx::query_scalar::<_, i64>(
+            "INSERT INTO users
+                 (username,password_hash,display_name,organization_id,department_id)
+             VALUES ($1,'test','范围外用户',$2,$3) RETURNING id",
+        )
+        .bind(format!("scope-out-{suffix}"))
+        .bind(organization_id)
+        .bind(other_department)
+        .fetch_one(&pool)
+        .await
+        .expect("other owner");
         let prerequisite_id = sqlx::query_scalar::<_, i64>(
             "INSERT INTO devrail_tasks (organization_id,department_id,owner_user_id,project_id,environment_id,title,goal,status) VALUES ($1,$2,$3,$4,$5,'范围外前置','不可见','queued') RETURNING id",
         )
         .bind(organization_id)
-        .bind(other_department)
+        .bind(Some(other_department))
         .bind(other_owner)
         .bind(project_id)
         .bind(environment_id)

@@ -56,7 +56,9 @@ jobs:
         with:
           toolchain: 1.97.1
           components: rustfmt, clippy
-          cache: false
+          cache: true
+          cache-key: v1-workflow-${{ hashFiles('codex-audit-pipeline/tools/arc-flow/Cargo.lock', 'rust-toolchain.toml') }}
+          cache-workspaces: codex-audit-pipeline/tools/arc-flow -> codex-audit-pipeline/tools/arc-flow/target
       - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
@@ -102,7 +104,9 @@ jobs:
         with:
           toolchain: 1.97.1
           components: rustfmt, clippy
-          cache: false
+          cache: true
+          cache-key: v1-backend-${{ hashFiles('backend/Cargo.lock', 'rust-toolchain.toml') }}
+          cache-workspaces: backend -> backend/target
       - name: Run backend checks and tests
         env:
           TEST_DATABASE_URL: postgres://arc_admin_test:arc_admin_test@127.0.0.1:5432/arc_admin_test
@@ -142,7 +146,9 @@ jobs:
         with:
           toolchain: 1.97.1
           components: rustfmt, clippy
-          cache: false
+          cache: true
+          cache-key: v1-frontend-workflow-${{ hashFiles('codex-audit-pipeline/tools/arc-flow/Cargo.lock', 'rust-toolchain.toml') }}
+          cache-workspaces: codex-audit-pipeline/tools/arc-flow -> codex-audit-pipeline/tools/arc-flow/target
       - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version

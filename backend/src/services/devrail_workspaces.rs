@@ -1160,16 +1160,10 @@ mod tests {
 
     #[tokio::test]
     async fn postgres_workspace_round_trip_is_scoped_and_idempotent() {
-        let _guard = crate::db::DATABASE_TEST_LOCK.lock().await;
-        let Some(database_url) = std::env::var("TEST_DATABASE_URL").ok() else {
+        let Ok(schema_fixture) = crate::db::test_schema_pool().await else {
             return;
         };
-        let pool = crate::db::init_pool(&database_url)
-            .await
-            .expect("connect test database");
-        crate::db::run_migrations(&pool)
-            .await
-            .expect("workspace migration");
+        let pool = schema_fixture.pool().clone();
         let root =
             PathBuf::from("/tmp").join(format!("devrail-workspace-db-{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&root).await.expect("root");
@@ -1240,5 +1234,10 @@ mod tests {
         assert!(duplicate.is_none());
         duplicate_tx.rollback().await.expect("rollback");
         tokio::fs::remove_dir_all(root).await.expect("cleanup");
+        drop(pool);
+        schema_fixture
+            .cleanup()
+            .await
+            .expect("cleanup workspace schema");
     }
 }
