@@ -61,5 +61,5 @@
 
 - [x] 8.1 更新需求、Symphony 证据矩阵、架构、实现状态、HANDOFF、OpenAPI 和运行手册，明确 repair 与 retry/continuation/Hook 熔断边界及当前未验收项；通过 `openspec validate --all --strict`、链接检查和文档漂移复核
 - [x] 8.2 更新 Orchestrator 运维手册，说明默认关闭、风险分级、审批、诊断保留、人工交接、指标告警、分阶段启用和 additive migration 回滚；通过配置默认值核对和严格 OpenSpec 校验
-- [ ] 8.3 用明确文件清单提交并推送；确认当前分支/PR 状态，记录提交 SHA、分支、PR URL 和可查询的 CI workflow 记录
-- [ ] 8.4 在 PR 描述列出 ADR、OpenSpec change、迁移、权限、测试、风险、回滚和人工交接；持续监控 CI、arc-flow、供应链和 CodeQL，失败时按日志 trace 修复并重新验证，直到 required checks 成功
+- [x] 8.3 用明确文件清单提交并推送；确认当前分支/PR 状态，记录提交 SHA、分支、PR URL 和可查询的 CI workflow 记录（commit `8e1e991a6baa7a1d31d5e3381ce55f4da9320d5c`，分支 `feat/controlled-repair-runs`，PR [#87](https://github.com/musutrade/DevRail/pull/87)，CI `33232529047`、Supply chain security `33232529042`、arc-flow platform `33232529061`）
+- [x] 8.4 在 PR 描述列出 ADR、OpenSpec change、迁移、权限、测试、风险、回滚和人工交接；持续监控 CI、arc-flow、供应链和 CodeQL，失败时按日志 trace 修复并重新验证，直到 required checks 成功（CI、Supply chain security、arc-flow platform 均 `success`；CodeQL 按工作流配置 `skipped`）
