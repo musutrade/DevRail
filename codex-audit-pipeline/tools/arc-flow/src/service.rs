@@ -113,8 +113,9 @@ impl RunningService {
                         project_root: project.root.clone(),
                     });
                 }
-                let deadline = Instant::now() + Duration::from_secs(startup_timeout_secs);
-                ensure_docker(project, id, remaining(deadline)?)?;
+                let docker_check_deadline =
+                    Instant::now() + Duration::from_secs(startup_timeout_secs);
+                ensure_docker(project, id, remaining(docker_check_deadline)?)?;
                 start_docker(
                     project,
                     id,
@@ -126,7 +127,7 @@ impl RunningService {
                         environment,
                         healthcheck,
                         connection,
-                        deadline,
+                        deadline: Instant::now() + Duration::from_secs(startup_timeout_secs),
                     },
                 )
             }

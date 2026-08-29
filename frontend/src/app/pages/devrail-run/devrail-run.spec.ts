@@ -6,7 +6,11 @@ import { vi } from 'vitest';
 import { AuthService } from '../../core/auth.service';
 import { DevRailApiService } from '../../features/devrail/data-access/devrail-api.service';
 import { DEVRAIL_PERMISSIONS } from '../../features/devrail/devrail.permissions';
-import type { DevRailContinuationResponse, DevRailRunResponse } from '../../generated/api/models';
+import type {
+  DevRailContinuationResponse,
+  DevRailRepairResponse,
+  DevRailRunResponse,
+} from '../../generated/api/models';
 import { DevRailRunPage } from './devrail-run';
 
 const RUN: DevRailRunResponse = {
@@ -51,6 +55,34 @@ const CONTINUATION: DevRailContinuationResponse = {
   updatedAt: '2026-08-26T00:02:00Z',
 };
 
+const REPAIR: DevRailRepairResponse = {
+  id: 41,
+  taskId: 7,
+  sourceRunId: 19,
+  rootRunId: 11,
+  diagnosisId: 51,
+  repairSequence: 1,
+  riskCategory: 'low_risk',
+  strategyVersion: 'repair-policy-v1',
+  status: 'running',
+  costUnits: 1,
+  diagnosis: {
+    id: 51,
+    sourceRunId: 19,
+    evidenceRef: 'quality-gate:19:1',
+    evidenceObservedAt: '2026-08-26T00:03:00Z',
+    affectedGates: ['backend_tests'],
+    errorSummary: '后端质量门禁未通过',
+    structuredError: { code: 'quality_gate_failed' },
+    environmentSummary: { source: 'quality_gate' },
+    createdAt: '2026-08-26T00:03:00Z',
+  },
+  gateReruns: [],
+  handoffs: [],
+  createdAt: '2026-08-26T00:03:00Z',
+  updatedAt: '2026-08-26T00:03:00Z',
+};
+
 class EventSourceStub {
   onmessage: ((event: MessageEvent) => void) | null = null;
   onerror: (() => void) | null = null;
@@ -82,6 +114,8 @@ describe('DevRailRunPage', () => {
       page: 1,
       pageSize: 50,
     })),
+    listRepairs: vi.fn(async () => ({ items: [REPAIR], total: 1, page: 1, pageSize: 50 })),
+    getRepair: vi.fn(async () => REPAIR),
     cancelContinuation: vi.fn(async () => ({ ...CONTINUATION, status: 'cancelled' as const })),
   };
 
@@ -154,6 +188,45 @@ describe('DevRailRunPage', () => {
     expect(fixture.nativeElement.textContent).toContain('根据审查意见继续修改');
     await page.cancelPendingContinuation(CONTINUATION);
     expect(page.continuations()[0].status).toBe('cancelled');
+  });
+
+  it('展示受控修复序号、诊断和门禁范围', () => {
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('受控修复谱系');
+    expect(text).toContain('第 1 次');
+    expect(text).toContain('后端质量门禁未通过');
+    expect(text).toContain('backend_tests');
+  });
+
+  it('展示门禁重跑结果、来源/子运行链接和人工交接原因', async () => {
+    const page = fixture.componentInstance;
+    page.repair.set({
+      ...REPAIR,
+      status: 'handed_off',
+      childRunId: 27,
+      handoffReason: 'hook_failure_circuit_open',
+      gateReruns: [
+        {
+          id: 81,
+          gateId: 'backend_tests',
+          changesetDigest: 'b'.repeat(64),
+          status: 'failed',
+          resultCode: 'command_failed',
+          summary: '后端测试仍未通过',
+          logRef: 'quality-gates/backend-tests',
+          durationMs: 120,
+          childRunId: 27,
+          createdAt: '2026-08-26T00:04:00Z',
+          completedAt: '2026-08-26T00:05:00Z',
+        },
+      ],
+    });
+    await fixture.whenStable();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('后端测试仍未通过');
+    expect(text).toContain('交接原因：Hook 失败熔断已打开');
+    expect(text).toContain('查看来源运行 #19');
+    expect(text).toContain('查看修复子运行 #27');
   });
 
   it('展示父运行和父回合，并拒绝取消已派发请求', async () => {

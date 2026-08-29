@@ -29,6 +29,8 @@ export interface DevRailRunResponse {
   policy: any;
   recoveryAttempts: number;
   recoverySuggestion?: (string | null);
+  repairRequestId?: (number | null);
+  repairSequence?: (number | null);
   retryReason?: (string | null);
   rootRunId?: (number | null);
   runKind: DevRailRunKind;

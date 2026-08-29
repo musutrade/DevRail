@@ -84,6 +84,19 @@ pub fn continuation_workspace_key(task_id: i64, sequence: i16) -> Result<String,
     ))
 }
 
+pub fn repair_workspace_key(task_id: i64, sequence: i16) -> Result<String, ApiError> {
+    if task_id <= 0 || sequence <= 0 {
+        return Err(ApiError::validation("任务或 repair 序号无效"));
+    }
+    let suffix = hex::encode(Sha256::digest(
+        format!("repair:{task_id}:{sequence}").as_bytes(),
+    ));
+    Ok(format!(
+        "task-{task_id}-repair-{sequence}-{}",
+        &suffix[..12]
+    ))
+}
+
 pub fn path_digest(relative: &str) -> String {
     hex::encode(Sha256::digest(relative.as_bytes()))
 }
@@ -524,6 +537,25 @@ pub(crate) async fn materialize_from_source(
     relative: &str,
     branch: Option<&str>,
 ) -> Result<MaterializedWorkspace, ApiError> {
+    materialize_from_source_impl(root, source, relative, branch, true).await
+}
+
+pub(crate) async fn materialize_repair_from_source(
+    root: &Path,
+    source: &Path,
+    relative: &str,
+    branch: Option<&str>,
+) -> Result<MaterializedWorkspace, ApiError> {
+    materialize_from_source_impl(root, source, relative, branch, false).await
+}
+
+async fn materialize_from_source_impl(
+    root: &Path,
+    source: &Path,
+    relative: &str,
+    branch: Option<&str>,
+    allow_existing: bool,
+) -> Result<MaterializedWorkspace, ApiError> {
     tokio::fs::create_dir_all(root)
         .await
         .map_err(ApiError::internal)?;
@@ -541,6 +573,9 @@ pub(crate) async fn materialize_from_source(
         .await
         .map_err(ApiError::internal)?
     {
+        if !allow_existing {
+            return Err(ApiError::conflict("repair 工作区已存在，拒绝复用"));
+        }
         let base_commit = if target.join(".git").exists() {
             git_output(&target, &["rev-parse", "HEAD"]).await.ok()
         } else {
@@ -585,6 +620,46 @@ pub(crate) async fn materialize_from_source(
             .map_err(ApiError::internal)?,
         base_commit: None,
     })
+}
+
+pub(crate) async fn cleanup_materialized_workspace(
+    root: &Path,
+    source: &Path,
+    relative: &str,
+) -> Result<(), ApiError> {
+    let root = tokio::fs::canonicalize(root)
+        .await
+        .map_err(|_| ApiError::validation("受控工作区根目录不存在或不可访问"))?;
+    let source = tokio::fs::canonicalize(source)
+        .await
+        .map_err(|_| ApiError::conflict("环境工作区不存在或不可访问"))?;
+    if !source.starts_with(&root) || source == root {
+        return Err(ApiError::validation("环境工作区不在受控根目录内"));
+    }
+    let target = controlled_path(&root, relative).await?;
+    if !tokio::fs::try_exists(&target)
+        .await
+        .map_err(ApiError::internal)?
+    {
+        return Ok(());
+    }
+    if source.join(".git").exists() {
+        git_output(
+            &source,
+            &[
+                "worktree",
+                "remove",
+                "--force",
+                target.to_string_lossy().as_ref(),
+            ],
+        )
+        .await?;
+    } else {
+        tokio::fs::remove_dir_all(&target)
+            .await
+            .map_err(ApiError::internal)?;
+    }
+    Ok(())
 }
 
 pub async fn get_for_task(
@@ -891,6 +966,18 @@ mod tests {
     }
 
     #[test]
+    fn repair_workspace_keys_are_isolated_from_other_run_kinds() {
+        let repair = repair_workspace_key(42, 1).expect("repair key");
+        assert_eq!(repair, repair_workspace_key(42, 1).expect("same key"));
+        assert_ne!(repair, workspace_key(42, 1).expect("attempt key"));
+        assert_ne!(
+            repair,
+            continuation_workspace_key(42, 1).expect("continuation key")
+        );
+        assert!(repair.contains("-repair-1-"));
+    }
+
+    #[test]
     fn hooks_are_closed_and_unknown_names_are_rejected() {
         let snapshot = serde_json::json!({"config":{"hooks":{"beforeRun":["cargo-flow-scope"]}}});
         assert_eq!(
@@ -917,6 +1004,34 @@ mod tests {
                 .expect("canonical root")
         ));
         tokio::fs::remove_dir_all(&root).await.expect("cleanup");
+    }
+
+    #[tokio::test]
+    async fn repair_materialization_rejects_path_reuse_and_cleanup_is_idempotent() {
+        let root = PathBuf::from("/tmp").join(format!(
+            "devrail-repair-workspace-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let source = root.join("repository");
+        tokio::fs::create_dir_all(&source).await.expect("source");
+        tokio::fs::write(source.join("tracked.txt"), "内容\n")
+            .await
+            .expect("source file");
+        let relative = repair_workspace_key(42, 1).expect("repair key");
+        materialize_repair_from_source(&root, &source, &relative, None)
+            .await
+            .expect("materialize repair workspace");
+        let reused = materialize_repair_from_source(&root, &source, &relative, None).await;
+        assert!(matches!(reused, Err(ApiError::Conflict(message)) if message.contains("拒绝复用")));
+        cleanup_materialized_workspace(&root, &source, &relative)
+            .await
+            .expect("cleanup repair workspace");
+        cleanup_materialized_workspace(&root, &source, &relative)
+            .await
+            .expect("cleanup is idempotent");
+        tokio::fs::remove_dir_all(&root)
+            .await
+            .expect("cleanup root");
     }
 
     #[tokio::test]

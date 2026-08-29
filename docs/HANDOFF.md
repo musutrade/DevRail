@@ -1,12 +1,18 @@
 # DevRail 项目状态与交接
 
-更新日期：2026-08-27。长期约定以根目录 `AGENTS.md`、[开发指南](development.md)、[架构说明](architecture.md)、[UI 与 CSS 规范](ui-design-system.md) 和生成的 [OpenAPI 契约](openapi.json) 为准。
+更新日期：2026-08-28。长期约定以根目录 `AGENTS.md`、[开发指南](development.md)、[架构说明](architecture.md)、[UI 与 CSS 规范](ui-design-system.md) 和生成的 [OpenAPI 契约](openapi.json) 为准。
 
 DevRail 的产品范围见 [需求文档](requirements.md)，当前实现口径见 [DevRail 实现状态](devrail-implementation-status.md)，业务边界见 [项目公约](devrail-governance.md)，门禁和审计证据见 [审计与门禁](devrail-audit-and-gates.md)。项目通过 `scripts/init-project.sh` 以 `devrail` slug、数据库名和权限前缀完成初始化，并以 `.arc-project.json` 记录 arc-admin 框架版本。
 
 ## 重要状态结论
 
-当前完成的是 arc-admin 基线、`arc-flow` 审计工具生产化、治理文档和 CI 配套，以及 continuation turns 的代码与专项测试闭环；Codex Harness 产品 MVP 尚未完成。不得把工程门禁或审计工具的通过结果解释为 DevRail 业务需求已验收。完整覆盖矩阵见 [DevRail 实现状态](devrail-implementation-status.md)。
+当前完成的是 arc-admin 基线、`arc-flow` 审计工具生产化、治理文档和 CI 配套，以及 continuation turns、Hook 重复失败熔断和受控 repair run 的工程实现与专项测试闭环；Codex Harness 产品 MVP 尚未完成。不得把工程门禁或审计工具的通过结果解释为 DevRail 业务需求已验收。完整覆盖矩阵见 [DevRail 实现状态](devrail-implementation-status.md) 和 [MVP 验收证据矩阵](verification/mvp-acceptance-2026-08-28.md)。
+
+## 当前验证记录
+
+当前工作区为 `main` HEAD `b66e4c1`，含未提交的受控 repair 变更。2026-08-28T20:29:43Z 执行 `cargo flow verify --all` 通过，backend/frontend/arc-flow 测试分别为 146/113/69 项，`TEST_SUMMARY: PASS`；脱敏报告见 [test_result.md](../codex-audit-pipeline/.codex/reports/test_result.md)。该记录是工作区工程门禁证据，不是 repair 代码已合并到主干的证明。
+
+`b66e4c1` 对应的可读 CI 历史：[CI](https://github.com/musutrade/DevRail/actions/runs/33145794157)、[arc-flow platform](https://github.com/musutrade/DevRail/actions/runs/33145794179)、[Supply chain security](https://github.com/musutrade/DevRail/actions/runs/33145794140)。CodeQL skipped 符合 workflow 条件。
 
 ## 当前基线
 
@@ -23,10 +29,10 @@ DevRail 的产品范围见 [需求文档](requirements.md)，当前实现口径�
 | UI       | 用户、权限、部门、角色、权限分配、审计、安全和错误页使用统一页面、筛选、表格、状态、卡片与反馈规范     |
 | 响应式   | Desktop Chrome 与 Pixel 7 双端覆盖；审计日志在手机切换卡片，权限分配保留可操作的固定末列               |
 | 无障碍   | 跳转链接、唯一 main landmark、表格 caption、焦点可见、菜单焦点返回、状态播报和减少动效                 |
-| 测试     | ESLint、Prettier、98 项 Angular 单测、Playwright 桌面/移动端 E2E、Rust/PostgreSQL 集成测试和全栈 smoke |
+| 测试     | ESLint、Prettier、Angular 单测、Playwright 桌面/移动端 E2E、Rust/PostgreSQL 集成测试和全栈 smoke；当前验收记录见 MVP 证据矩阵 |
 | 运维     | 生产 Compose、独立 migration、JSON 日志、Prometheus/Loki/Grafana、Blackbox、可选 Tempo、备份与审计归档 |
 | 供应链   | Dependabot、RustSec、`cargo deny`、CodeQL、Trivy 镜像扫描和 SPDX SBOM                                  |
-| DevRail 产品 MVP | 仍未完成；Phase 0 主要 CRUD/资源同步，Phase 1 Harness Supervisor、审批、质量门禁、Symphony P0 调度、TaskTracker/WORKFLOW、DAG/follow-up、per-task workspace/hooks 和 continuation turns，Phase 2 站内通知/outbox/Web Push 投递基础，以及 Phase 3 评论、审查、补丁导出、PR/MR 与外部审查同步基础均已加入；剩余主要缺口是受控修复 run、供应商/生产运行演练和完整 MVP 自动化验收 |
+| DevRail 产品 MVP | 仍未完成；Phase 0 主要 CRUD/资源同步，Phase 1 Harness Supervisor、审批、质量门禁、Symphony P0 调度、TaskTracker/WORKFLOW、DAG/follow-up、per-task workspace/hooks、continuation turns、Hook 失败熔断和受控 repair run 工程实现均已加入；Phase 2 站内通知/outbox/Web Push 投递基础，以及 Phase 3 评论、审查、补丁导出、PR/MR 与外部审查同步基础均已加入；剩余主要缺口是受控假 app-server/workspace/质量门禁/Playwright 验收、供应商/生产运行演练和完整 MVP 自动化验收 |
 | 审计工具配套 | `arc-flow` 生产化、跨平台 CI、性能基准、SBOM 和操作文档已完成 |
 
 ## 常用命令
@@ -57,7 +63,7 @@ VISUAL_REVIEW=1 npm run e2e -- --project=chromium --project=mobile-chromium
 4. 保护 `main`，将 Quality gate、Backend verification、Frontend verification 设为 required checks，并启用 secret scanning 与 push protection；
 5. 将审计归档、SBOM、备份和发布证据写入权限独立的不可变存储，并执行恢复演练；
 6. 根据业务 RPO/RTO、数据分类、司法辖区与合同要求补齐高合规控制；
-7. 按 [DevRail 实现状态](devrail-implementation-status.md) 和 [需求文档](requirements.md) 继续完成受控修复 run、供应商/生产运行演练与 MVP 验收；continuation、运行、审批、通知、评论/审查、PR/MR 同步、DAG/follow-up 和 per-task workspace/hooks 能力只能以自动化测试与可追溯运行证据判定验收，不能仅依赖工程门禁结论。
+7. 按 [DevRail 实现状态](devrail-implementation-status.md) 和 [需求文档](requirements.md) 完成受控 repair run 的假 app-server/workspace/质量门禁/Playwright 验收、供应商/生产运行演练与 MVP 验收；continuation、运行、审批、通知、评论/审查、PR/MR 同步、DAG/follow-up、per-task workspace/hooks 和 repair 能力只能以自动化测试与可追溯运行证据判定验收，不能仅依赖工程门禁结论。
 
 ## 已知边界
 

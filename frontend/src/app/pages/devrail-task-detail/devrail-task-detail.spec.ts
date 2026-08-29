@@ -7,7 +7,11 @@ import { AuthService } from '../../core/auth.service';
 import { DevRailApiService } from '../../features/devrail/data-access/devrail-api.service';
 import type { DevRailTaskResponse } from '../../generated/api/models';
 import { DevRailTaskDetailPage } from './devrail-task-detail';
-import type { DevRailContinuationResponse, DevRailRunResponse } from '../../generated/api/models';
+import type {
+  DevRailContinuationResponse,
+  DevRailRepairResponse,
+  DevRailRunResponse,
+} from '../../generated/api/models';
 
 const TASK: DevRailTaskResponse = {
   id: 7,
@@ -29,6 +33,19 @@ const TASK: DevRailTaskResponse = {
   continuationPolicy: {
     enabled: true,
     max_context_bytes: 16_384,
+  },
+  repairPolicy: {
+    enabled: true,
+    max_repairs: 3,
+    max_cost_units: 10,
+    max_diagnostic_bytes: 4096,
+    evidence_max_age_seconds: 3600,
+    claim_lease_seconds: 60,
+    max_dispatch_attempts: 3,
+    retry_base_delay_seconds: 10,
+    retry_max_delay_seconds: 300,
+    auto_categories: ['low_risk'],
+    approval_categories: ['logical_change'],
   },
   continuationCapabilities: {
     canRead: true,
@@ -84,6 +101,42 @@ const CONTINUATION: DevRailContinuationResponse = {
   updatedAt: '2026-08-26T00:02:00Z',
 };
 
+const REPAIR: DevRailRepairResponse = {
+  id: 41,
+  taskId: 7,
+  sourceRunId: 19,
+  rootRunId: 19,
+  diagnosisId: 12,
+  repairSequence: 1,
+  riskCategory: 'low_risk',
+  strategyVersion: 'repair-policy-v1',
+  status: 'pending',
+  costUnits: 1,
+  diagnosis: {
+    id: 12,
+    sourceRunId: 19,
+    evidenceRef: 'quality-gate:19:1',
+    evidenceObservedAt: '2026-08-26T00:02:00Z',
+    affectedGates: ['backend_tests'],
+    errorSummary: '质量门禁未通过：backend_tests',
+    structuredError: { code: 'quality_gate_failed' },
+    environmentSummary: { source: 'quality_gate' },
+    createdAt: '2026-08-26T00:02:00Z',
+  },
+  gateReruns: [
+    {
+      id: 51,
+      gateId: 'backend_tests',
+      changesetDigest: 'a'.repeat(64),
+      status: 'passed',
+      createdAt: '2026-08-26T00:03:00Z',
+    },
+  ],
+  handoffs: [],
+  createdAt: '2026-08-26T00:02:00Z',
+  updatedAt: '2026-08-26T00:02:00Z',
+};
+
 describe('DevRailTaskDetailPage', () => {
   let fixture: ComponentFixture<DevRailTaskDetailPage>;
   let apiStub: Partial<DevRailApiService>;
@@ -101,6 +154,55 @@ describe('DevRailTaskDetailPage', () => {
       listContinuations: vi.fn(async () => ({ items: [], total: 0, page: 1, pageSize: 100 })),
       createContinuation: vi.fn(async () => CONTINUATION),
       cancelContinuation: vi.fn(async () => ({ ...CONTINUATION, status: 'cancelled' as const })),
+      listRepairs: vi.fn(async () => ({ items: [REPAIR], total: 1, page: 1, pageSize: 100 })),
+      createRepair: vi.fn(async () => REPAIR),
+      cancelRepair: vi.fn(async () => ({ ...REPAIR, status: 'cancelled' as const })),
+      handoffRepair: vi.fn(async () => ({ ...REPAIR, status: 'handed_off' as const })),
+      retryRepair: vi.fn(async () => ({
+        ...REPAIR,
+        id: 42,
+        repairSequence: 2,
+        status: 'pending' as const,
+      })),
+      approveRepair: vi.fn(async () => ({
+        id: 91,
+        repairRequestId: REPAIR.id,
+        riskCategory: 'logical_change' as const,
+        policyVersion: 'repair-policy-v1',
+        status: 'approved' as const,
+        requestedBy: 5,
+        decidedBy: 5,
+        decisionReason: null,
+        expiresAt: '2026-08-26T01:00:00Z',
+        createdAt: '2026-08-26T00:02:00Z',
+        updatedAt: '2026-08-26T00:03:00Z',
+      })),
+      rejectRepair: vi.fn(async () => ({
+        id: 91,
+        repairRequestId: REPAIR.id,
+        riskCategory: 'logical_change' as const,
+        policyVersion: 'repair-policy-v1',
+        status: 'rejected' as const,
+        requestedBy: 5,
+        decidedBy: 5,
+        decisionReason: '人工审核未通过',
+        expiresAt: '2026-08-26T01:00:00Z',
+        createdAt: '2026-08-26T00:02:00Z',
+        updatedAt: '2026-08-26T00:03:00Z',
+      })),
+      withdrawRepairApproval: vi.fn(async () => ({
+        id: 91,
+        repairRequestId: REPAIR.id,
+        riskCategory: 'logical_change' as const,
+        policyVersion: 'repair-policy-v1',
+        status: 'withdrawn' as const,
+        requestedBy: 5,
+        decidedBy: 5,
+        decisionReason: '申请人主动撤回审批',
+        expiresAt: '2030-01-01T01:00:00Z',
+        createdAt: '2026-08-26T00:02:00Z',
+        updatedAt: '2026-08-26T00:03:00Z',
+      })),
     };
 
     await TestBed.configureTestingModule({
@@ -119,7 +221,10 @@ describe('DevRailTaskDetailPage', () => {
         { provide: DevRailApiService, useValue: apiStub },
         {
           provide: AuthService,
-          useValue: { hasPermission: (code: string) => permissionState().has(code) },
+          useValue: {
+            hasPermission: (code: string) => permissionState().has(code),
+            currentUser: () => ({ id: 5 }),
+          },
         },
         { provide: MatSnackBar, useValue: { open: vi.fn() } },
       ],
@@ -205,6 +310,285 @@ describe('DevRailTaskDetailPage', () => {
     const second = page.createContinuation(form);
     await Promise.all([first, second]);
     expect(apiStub.createContinuation).toHaveBeenCalledTimes(1);
+  });
+
+  it('展示脱敏修复诊断、门禁结果和低风险修复入口', async () => {
+    permissionState.set(new Set(['devrail:repair:create']));
+    const page = fixture.componentInstance;
+    page.task.set({ ...TASK, status: 'failed' });
+    page.runs.set([{ ...SOURCE_RUN, status: 'failed' }]);
+    page.repairs.set([REPAIR]);
+    await fixture.whenStable();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('受控修复');
+    expect(text).toContain('质量门禁未通过：backend_tests');
+    expect(text).toContain('受影响门禁：backend_tests');
+    expect(text).toContain('请求低风险修复');
+    await page.createRepair();
+    expect(apiStub.createRepair).toHaveBeenCalledWith(
+      19,
+      expect.objectContaining({ riskCategory: 'low_risk' }),
+    );
+  });
+
+  it('修复区域提供加载语义、动态更新和操作后焦点恢复', async () => {
+    permissionState.set(new Set(['devrail:repair:cancel']));
+    const page = fixture.componentInstance;
+    page.task.set({ ...TASK, status: 'failed' });
+    page.runs.set([{ ...SOURCE_RUN, status: 'failed' }]);
+    page.repairs.set([REPAIR]);
+    await fixture.whenStable();
+
+    const section = fixture.nativeElement.querySelector('.repair-section') as HTMLElement;
+    const heading = fixture.nativeElement.querySelector('#repair-title') as HTMLElement;
+    const list = fixture.nativeElement.querySelector('.repair-list') as HTMLElement;
+    expect(section.getAttribute('aria-busy')).toBe('false');
+    expect(heading.getAttribute('tabindex')).toBe('-1');
+    expect(list.getAttribute('aria-live')).toBe('polite');
+
+    await page.cancelRepair(REPAIR);
+    await fixture.whenStable();
+    await Promise.resolve();
+    expect(document.activeElement).toBe(heading);
+  });
+
+  it('策略关闭时隐藏修复入口且不调用创建接口', async () => {
+    permissionState.set(new Set(['devrail:repair:create']));
+    const page = fixture.componentInstance;
+    page.task.set({
+      ...TASK,
+      status: 'failed',
+      repairPolicy: { ...TASK.repairPolicy, enabled: false },
+    });
+    page.runs.set([{ ...SOURCE_RUN, status: 'failed' }]);
+    page.repairs.set([]);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).not.toContain('请求低风险修复');
+    await page.createRepair();
+    expect(apiStub.createRepair).not.toHaveBeenCalled();
+  });
+
+  it('审批待处理时仅显示授权审批操作', async () => {
+    const approval = {
+      id: 91,
+      repairRequestId: REPAIR.id,
+      riskCategory: 'logical_change' as const,
+      policyVersion: 'repair-policy-v1',
+      status: 'pending' as const,
+      requestedBy: 5,
+      decidedBy: null,
+      decisionReason: null,
+      expiresAt: '2030-01-01T01:00:00Z',
+      createdAt: '2026-08-26T00:02:00Z',
+      updatedAt: '2026-08-26T00:02:00Z',
+    };
+    const page = fixture.componentInstance;
+    page.repairs.set([{ ...REPAIR, approval }]);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).not.toContain('批准');
+    permissionState.set(new Set(['devrail:repair:approve']));
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('批准');
+    expect(fixture.nativeElement.textContent).toContain('拒绝');
+  });
+
+  it('熔断和终态请求不显示可继续执行操作', async () => {
+    const page = fixture.componentInstance;
+    page.repairs.set([
+      { ...REPAIR, status: 'handed_off', handoffReason: 'hook_failure_circuit_open' },
+      { ...REPAIR, id: 42, status: 'succeeded', handoffReason: null },
+    ]);
+    permissionState.set(
+      new Set(['devrail:repair:create', 'devrail:repair:cancel', 'devrail:repair:handoff']),
+    );
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).not.toContain('请求低风险修复');
+    expect(fixture.nativeElement.textContent).not.toContain('取消请求');
+    expect(fixture.nativeElement.textContent).not.toContain('转人工处理');
+  });
+
+  it('修复空态使用中文，并阻止重复创建', async () => {
+    permissionState.set(new Set(['devrail:repair:create']));
+    const page = fixture.componentInstance;
+    page.task.set({ ...TASK, status: 'failed' });
+    page.runs.set([{ ...SOURCE_RUN, status: 'failed' }]);
+    page.repairs.set([]);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('暂无受控修复记录');
+    const first = page.createRepair();
+    const second = page.createRepair();
+    await Promise.all([first, second]);
+    expect(apiStub.createRepair).toHaveBeenCalledTimes(1);
+  });
+
+  it('修复创建失败时显示中文错误', async () => {
+    permissionState.set(new Set(['devrail:repair:create']));
+    const page = fixture.componentInstance;
+    page.task.set({ ...TASK, status: 'failed' });
+    page.runs.set([{ ...SOURCE_RUN, status: 'failed' }]);
+    (apiStub.createRepair as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('network'));
+    const snackOpen = vi.spyOn((page as unknown as { snack: MatSnackBar }).snack, 'open');
+    expect(page.canCreateRepair()).toBe(true);
+    await page.createRepair();
+    expect(apiStub.createRepair).toHaveBeenCalledTimes(1);
+    expect(snackOpen).toHaveBeenCalledWith('提交受控修复请求失败', '关闭', {
+      duration: 5000,
+    });
+  });
+
+  it('过期或撤回的审批显示状态且不提供审批操作', async () => {
+    permissionState.set(new Set(['devrail:repair:approve']));
+    const page = fixture.componentInstance;
+    page.repairs.set([
+      {
+        ...REPAIR,
+        approval: {
+          id: 92,
+          repairRequestId: REPAIR.id,
+          riskCategory: 'logical_change',
+          policyVersion: 'repair-policy-v1',
+          status: 'pending',
+          requestedBy: 5,
+          decidedBy: null,
+          decisionReason: null,
+          expiresAt: '2020-01-01T00:00:00Z',
+          createdAt: '2020-01-01T00:00:00Z',
+          updatedAt: '2020-01-01T00:00:00Z',
+        },
+      },
+      {
+        ...REPAIR,
+        id: 42,
+        approval: {
+          id: 93,
+          repairRequestId: 42,
+          riskCategory: 'logical_change',
+          policyVersion: 'repair-policy-v1',
+          status: 'withdrawn',
+          requestedBy: 5,
+          decidedBy: 5,
+          decisionReason: null,
+          expiresAt: '2030-01-01T00:00:00Z',
+          createdAt: '2026-08-26T00:00:00Z',
+          updatedAt: '2026-08-26T00:01:00Z',
+        },
+      },
+    ]);
+    await fixture.whenStable();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('审批：已过期');
+    expect(text).toContain('审批：已撤回');
+    expect(text).not.toContain('批准');
+    expect(text).not.toContain('拒绝');
+  });
+
+  it('仅将未过期审批提交给批准或拒绝接口', async () => {
+    permissionState.set(new Set(['devrail:repair:approve']));
+    const approval = {
+      id: 94,
+      repairRequestId: REPAIR.id,
+      riskCategory: 'logical_change' as const,
+      policyVersion: 'repair-policy-v1',
+      status: 'pending' as const,
+      requestedBy: 5,
+      decidedBy: null,
+      decisionReason: null,
+      expiresAt: '2030-01-01T00:00:00Z',
+      createdAt: '2026-08-26T00:00:00Z',
+      updatedAt: '2026-08-26T00:00:00Z',
+    };
+    const page = fixture.componentInstance;
+    await page.decideRepairApproval({ ...REPAIR, approval }, true);
+    await page.decideRepairApproval({ ...REPAIR, approval }, false);
+    expect(apiStub.approveRepair).toHaveBeenCalledWith(approval.id, {});
+    expect(apiStub.rejectRepair).toHaveBeenCalledWith(approval.id, {
+      reason: '人工审核未通过',
+    });
+  });
+
+  it('仅允许申请人撤回审批，并支持已交接请求的人工重试', async () => {
+    const page = fixture.componentInstance;
+    const approval = {
+      id: 95,
+      repairRequestId: REPAIR.id,
+      riskCategory: 'logical_change' as const,
+      policyVersion: 'repair-policy-v1',
+      status: 'pending' as const,
+      requestedBy: 5,
+      decidedBy: null,
+      decisionReason: null,
+      expiresAt: '2030-01-01T01:00:00Z',
+      createdAt: '2026-08-26T00:02:00Z',
+      updatedAt: '2026-08-26T00:02:00Z',
+    };
+    page.repairs.set([{ ...REPAIR, status: 'handed_off', approval }]);
+    permissionState.set(new Set(['devrail:repair:approve', 'devrail:repair:handoff']));
+    await page.withdrawRepairApproval(approval);
+    expect(apiStub.withdrawRepairApproval).toHaveBeenCalledWith(95, {
+      reason: '申请人主动撤回审批',
+    });
+    await page.retryRepair({ ...REPAIR, status: 'handed_off' });
+    expect(apiStub.retryRepair).toHaveBeenCalledWith(
+      REPAIR.id,
+      expect.objectContaining({ riskCategory: 'low_risk' }),
+    );
+  });
+
+  it('未授权和人工交接状态不触发 repair 创建或管理请求', async () => {
+    const page = fixture.componentInstance;
+    page.task.set({ ...TASK, status: 'repair_handoff' });
+    page.runs.set([{ ...SOURCE_RUN, status: 'failed' }]);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).not.toContain('请求低风险修复');
+    await page.createRepair();
+    await page.cancelRepair(REPAIR);
+    await page.handoffRepair(REPAIR);
+    expect(apiStub.createRepair).not.toHaveBeenCalled();
+    expect(apiStub.cancelRepair).not.toHaveBeenCalled();
+    expect(apiStub.handoffRepair).not.toHaveBeenCalled();
+  });
+
+  it('展示人工交接原因并按权限执行取消和交接', async () => {
+    permissionState.set(new Set(['devrail:repair:cancel', 'devrail:repair:handoff']));
+    const page = fixture.componentInstance;
+    const handedOff = { ...REPAIR, handoffReason: 'hook_failure_circuit_open' };
+    page.repairs.set([handedOff]);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('交接原因：Hook 失败熔断已打开');
+    await page.cancelRepair(REPAIR);
+    expect(apiStub.cancelRepair).toHaveBeenCalledWith(REPAIR.id);
+    await page.handoffRepair(REPAIR);
+    expect(apiStub.handoffRepair).toHaveBeenCalledWith(
+      REPAIR.id,
+      expect.objectContaining({ reasonCode: 'manual_handoff' }),
+    );
+  });
+
+  it('终态 repair 和过期审批不会触发写操作', async () => {
+    permissionState.set(
+      new Set(['devrail:repair:cancel', 'devrail:repair:handoff', 'devrail:repair:approve']),
+    );
+    const page = fixture.componentInstance;
+    const expiredApproval = {
+      id: 92,
+      repairRequestId: REPAIR.id,
+      riskCategory: 'logical_change' as const,
+      policyVersion: 'repair-policy-v1',
+      status: 'pending' as const,
+      requestedBy: 5,
+      decidedBy: null,
+      decisionReason: null,
+      expiresAt: '2020-01-01T00:00:00Z',
+      createdAt: '2020-01-01T00:00:00Z',
+      updatedAt: '2020-01-01T00:00:00Z',
+    };
+    const terminal = { ...REPAIR, status: 'succeeded' as const, approval: expiredApproval };
+    await page.cancelRepair(terminal);
+    await page.handoffRepair(terminal);
+    await page.decideRepairApproval(terminal, true);
+    expect(apiStub.cancelRepair).not.toHaveBeenCalled();
+    expect(apiStub.handoffRepair).not.toHaveBeenCalled();
+    expect(apiStub.approveRepair).not.toHaveBeenCalled();
   });
 
   it('提交追加执行后恢复输入框焦点', async () => {

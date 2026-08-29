@@ -19,6 +19,11 @@ export const DEVRAIL_PERMISSIONS = {
   continuationRead: 'devrail:continuation:read',
   continuationCreate: 'devrail:continuation:create',
   continuationCancel: 'devrail:continuation:cancel',
+  repairRead: 'devrail:repair:read',
+  repairCreate: 'devrail:repair:create',
+  repairCancel: 'devrail:repair:cancel',
+  repairApprove: 'devrail:repair:approve',
+  repairHandoff: 'devrail:repair:handoff',
 } as const;
 
 export const DEVRAIL_ROUTE_ACCESS = [DEVRAIL_PERMISSIONS.projectRead] as const;

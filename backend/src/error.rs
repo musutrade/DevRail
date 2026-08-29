@@ -19,6 +19,8 @@ pub enum ApiError {
     Conflict(String),
     #[error("{0}")]
     Validation(String),
+    #[error("服务暂时不可用，请稍后重试")]
+    Unavailable,
     #[error("CSRF 校验失败，请刷新页面后重试")]
     CsrfInvalid,
     #[error("登录尝试过于频繁，请稍后再试")]
@@ -48,6 +50,10 @@ impl ApiError {
         Self::Validation(message.into())
     }
 
+    pub fn unavailable() -> Self {
+        Self::Unavailable
+    }
+
     pub fn csrf_invalid() -> Self {
         Self::CsrfInvalid
     }
@@ -69,6 +75,7 @@ impl IntoResponse for ApiError {
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Conflict(_) => StatusCode::CONFLICT,
             Self::Validation(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            Self::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
             Self::CsrfInvalid => StatusCode::FORBIDDEN,
             Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -79,6 +86,7 @@ impl IntoResponse for ApiError {
             Self::NotFound(_) => "NOT_FOUND",
             Self::Conflict(_) => "CONFLICT",
             Self::Validation(_) => "VALIDATION_ERROR",
+            Self::Unavailable => "SERVICE_UNAVAILABLE",
             Self::CsrfInvalid => "CSRF_INVALID",
             Self::RateLimited { .. } => "RATE_LIMITED",
             Self::Internal(_) => "INTERNAL_ERROR",

@@ -91,7 +91,7 @@ async fn send(
     let subscription = SubscriptionInfo::new(endpoint, keys.p256dh, keys.auth);
     let mut message = WebPushMessageBuilder::new(&subscription);
     let payload = serde_json::to_vec(
-        &json!({"notificationId":row.notification_id,"title":row.title,"summary":row.summary,"deepLink":row.deep_link}),
+        &json!({"notificationId":row.notification_id,"eventType":row.event_type,"summary":row.summary,"deepLink":row.deep_link}),
     )?;
     message.set_payload(ContentEncoding::Aes128Gcm, &payload);
     let mut vapid = VapidSignatureBuilder::from_base64(private_key, &subscription)?;

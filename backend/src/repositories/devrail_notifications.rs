@@ -23,8 +23,25 @@ pub(crate) async fn create(
     c: &mut PgConnection,
     n: &NewNotification<'_>,
 ) -> Result<(), sqlx::Error> {
+    create_or_get(c, n).await.map(|_| ())
+}
+
+pub(crate) async fn create_or_get(
+    c: &mut PgConnection,
+    n: &NewNotification<'_>,
+) -> Result<i64, sqlx::Error> {
     sqlx::query("INSERT INTO devrail_notifications (organization_id, department_id, recipient_user_id, event_type, level, title, summary, resource_type, resource_id, deep_link, source_key) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (recipient_user_id, source_key) DO NOTHING")
-        .bind(n.organization_id).bind(n.department_id).bind(n.recipient_user_id).bind(n.event_type).bind(n.level).bind(n.title).bind(n.summary).bind(n.resource_type).bind(n.resource_id).bind(n.deep_link).bind(n.source_key).execute(c).await.map(|_| ())
+        .bind(n.organization_id).bind(n.department_id).bind(n.recipient_user_id).bind(n.event_type).bind(n.level).bind(n.title).bind(n.summary).bind(n.resource_type).bind(n.resource_id).bind(n.deep_link).bind(n.source_key).execute(&mut *c)
+        .await?;
+    sqlx::query_scalar(
+        "SELECT id FROM devrail_notifications
+         WHERE organization_id=$1 AND recipient_user_id=$2 AND source_key=$3",
+    )
+    .bind(n.organization_id)
+    .bind(n.recipient_user_id)
+    .bind(n.source_key)
+    .fetch_one(&mut *c)
+    .await
 }
 pub(crate) async fn outbox(
     c: &mut PgConnection,

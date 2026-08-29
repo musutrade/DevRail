@@ -4,9 +4,9 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档版本 | 1.1.1 |
+| 文档版本 | 1.1.2 |
 | 文档状态 | 专项需求基线，分阶段实现与验收 |
-| 编写日期 | 2026-08-27 |
+| 编写日期 | 2026-08-28 |
 | 适用产品 | DevRail（基于 Codex harness 的开发工作台） |
 | 上位需求 | [DevRail 产品与技术需求](requirements.md) |
 | 当前状态 | [DevRail 实现状态](devrail-implementation-status.md) |
@@ -19,7 +19,7 @@
 
 ### 1.1 背景
 
-DevRail 已经具备项目、仓库、环境、任务、Harness Supervisor、run/thread/turn/event、审批、通知、质量门禁和外部代码审查等基础能力。`queued` 调度的 P0 可靠性与 TaskTracker/WORKFLOW、DAG/follow-up、任务级隔离工作区和 continuation turns 等 P1 基础已经实现；当前主要缺口是受控修复 run 和 MVP 自动化验收闭环。
+DevRail 已经具备项目、仓库、环境、任务、Harness Supervisor、run/thread/turn/event、审批、通知、质量门禁和外部代码审查等基础能力。`queued` 调度的 P0 可靠性与 TaskTracker/WORKFLOW、DAG/follow-up、任务级隔离工作区、continuation turns 和受控修复 run 工程实现已经完成；当前主要缺口是受控修复 run 的产品端到端验收和 MVP 自动化验收闭环。
 
 ### 1.2 目标
 
@@ -150,16 +150,21 @@ CI、供应链、CodeQL 与外部审查
 - 任务评论、代码审查、补丁导出、GitHub/GitLab PR/MR 状态和外部评论归一化基础能力已实现，resolved 状态不再固定为 `false`。
 - `arc-flow` scope、审计、lint、编译、测试、构建和供应链检查已接入 CI。
 - `TaskTracker` PostgreSQL adapter、严格 `WORKFLOW.md` loader、入队快照、run 身份校验、动态 reload 和 last-known-good 已实现。
+- 相同脱敏 Hook fingerprint 的连续失败现已受 5 次熔断阈值约束；达到阈值后停止自动运行并请求人工介入，避免普通 retry 无限消耗执行额度。
 
 ### 4.2 本专项尚待补齐
 
-以下项目仍是后续路线，不属于本专项：
+受控修复 run 的请求、诊断、策略、审批、独立 child run、workspace、门禁重跑、任务/run 投影和人工交接代码闭环已实现；当前仍缺少与产品验收等价的受控假 app-server/workspace/质量门禁端到端演练，因此不能仅凭专项测试或工程门禁将其标记为 MVP 已验收。
 
-- Workspace 生命周期 hooks、跨运行可复现环境和终端清理保证。
-- 结构化日志/指标/Trace、测试产物、Playwright 截图/视频和失败诊断上下文。
-- 质量门禁失败后的受控修复 run，以及通知和外部供应商回调的完整端到端演练。
+以下项目仍是验收缺口或后续路线：
 
-验收数量以 [DevRail 总需求第 16 节](requirements.md#16-mvp-完成定义definition-of-done) 当前版本为准。
+- 受控假 app-server/workspace/质量门禁套件，覆盖 repair 单次启动、retry/continuation/repair 分支、Hook 熔断、来源 cleanup 后重建和重复终态，并验证敏感数据不落盘。
+- 通知与外部供应商回调的完整端到端演练，以及 Android PWA 和符合条件 iOS PWA 的可复查验收记录。
+- 统一受控产物存储和浏览器失败录制（截图、视频、trace、控制台日志）及 Chrome DevTools MCP；该项属于 P2，不是当前 MVP 成功前置条件。
+
+任务级隔离 workspace、生命周期 hooks、跨运行重建、终态 cleanup、结构化运行事件和低基数指标已实现，不再列为本专项缺口。
+
+验收数量以 [DevRail 总需求第 16 节](requirements.md#16-mvp-完成定义definition-of-done) 当前版本为准。逐项状态和缺失证据记录在 [MVP 验收证据矩阵](verification/mvp-acceptance-2026-08-28.md)。
 
 ---
 
@@ -217,6 +222,8 @@ CI、供应链、CodeQL 与外部审查
 **SY-ORCH-006**：调度排序至少支持优先级、截止时间和创建时间；排序规则和饥饿防护必须可配置并有测试证据。
 
 **SY-ORCH-007**：任务状态、依赖、环境或策略发生变化后，Orchestrator 必须在下一轮 reconciliation 中终止不再符合条件的未启动 run，或将任务转为明确的等待/失败状态。
+
+**SY-ORCH-008**：相同 Hook fingerprint 连续失败达到 5 次时必须打开熔断，停止自动启动 Agent 并转人工；低于阈值的自动调度失败按策略重试，手工触发不得自动重试，成功或 fingerprint 变化必须重置计数。
 
 ### 5.4 重试、stall 与恢复（P0）
 
@@ -295,6 +302,26 @@ run 范围内使用。所有三项权限均在迁移中以幂等种子绑定，A
 | --- | --- | --- | --- |
 | `SY-RUNNER-004` | 已实现 | `20260907100000_add_continuation_turns.sql`、`backend/src/repositories/devrail_continuations.rs`、`backend/src/repositories/devrail_runs.rs`、`backend/src/workers/task_scheduler.rs`、`backend/src/workers/harness_supervisor.rs`；`ADR-0005` 固化同 thread 新 turn、新 child run、handoff 与取消边界 | `restart_reconciles_threadless_continuation_child_terminally`、`concurrent_child_creation_reuses_one_run_and_preserves_source_terminal`、`continuation_start_uses_same_thread_and_new_turn`、`stalled_and_disconnected_processes_recover_without_duplicate_runs`；Angular continuation Vitest 与 Playwright 桌面/移动验收 |
 | `SY-RUNNER-005` | 已实现 | `finish_run` 统一写入质量门禁、终态、handoff、TaskTracker 投影、审计和 outbox；客户端只读状态 | `dispatch_and_child_terminal_projection_are_atomic_and_idempotent`、重复终态/重启 PostgreSQL 测试、OpenAPI contract 与 secret scan |
+
+#### Hook 失败熔断证据矩阵（2026-08-28）
+
+| 需求 ID | 状态 | 代码/迁移 | 自动化与运行证据 |
+| --- | --- | --- | --- |
+| `SY-ORCH-008` | 已实现 | `20260908100000_add_hook_failure_circuit_breaker.sql`、`backend/src/repositories/devrail_runs.rs`、`backend/src/services/devrail_runs.rs`、`backend/src/workers/harness_supervisor.rs`、`ADR-0006` | `cargo flow verify --components backend`、相同 fingerprint 第 1 至第 5 次失败、fingerprint 变化/Hook 成功重置、手工触发不重试和重复终态幂等测试 |
+
+#### 受控修复 run 证据矩阵（2026-08-28）
+
+本矩阵记录 repair 的代码与自动化证据；“已实现”不代表已完成真实假 app-server、浏览器或生产运行验收。当前全量门禁记录见 [MVP 验收证据矩阵](verification/mvp-acceptance-2026-08-28.md)。
+
+| 需求 | 状态 | 代码、迁移与运行边界 | 自动化证据 |
+| --- | --- | --- | --- |
+| `HE-FIX-001` 诊断快照脱敏、限额、范围和不可变 | 已实现；端到端验收待补 | `devrail_repairs` Repository/Service、`20260909100000_add_controlled_repair_runs.sql` | `diagnosis_validation_rejects_sensitive_and_stale_inputs`、`diagnosis_validation_bounds_context_and_rejects_raw_fields`、`trusted_callback_rejects_forgery_stale_and_cross_scope_and_replays_idempotently` |
+| `HE-FIX-002` 策略绑定、独立 attempt 和 repair/ retry/continuation 谱系 | 已实现；端到端验收待补 | `models.rs`/`workflow.rs` repair policy、`devrail_runs::create_repair_run`、独立 `run_kind`/`repair_request_id`/start key | `repair_policy_defaults_are_closed_and_bounded`、`policy_decision_separates_auto_approval_and_forbidden_categories`、`repair_claim_child_creation_and_terminal_projection_are_idempotent` |
+| `HE-FIX-003` 风险分级、审批和安全边界 | 已实现；端到端验收待补 | repair 权限迁移、审批/拒绝/撤回 Handler 与 Service、Hook 熔断和人工交接 | `trusted_evidence_requires_system_actor`、`trusted_evidence_rejects_changeset_drift_and_sensitive_fields`、`repair_dispatch_keeps_capacity_transient_but_hands_off_policy_rejections` |
+| `HE-FIX-004` 门禁重跑、父子关联和上限后人工交接 | 已实现；端到端验收待补 | `begin_gate_reruns_for_child_run`/`finalize_gate_reruns`、任务/run 终态投影、transactional outbox | `repair_claim_child_creation_and_terminal_projection_are_idempotent`、`repair_lifecycle_outbox_contains_only_safe_fields_and_is_idempotent`、`repair_transaction_rolls_back_when_outbox_write_fails` |
+| OpenSpec：Repair dispatch is bounded and restart-safe | 已实现；受控 Supervisor 演练待补 | Scheduler repair phases、claim 过期恢复、workspace 物化、唯一 child run 和稳定 `repair:<request_id>:start` | `dispatch_prioritizes_continuations_before_queued_tasks`、repair claim/child/recovery 测试及 `cargo flow verify --all` |
+| OpenSpec：Repair terminal handling revalidates without rewriting source history | 已实现；质量门禁端到端演练待补 | Supervisor repair 终态分支、受影响 gate rerun 幂等键、来源 run 不可变投影 | `repair_claim_child_creation_and_terminal_projection_are_idempotent`、重复终态/outbox/门禁重跑 PostgreSQL 测试 |
+| OpenSpec：Repair runs use isolated evidence-backed workspaces | 已实现；浏览器/假 workspace 验收待补 | `repair_workspace_key`、`materialize_repair_from_source`、cleanup reconciliation | `repair_workspace_keys_are_isolated_from_other_run_kinds`、`repair_materialization_rejects_path_reuse_and_cleanup_is_idempotent`、`handoff_rebuild_survives_source_cleanup_and_rejects_tampering` |
 
 ### 5.8 Reconciliation 与终态处理（P0）
 
@@ -479,7 +506,7 @@ run 范围内使用。所有三项权限均在迁移中以幂等种子绑定，A
 
 ### 12.4 P0 调度可靠性证据矩阵（2026-08-26）
 
-本矩阵只声明 `symphony-orchestrator-reconciliation` change 覆盖的 DevRail DB tracker 与 Harness 调度能力。DAG/follow-up 证据见第 5.5.1 节，per-task workspace 证据见第 5.6 节；外部 tracker 仍不因本矩阵视为完成。
+本矩阵只声明已归档的 `2026-08-26-symphony-orchestrator-reconciliation` change 覆盖的 DevRail DB tracker 与 Harness 调度能力。DAG/follow-up 证据见第 5.5.1 节，per-task workspace 证据见第 5.6 节；外部 tracker 仍不因本矩阵视为完成。
 
 | 需求 ID | 状态 | 代码/迁移 | 自动化与运行证据 |
 | --- | --- | --- | --- |
@@ -524,9 +551,9 @@ cargo flow verify --all
 
 1. TaskTracker 抽象及 DevRail DB tracker（已完成）。
 2. `WORKFLOW.md`、严格模板、动态 reload 和 workflow 快照（已完成）。
-3. 确定性 workspace、hooks 和 continuation turns（代码与专项测试已完成）；下一步完成受控修复 run。
+3. 确定性 workspace、hooks、continuation turns 和受控修复 run（代码与专项测试已完成）；下一步完成受控修复 run 的假 app-server/workspace/质量门禁/Playwright 端到端验收。
 4. 完善指标、trace、成本预算和前端调度/诊断视图。
-5. 质量门禁失败生成受控修复 run，并在达到上限后转人工。
+5. 质量门禁失败生成受控修复 run，并在达到上限后转人工（工程闭环已接通，仍需产品运行验收）。
 
 ### P2：Harness 体验增强
 

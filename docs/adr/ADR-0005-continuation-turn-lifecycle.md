@@ -3,9 +3,9 @@
 - 状态：已接受
 - 日期：2026-08-27
 - 决策人：DevRail 项目维护者
-- 关联提案：[continuation-turns proposal](../../openspec/changes/continuation-turns/proposal.md)
-- 行为规范：[continuation-turns](../../openspec/changes/continuation-turns/specs/continuation-turns/spec.md)、[symphony-orchestrator](../../openspec/changes/continuation-turns/specs/symphony-orchestrator/spec.md)、[task-tracker](../../openspec/changes/continuation-turns/specs/task-tracker/spec.md)、[task-workspace-manager](../../openspec/changes/continuation-turns/specs/task-workspace-manager/spec.md)
-- 迁移计划：[continuation-turns design](../../openspec/changes/continuation-turns/design.md#migration-plan)
+- 关联提案：[continuation-turns proposal](../../openspec/changes/archive/2026-08-28-continuation-turns/proposal.md)
+- 行为规范：[continuation-turns](../../openspec/specs/continuation-turns/spec.md)、[symphony-orchestrator](../../openspec/specs/symphony-orchestrator/spec.md)、[task-tracker](../../openspec/specs/task-tracker/spec.md)、[task-workspace-manager](../../openspec/specs/task-workspace-manager/spec.md)
+- 迁移计划：[continuation-turns design](../../openspec/changes/archive/2026-08-28-continuation-turns/design.md#migration-plan)
 
 ## 背景
 
@@ -47,7 +47,7 @@ DevRail 已有 run retry、同 attempt 传输恢复、受控 follow-up task 和�
 
 ## 迁移与回滚
 
-落地迁移为 additive migration `20260907100000_add_continuation_turns.sql`：先增加可兼容读取的新表、状态和可空谱系字段，再部署只写 handoff 且策略关闭的版本，之后按组织或环境逐步启用用户、gate 和 review 触发。完整顺序与验证要求以 [OpenSpec 迁移计划](../../openspec/changes/continuation-turns/design.md#migration-plan) 为准。
+落地迁移为 additive migration `20260907100000_add_continuation_turns.sql`：先增加可兼容读取的新表、状态和可空谱系字段，再部署只写 handoff 且策略关闭的版本，之后按组织或环境逐步启用用户、gate 和 review 触发。完整顺序与验证要求以 [OpenSpec 迁移计划](../../openspec/changes/archive/2026-08-28-continuation-turns/design.md#migration-plan) 为准。
 
 回滚时先关闭新请求和 claim，让已派发 child run 走既有终态处理，取消未派发请求并恢复请求前任务投影。保留 additive schema、handoff、审计和 outbox 事实，不执行破坏性 down migration。
 
@@ -61,4 +61,4 @@ DevRail 已有 run retry、同 attempt 传输恢复、受控 follow-up task 和�
 
 ## 关联实施
 
-本 ADR 由 [continuation-turns OpenSpec change](../../openspec/changes/continuation-turns/tasks.md) 跟踪。迁移、Repository、Service、Handler、Scheduler、Supervisor、Workspace Manager、OpenAPI、Angular 和测试证据只有在对应任务通过后才视为已实现。
+本 ADR 由已归档的 [continuation-turns OpenSpec change](../../openspec/changes/archive/2026-08-28-continuation-turns/tasks.md) 跟踪。迁移、Repository、Service、Handler、Scheduler、Supervisor、Workspace Manager、OpenAPI、Angular 和测试证据只有在对应任务通过后才视为已实现。

@@ -5,7 +5,7 @@ use crate::models::{DevRailRunEventRow, DevRailRunRow};
 use serde_json::Value;
 use sqlx::{AssertSqlSafe, PgConnection, PgPool};
 
-const RUN_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, attempt, task_revision, workflow_source, workflow_version, workflow_digest, workflow_snapshot, actor_type, last_heartbeat_at, last_event_at, retry_reason, parent_run_id, parent_turn_id, run_kind, root_run_id, continuation_sequence, continuation_request_id, harness_start_key, harness_start_claim_owner, harness_start_claim_token, harness_start_claim_expires_at, harness_started_token, cleanup_status, branch_name, branch_expires_at, status, thread_id, turn_id, harness_version, model_id, cwd, policy, startup_args_summary, exit_reason, exit_code, stderr_summary, trace_id, recovery_suggestion, recovery_attempts, started_at, completed_at, created_at, updated_at";
+const RUN_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, attempt, task_revision, workflow_source, workflow_version, workflow_digest, workflow_snapshot, actor_type, last_heartbeat_at, last_event_at, retry_reason, parent_run_id, parent_turn_id, run_kind, root_run_id, continuation_sequence, continuation_request_id, repair_request_id, repair_sequence, harness_start_key, harness_start_claim_owner, harness_start_claim_token, harness_start_claim_expires_at, harness_started_token, cleanup_status, branch_name, branch_expires_at, status, thread_id, turn_id, harness_version, model_id, cwd, policy, startup_args_summary, exit_reason, exit_code, stderr_summary, trace_id, recovery_suggestion, recovery_attempts, started_at, completed_at, created_at, updated_at";
 const EVENT_COLUMNS: &str = "id, organization_id, department_id, owner_user_id, run_id, cursor, event_type, source_event_id, idempotency_key, payload, summary, occurred_at";
 const MAX_TRANSPORT_RECOVERY_ATTEMPTS: i32 = 2;
 pub(crate) const MAX_HOOK_FAILURES: i32 = 5;
@@ -62,6 +62,28 @@ pub struct NewContinuationRun<'a> {
     pub thread_id: &'a str,
     pub continuation_request_id: i64,
     pub continuation_sequence: i16,
+    pub harness_start_key: &'a str,
+    pub cwd: &'a str,
+    pub policy: &'a Value,
+    pub startup_args: &'a Value,
+    pub model_id: Option<&'a str>,
+    pub department_id: Option<i64>,
+}
+
+pub struct NewRepairRun<'a> {
+    pub actor: &'a ActorContext,
+    pub task_id: i64,
+    pub snapshot_id: i64,
+    pub idempotency_key: &'a str,
+    pub task_revision: i64,
+    pub workflow_source: &'a str,
+    pub workflow_version: &'a str,
+    pub workflow_digest: &'a str,
+    pub workflow_snapshot: &'a Value,
+    pub parent_run_id: i64,
+    pub parent_turn_id: Option<&'a str>,
+    pub repair_request_id: i64,
+    pub repair_sequence: i16,
     pub harness_start_key: &'a str,
     pub cwd: &'a str,
     pub policy: &'a Value,
@@ -214,6 +236,68 @@ pub async fn create_continuation_run(
     )))
     .bind(input.actor.organization_id)
     .bind(input.continuation_request_id)
+    .fetch_optional(&mut *c)
+    .await
+}
+
+pub async fn create_repair_run(
+    c: &mut PgConnection,
+    input: &NewRepairRun<'_>,
+) -> Result<Option<DevRailRunRow>, sqlx::Error> {
+    let sql = format!(
+        "INSERT INTO devrail_runs (organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, attempt, task_revision, workflow_source, workflow_version, workflow_digest, workflow_snapshot, actor_type, parent_run_id, parent_turn_id, run_kind, root_run_id, repair_request_id, repair_sequence, harness_start_key, status, cwd, policy, startup_args_summary, model_id)
+         SELECT $1,$2,$3,$4,$5,$6,
+                COALESCE((SELECT MAX(attempt)+1 FROM devrail_runs WHERE task_id=$4 AND organization_id=$1),1),
+                $7,$8,$9,$10,$11,'system',$12,$13,'repair',
+                COALESCE(source.root_run_id,source.id),$14,$15,$16,'starting',$17,$18,$19,$20
+         FROM devrail_runs source
+         JOIN devrail_tasks task ON task.id=source.task_id AND task.organization_id=source.organization_id
+         JOIN devrail_repair_requests request
+           ON request.id=$14 AND request.organization_id=$1
+          AND request.task_id=task.id AND request.source_run_id=source.id
+          AND request.repair_sequence=$15
+         WHERE source.id=$12 AND source.organization_id=$1 AND source.task_id=$4
+           AND source.status='failed' AND task.revision=$7
+           AND task.status IN ('repair_pending','repair_running')
+           AND request.status IN ('claimed','dispatched','running')
+           AND NOT EXISTS (
+             SELECT 1 FROM devrail_runs active
+             WHERE active.task_id=$4 AND active.organization_id=$1
+               AND active.status IN ('starting','active','awaiting_approval')
+           )
+         ON CONFLICT DO NOTHING RETURNING {RUN_COLUMNS}"
+    );
+    let inserted = sqlx::query_as::<_, DevRailRunRow>(AssertSqlSafe(sql))
+        .bind(input.actor.organization_id)
+        .bind(input.department_id)
+        .bind(input.actor.user_id)
+        .bind(input.task_id)
+        .bind(input.snapshot_id)
+        .bind(input.idempotency_key)
+        .bind(input.task_revision)
+        .bind(input.workflow_source)
+        .bind(input.workflow_version)
+        .bind(input.workflow_digest)
+        .bind(input.workflow_snapshot)
+        .bind(input.parent_run_id)
+        .bind(input.parent_turn_id)
+        .bind(input.repair_request_id)
+        .bind(input.repair_sequence)
+        .bind(input.harness_start_key)
+        .bind(input.cwd)
+        .bind(input.policy)
+        .bind(input.startup_args)
+        .bind(input.model_id)
+        .fetch_optional(&mut *c)
+        .await?;
+    if inserted.is_some() {
+        return Ok(inserted);
+    }
+    sqlx::query_as::<_, DevRailRunRow>(AssertSqlSafe(format!(
+        "SELECT {RUN_COLUMNS} FROM devrail_runs WHERE organization_id=$1 AND repair_request_id=$2 FOR UPDATE"
+    )))
+    .bind(input.actor.organization_id)
+    .bind(input.repair_request_id)
     .fetch_optional(&mut *c)
     .await
 }
@@ -883,6 +967,67 @@ pub(crate) async fn append_event(
         .bind(input.summary)
         .fetch_one(c)
         .await
+}
+
+pub(crate) async fn append_idempotent_callback_event(
+    c: &mut PgConnection,
+    input: &NewRunEvent<'_>,
+) -> Result<(DevRailRunEventRow, bool), sqlx::Error> {
+    let Some(source_event_id) = input.source_event_id else {
+        return Err(sqlx::Error::Protocol(
+            "repair 回调事件缺少来源事件 ID".to_string(),
+        ));
+    };
+    sqlx::query("SELECT id FROM devrail_runs WHERE id=$1 FOR UPDATE")
+        .bind(input.run_id)
+        .execute(&mut *c)
+        .await?;
+    sqlx::query("UPDATE devrail_runs SET last_event_at=now(), last_heartbeat_at=now(), updated_at=now() WHERE id=$1 AND status IN ('starting','active','awaiting_approval')")
+        .bind(input.run_id)
+        .execute(&mut *c)
+        .await?;
+    let insert_sql = format!(
+        "INSERT INTO devrail_run_events (organization_id, department_id, owner_user_id, run_id, cursor, event_type, source_event_id, idempotency_key, payload, summary) VALUES ($1,$2,$3,$4,COALESCE((SELECT max(cursor)+1 FROM devrail_run_events WHERE run_id=$4),1),$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING RETURNING {EVENT_COLUMNS}"
+    );
+    if let Some(event) = sqlx::query_as::<_, DevRailRunEventRow>(AssertSqlSafe(insert_sql))
+        .bind(input.organization_id)
+        .bind(input.department_id)
+        .bind(input.owner_user_id)
+        .bind(input.run_id)
+        .bind(input.event_type)
+        .bind(Some(source_event_id))
+        .bind(input.idempotency_key)
+        .bind(input.payload)
+        .bind(input.summary)
+        .fetch_optional(&mut *c)
+        .await?
+    {
+        return Ok((event, true));
+    }
+    let existing = sqlx::query_as::<_, DevRailRunEventRow>(AssertSqlSafe(format!(
+        "SELECT {EVENT_COLUMNS} FROM devrail_run_events WHERE (organization_id=$1 AND source_event_id=$2 AND event_type=$3) OR (run_id=$4 AND idempotency_key=$5) ORDER BY CASE WHEN source_event_id=$2 THEN 0 ELSE 1 END, id LIMIT 1 FOR UPDATE"
+    )))
+    .bind(input.organization_id)
+    .bind(source_event_id)
+    .bind(input.event_type)
+    .bind(input.run_id)
+    .bind(input.idempotency_key)
+    .fetch_optional(&mut *c)
+    .await?
+    .ok_or_else(|| sqlx::Error::Protocol("repair 回调事件冲突但原事件不可读".to_string()))?;
+    if existing.organization_id != input.organization_id
+        || existing.run_id != input.run_id
+        || existing.event_type != input.event_type
+        || existing.source_event_id.as_deref() != Some(source_event_id)
+        || existing.idempotency_key != input.idempotency_key
+        || existing.payload != *input.payload
+        || existing.summary.as_deref() != input.summary
+    {
+        return Err(sqlx::Error::Protocol(
+            "repair 回调事件 payload 或来源发生漂移".to_string(),
+        ));
+    }
+    Ok((existing, false))
 }
 
 pub async fn list_events(

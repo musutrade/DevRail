@@ -142,6 +142,10 @@ async fn run(config: AppConfig, metadata: TelemetryMetadata) -> anyhow::Result<(
         state.supervisor.clone(),
     );
     arc_admin_backend::workers::branch_cleanup::spawn(state.pool.clone());
+    arc_admin_backend::workers::artifact_cleanup::spawn(
+        state.pool.clone(),
+        PathBuf::from(&config.run_workspace_root),
+    );
     let shutdown = CancellationToken::new();
     let scheduler = arc_admin_backend::workers::task_scheduler::spawn(
         state.pool.clone(),
