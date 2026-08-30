@@ -33,6 +33,9 @@
 | `TMPDIR=/tmp ARC_FLOW_BACKEND_TEST_THREADS=1 cargo flow step backend.tests`（重复轮） | 通过 | 471.34 秒 | 156 个结果；受控 PostgreSQL 服务，`TEST_SUMMARY: PASS`。 |
 | `TMPDIR=/tmp ARC_FLOW_BACKEND_TEST_THREADS=2 cargo flow step backend.tests`（重复轮） | 通过 | 186.47 秒 | 156 个结果；库/API/schema 分段均通过，`TEST_SUMMARY: PASS`。 |
 | `TMPDIR=/tmp ARC_FLOW_BACKEND_TEST_THREADS=4 cargo flow step backend.tests`（重复轮） | 通过 | 175.86 秒 | 156 个结果；默认并发上限第二次通过，`TEST_SUMMARY: PASS`。 |
+| 2026-08-30 `TMPDIR=/tmp ARC_FLOW_BACKEND_TEST_THREADS=1 cargo flow step backend.tests` | 通过 | 302.18 秒 | 157 个结果；迁移锁修复后的串行基准，`TEST_SUMMARY: PASS`。 |
+| 2026-08-30 `TMPDIR=/tmp ARC_FLOW_BACKEND_TEST_THREADS=2 cargo flow step backend.tests` | 通过 | 191.58 秒 | 157 个结果；schema 迁移与测试均通过，`TEST_SUMMARY: PASS`。 |
+| 2026-08-30 `TMPDIR=/tmp cargo flow verify --all`（backend step） | 通过 | 195.29 秒 | 157 个结果；全量 backend/frontend/workflow 门禁最终 `TEST_SUMMARY: PASS`。 |
 
 共享迁移初始化减少了重复迁移检查，但不会消除 API 集成流中的真实 Argon2/MFA 成本。冷编译、依赖缓存和 API 流拆分需要分别衡量，不能把它们混为同一项收益。
 
@@ -63,7 +66,7 @@
 ## Schema fixture 验证
 
 - `backend/tests/db_schema.rs` 通过两个并发 `db::test_schema_pool()` fixture 验证唯一 schema、连接级 `search_path`、各自迁移和同名表数据互不可见。
-- fixture 清理先关闭业务连接池，再由管理连接池执行 `DROP SCHEMA ... CASCADE`；迁移或清理失败都会关闭已创建的连接并返回错误。
+- fixture 清理先关闭业务连接池，再由管理连接池执行 `DROP SCHEMA ... CASCADE`；迁移或显式清理失败都会关闭已创建的连接并保留错误上下文，异常丢弃时还会尝试异步兜底清理。
 - 2026-08-29 `TMPDIR=/tmp cargo flow step backend.tests`：156 个结果通过，包含 schema fixture 测试；测试服务结束后未发现残留 `devrail_test_*` schema。
 
 ## 2.3 并发验证
@@ -74,19 +77,27 @@
 
 ## 4.1 受控并发
 
-- `.arc-flow/flow.toml` 中 `backend.tests` 默认 `test_threads = 4`，可由 `ARC_FLOW_BACKEND_TEST_THREADS` 覆盖；arc-flow 在 `cargo test --` 后追加实际 `--test-threads` 参数。
-- 报告步骤标签、`DEVRAIL_TEST_THREADS` 和 `test_result.md` 都记录实际并发上限。2026-08-29 默认门禁以 4 线程通过，156 个结果、`TEST_SUMMARY: PASS`。
+- `.arc-flow/flow.toml` 中 `backend.tests` 默认 `test_threads = 4`，可由 `ARC_FLOW_BACKEND_TEST_THREADS` 覆盖；arc-flow 在 `cargo test --` 后插入实际 `--test-threads` 参数。自定义步骤缺少 Cargo `--` 分隔符会在配置加载阶段拒绝。
+- 报告步骤标签、`DEVRAIL_TEST_THREADS` 和 `test_result.md` 都记录实际并发上限。2026-08-29 默认门禁以 4 线程通过，156 个结果、`TEST_SUMMARY: PASS`；2026-08-30 修复复核报告 157 个结果。
 
 ## 4.2 跨进程执行器评估
 
 - 本机已安装 `cargo-nextest 0.9.143`，但本变更不启用它。nextest 会让多个测试二进制跨进程并发，而 `DATABASE_TEST_LOCK` 仅能保护单一 Rust 测试进程。
 - 仍有公共 schema 的迁移、seed、审计触发器和恢复状态测试；这些场景与另一个测试进程共享 `TEST_DATABASE_URL` 时没有跨进程锁或每 worker 独立数据库保证。启用 nextest 会绕开已验证的串行边界。
-- 因此不执行 nextest 的失败重试、JUnit 或结果解析切换验证，现有 Rust parser、`TEST_SUMMARY` 和 156 个结果计数保持不变。待公共 schema 测试迁移至 schema 或每 worker 独立数据库，并证明跨进程清理安全后，再单独提出 change 评估 nextest。
+- 因此不执行 nextest 的失败重试、JUnit 或结果解析切换验证；Rust parser 和 `TEST_SUMMARY` 语义保持不变，结果计数随新增线程报告单测变为 157。待公共 schema 测试迁移至 schema 或每 worker 独立数据库，并证明跨进程清理安全后，再单独提出 change 评估 nextest。
 
 ## 4.3 编排配置门禁
 
-- `test_threads` 仅接受 1-64，配置并发时必须声明 `test_isolation`；`shared` 隔离与大于 1 的线程数会被拒绝。arc-flow 单元测试覆盖超出上限、缺失隔离声明和共享状态并发三种故障注入。
+- `test_threads` 仅接受 1-64，配置并发时必须声明 `test_isolation` 和 Cargo `--` 分隔符；`shared` 隔离必须显式使用 `test_threads = 1`。arc-flow 单元测试覆盖超出上限、缺失隔离声明、缺失分隔符和共享状态未串行化四种故障注入。
 - 测试步骤仍由 arc-flow 顺序执行，报告文件和测试服务不会被无序并发访问。并发仅由单个 `cargo test -- --test-threads=N` 进程内部进行；`RUST_TEST_TIMEOUT` 继续限制该步骤最长 600 秒。
+
+## 4.4 评审修复复核（2026-08-30）
+
+- 首次以失败可见性运行 4 线程时，6 个 schema fixture 因 SQLx 数据库级 migration advisory lock 竞争触发 30 秒 statement timeout；该失败不再被静默跳过。随后对所有测试迁移调用增加进程内迁移锁，保留 schema 测试主体的并发执行。
+- 修复后 1、2、4 线程各完成一轮，均为 157 个结果通过；4 线程全量门禁同时通过 frontend、workflow 和生产构建检查。迁移初始化失败不再缓存，配置测试数据库时会直接让测试失败。
+- `TestSchemaPool` 的显式 cleanup 返回失败上下文，异常丢弃会调度 `DROP SCHEMA` 兜底任务；专门的外部删除故障测试输出 `TEST_SCHEMA_CLEANUP_FAILED` 并自身通过，确认诊断没有被吞掉。
+- arc-flow 现在拒绝缺少 Cargo `--` 分隔符的 `test_threads` 配置，`shared` 隔离必须显式使用 `test_threads = 1`；报告优先记录命令行实际线程数。Security workflow 的 `actions: write` 已收窄到 `container-images` job。
+- 4 线程全量复核首轮曾因受数据库/进程启动压力影响，repair E2E 的 10 秒轮询窗口提前触发；该测试现将 child 完成、gate finalize 轮询与 supervisor 生命周期统一为 30 秒。随后同一 `cargo flow verify --components backend` 入口以 157 个结果通过，`TEST_SUMMARY: PASS`。
 
 ## 5. CI 缓存与重复编译
 

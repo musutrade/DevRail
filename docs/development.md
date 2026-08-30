@@ -80,7 +80,9 @@ cargo flow verify --components backend
 
 后端测试会输出 `DEVRAIL_TEST_THREADS=<数量>`，表示本次测试进程使用的线程配置。通过 `cargo flow` 时该值与实际传给 Rust harness 的 `--test-threads` 一致；公共 schema 测试仍由 `DATABASE_TEST_LOCK` 保护。
 
-`cargo flow` 以顺序步骤写入同一报告目录和管理测试服务生命周期，不在步骤间做并发调度。`test_isolation = "shared"` 与大于 1 的 `test_threads` 会在配置加载时被拒绝；`test_threads` 必须介于 1 和 64，并且必须显式声明隔离模式。`RUST_TEST_TIMEOUT` 仍可覆盖后端测试的 600 秒上限。
+`cargo flow` 以顺序步骤写入同一报告目录和管理测试服务生命周期，不在步骤间做并发调度。`test_isolation = "shared"` 必须显式配置 `test_threads = 1`，大于 1 或省略线程数都会在配置加载时被拒绝；启用 `test_threads` 的 Cargo 步骤还必须提供 `--` 参数分隔符。`test_threads` 必须介于 1 和 64，并且必须显式声明隔离模式。`RUST_TEST_TIMEOUT` 仍可覆盖后端测试的 600 秒上限。
+
+配置了 `TEST_DATABASE_URL` 后，数据库连接、迁移和 schema fixture 初始化失败会让测试失败；只有未配置该变量时才允许按测试约定跳过数据库场景。schema fixture 正常路径仍应显式调用 `cleanup()`，测试异常退出时会尝试异步兜底清理并将清理错误写入日志。
 
 后端门禁保留 `cargo fmt`、`cargo clippy --all-targets --all-features` 和完整 `cargo test`。不再单独执行冗余的 `cargo check`：Clippy 已覆盖其类型检查范围，测试步骤仍会编译并执行测试目标。
 

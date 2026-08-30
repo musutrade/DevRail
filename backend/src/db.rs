@@ -13,13 +13,14 @@ static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 pub(crate) static DATABASE_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[cfg(test)]
-static TEST_MIGRATIONS_READY: tokio::sync::OnceCell<bool> = tokio::sync::OnceCell::const_new();
+static TEST_MIGRATIONS_READY: tokio::sync::OnceCell<()> = tokio::sync::OnceCell::const_new();
 
 #[cfg(test)]
 static TEST_MIGRATION_INITIALIZATIONS: std::sync::atomic::AtomicUsize =
     std::sync::atomic::AtomicUsize::new(0);
 
-static TEST_SCHEMA_BASE_READY: tokio::sync::OnceCell<bool> = tokio::sync::OnceCell::const_new();
+static TEST_SCHEMA_BASE_READY: tokio::sync::OnceCell<()> = tokio::sync::OnceCell::const_new();
+static TEST_MIGRATION_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 static TEST_THREADS_REPORTED: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
 #[cfg(test)]
 static TEST_SERIAL_FACTS_REPORTED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
@@ -231,33 +232,123 @@ pub async fn ping(pool: &PgPool) -> bool {
 /// A schema-isolated PostgreSQL fixture for tests that need concurrent database access.
 ///
 /// The management pool remains outside the test schema so cleanup can drop the schema after
-/// all schema connections have been returned. Call [`TestSchemaPool::cleanup`] in every test.
+/// all schema connections have been returned. Call [`TestSchemaPool::cleanup`] in every test;
+/// dropping an uncleaned fixture schedules a best-effort asynchronous cleanup.
 #[derive(Debug)]
 pub struct TestSchemaPool {
-    pool: PgPool,
-    management_pool: PgPool,
+    pool: Option<PgPool>,
+    management_pool: Option<PgPool>,
     schema: String,
+    cleanup_started: std::sync::atomic::AtomicBool,
+    cleanup_completed: std::sync::atomic::AtomicBool,
 }
 
 impl TestSchemaPool {
     pub fn pool(&self) -> &PgPool {
-        &self.pool
+        self.pool
+            .as_ref()
+            .expect("test schema pool is unavailable after cleanup")
     }
 
     pub fn schema(&self) -> &str {
         &self.schema
     }
 
-    pub async fn cleanup(self) -> anyhow::Result<()> {
-        let TestSchemaPool {
-            pool,
-            management_pool,
-            schema,
-        } = self;
+    pub async fn cleanup(mut self) -> anyhow::Result<()> {
+        self.cleanup_started
+            .store(true, std::sync::atomic::Ordering::Release);
+        let pool = self
+            .pool
+            .take()
+            .expect("test schema pool cleanup was already started");
+        let management_pool = self
+            .management_pool
+            .take()
+            .expect("test schema management pool cleanup was already started");
+        let schema = self.schema.clone();
         pool.close().await;
         let drop_result = drop_schema(&management_pool, &schema).await;
         management_pool.close().await;
-        drop_result
+        self.cleanup_completed
+            .store(true, std::sync::atomic::Ordering::Release);
+        match drop_result {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                eprintln!("TEST_SCHEMA_CLEANUP_FAILED schema={schema} error={error:#}");
+                Err(anyhow::anyhow!(
+                    "drop test schema {schema} during cleanup failed: {error:#}"
+                ))
+            }
+        }
+    }
+}
+
+impl Drop for TestSchemaPool {
+    fn drop(&mut self) {
+        if self
+            .cleanup_completed
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            return;
+        }
+        if self
+            .cleanup_started
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            eprintln!(
+                "TEST_SCHEMA_CLEANUP_INCOMPLETE schema={} cleanup did not finish",
+                self.schema
+            );
+            return;
+        }
+
+        let Some(pool) = self.pool.take() else {
+            eprintln!(
+                "TEST_SCHEMA_CLEANUP_MISSED schema={} test pool was unavailable",
+                self.schema
+            );
+            return;
+        };
+        let Some(management_pool) = self.management_pool.take() else {
+            eprintln!(
+                "TEST_SCHEMA_CLEANUP_FAILED schema={} management pool was unavailable",
+                self.schema
+            );
+            return;
+        };
+        let schema = self.schema.clone();
+        match tokio::runtime::Handle::try_current() {
+            Ok(handle) => {
+                handle.spawn(async move {
+                    pool.close().await;
+                    let drop_result = drop_schema(&management_pool, &schema).await;
+                    management_pool.close().await;
+                    if let Err(error) = drop_result {
+                        eprintln!("TEST_SCHEMA_CLEANUP_FAILED schema={schema} error={error:#}");
+                    }
+                });
+            }
+            Err(error) => {
+                eprintln!(
+                    "TEST_SCHEMA_CLEANUP_FAILED schema={} runtime unavailable: {error:#}",
+                    self.schema
+                );
+            }
+        }
+    }
+}
+
+fn panic_after_schema_cleanup(
+    stage: &str,
+    schema: &str,
+    setup_error: anyhow::Error,
+    cleanup_result: anyhow::Result<()>,
+) -> ! {
+    match cleanup_result {
+        Ok(()) => panic!("{stage} for schema {schema}: {setup_error:#}"),
+        Err(cleanup_error) => panic!(
+            "{stage} for schema {schema}: {setup_error:#}; cleanup failed: {cleanup_error:#}"
+        ),
     }
 }
 
@@ -272,26 +363,34 @@ pub async fn test_schema_pool() -> anyhow::Result<TestSchemaPool> {
         min_connections: 0,
         ..DatabasePoolConfig::default()
     };
-    let management_pool = init_pool_with_config(&database_url, &management_config).await?;
+    let management_pool = init_pool_with_config(&database_url, &management_config)
+        .await
+        .unwrap_or_else(|error| {
+            panic!("schema test database connection failed: {error:#}");
+        });
     let base_database_url = database_url.clone();
-    let base_ready = TEST_SCHEMA_BASE_READY
-        .get_or_init(|| async move {
-            let Ok(base_pool) = init_pool(&base_database_url).await else {
-                return false;
+    TEST_SCHEMA_BASE_READY
+        .get_or_try_init(|| async move {
+            let base_pool = init_pool(&base_database_url).await.map_err(|error| {
+                anyhow::anyhow!("base test database connection failed: {error:#}")
+            })?;
+            let migration_result = {
+                let _migration_guard = TEST_MIGRATION_LOCK.lock().await;
+                run_migrations(&base_pool).await
             };
-            let migrated = run_migrations(&base_pool).await.is_ok();
             base_pool.close().await;
-            migrated
+            migration_result
+                .map(|_| ())
+                .map_err(|error| anyhow::anyhow!("base test database migrations failed: {error:#}"))
         })
-        .await;
-    if !*base_ready {
-        management_pool.close().await;
-        anyhow::bail!("base test database migrations failed");
-    }
+        .await
+        .unwrap_or_else(|error| {
+            panic!("base test database migration initialization failed: {error:#}");
+        });
     let schema = format!("devrail_test_{}", Uuid::new_v4().simple());
     if let Err(error) = create_schema(&management_pool, &schema).await {
         management_pool.close().await;
-        return Err(error);
+        panic!("test schema creation failed for {schema}: {error:#}");
     }
 
     let pool = match init_pool_with_config_and_search_path(
@@ -303,22 +402,38 @@ pub async fn test_schema_pool() -> anyhow::Result<TestSchemaPool> {
     {
         Ok(pool) => pool,
         Err(error) => {
-            let _ = drop_schema(&management_pool, &schema).await;
+            let cleanup_result = drop_schema(&management_pool, &schema).await;
             management_pool.close().await;
-            return Err(error);
+            panic_after_schema_cleanup(
+                "test schema connection initialization failed",
+                &schema,
+                error,
+                cleanup_result,
+            );
         }
     };
-    if let Err(error) = run_migrations(&pool).await {
+    let migration_result = {
+        let _migration_guard = TEST_MIGRATION_LOCK.lock().await;
+        run_migrations(&pool).await
+    };
+    if let Err(error) = migration_result {
         pool.close().await;
-        let _ = drop_schema(&management_pool, &schema).await;
+        let cleanup_result = drop_schema(&management_pool, &schema).await;
         management_pool.close().await;
-        return Err(error);
+        panic_after_schema_cleanup(
+            "test schema migration initialization failed",
+            &schema,
+            error,
+            cleanup_result,
+        );
     }
 
     Ok(TestSchemaPool {
-        pool,
-        management_pool,
+        pool: Some(pool),
+        management_pool: Some(management_pool),
         schema,
+        cleanup_started: std::sync::atomic::AtomicBool::new(false),
+        cleanup_completed: std::sync::atomic::AtomicBool::new(false),
     })
 }
 
@@ -344,17 +459,44 @@ fn quote_identifier(identifier: &str) -> String {
 
 pub fn report_test_threads() {
     TEST_THREADS_REPORTED.get_or_init(|| {
-        let configured = std::env::var("DEVRAIL_TEST_THREADS")
-            .or_else(|_| std::env::var("RUST_TEST_THREADS"))
-            .ok()
-            .and_then(|value| value.parse::<usize>().ok())
-            .filter(|value| *value > 0);
+        let configured = parse_test_threads(std::env::args().skip(1)).or_else(|| {
+            std::env::var("DEVRAIL_TEST_THREADS")
+                .or_else(|_| std::env::var("RUST_TEST_THREADS"))
+                .ok()
+                .and_then(|value| value.parse::<usize>().ok())
+                .filter(|value| *value > 0)
+        });
         let threads = configured
             .or_else(|| std::thread::available_parallelism().ok().map(usize::from))
             .unwrap_or(1);
         eprintln!("DEVRAIL_TEST_THREADS={threads}");
         threads
     });
+}
+
+fn parse_test_threads<I>(args: I) -> Option<usize>
+where
+    I: IntoIterator<Item = String>,
+{
+    let mut args = args.into_iter();
+    while let Some(argument) = args.next() {
+        if let Some(value) = argument.strip_prefix("--test-threads=") {
+            if let Some(threads) = parse_positive_thread_count(value) {
+                return Some(threads);
+            }
+        } else if argument == "--test-threads" {
+            if let Some(value) = args.next() {
+                if let Some(threads) = parse_positive_thread_count(&value) {
+                    return Some(threads);
+                }
+            }
+        }
+    }
+    None
+}
+
+fn parse_positive_thread_count(value: &str) -> Option<usize> {
+    value.parse::<usize>().ok().filter(|threads| *threads > 0)
 }
 
 #[cfg(test)]
@@ -370,26 +512,35 @@ pub(crate) fn report_test_serial_database_facts() {
 pub(crate) async fn test_pool() -> Option<PgPool> {
     report_test_threads();
     report_test_serial_database_facts();
-    let migrations_ready = TEST_MIGRATIONS_READY
-        .get_or_init(|| async {
-            let Ok(database_url) = std::env::var("TEST_DATABASE_URL") else {
-                return false;
+    let database_url = match std::env::var("TEST_DATABASE_URL") {
+        Ok(database_url) => database_url,
+        Err(_) => return None,
+    };
+    let migration_database_url = database_url.clone();
+    TEST_MIGRATIONS_READY
+        .get_or_try_init(|| async move {
+            let pool = init_pool(&migration_database_url)
+                .await
+                .map_err(|error| anyhow::anyhow!("test database connection failed: {error:#}"))?;
+            let migration_result = {
+                let _migration_guard = TEST_MIGRATION_LOCK.lock().await;
+                run_migrations(&pool).await
             };
-            let Ok(pool) = init_pool(&database_url).await else {
-                return false;
-            };
-            let migrated = run_migrations(&pool).await.is_ok();
             pool.close().await;
-            TEST_MIGRATION_INITIALIZATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            migrated
+            migration_result
+                .map(|_| {
+                    TEST_MIGRATION_INITIALIZATIONS
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                })
+                .map_err(|error| anyhow::anyhow!("test database migrations failed: {error:#}"))
         })
-        .await;
-    if !*migrations_ready {
-        return None;
-    }
-
-    let database_url = std::env::var("TEST_DATABASE_URL").ok()?;
-    init_pool(&database_url).await.ok()
+        .await
+        .unwrap_or_else(|error| {
+            panic!("test database migration initialization failed: {error:#}");
+        });
+    Some(init_pool(&database_url).await.unwrap_or_else(|error| {
+        panic!("test database connection failed: {error:#}");
+    }))
 }
 
 #[cfg(test)]
@@ -405,6 +556,25 @@ mod tests {
         })
         .expect_err("minimum larger than maximum must fail");
         assert!(error.to_string().contains("DB_MIN_CONNECTIONS"));
+    }
+
+    #[test]
+    fn test_thread_parser_accepts_rust_harness_argument_forms() {
+        assert_eq!(
+            parse_test_threads(vec![
+                "--nocapture".to_string(),
+                "--test-threads=4".to_string(),
+            ]),
+            Some(4)
+        );
+        assert_eq!(
+            parse_test_threads(vec!["--test-threads".to_string(), "2".to_string(),]),
+            Some(2)
+        );
+        assert_eq!(
+            parse_test_threads(vec!["--test-threads".to_string(), "0".to_string(),]),
+            None
+        );
     }
 
     #[tokio::test]

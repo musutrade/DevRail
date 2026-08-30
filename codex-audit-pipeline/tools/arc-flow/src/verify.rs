@@ -274,8 +274,7 @@ fn configured_task(
         })
         .unwrap_or_else(|| step.label.clone());
     if let Some(test_threads) = step.test_threads {
-        args.push("--test-threads".into());
-        args.push(test_threads.to_string());
+        insert_test_threads(&mut args, test_threads);
     }
     let mut task = Task::new(label, &step.program, &cwd, log(project, &step.log))
         .args(args)
@@ -290,6 +289,17 @@ fn configured_task(
         task = task.env_remove(name);
     }
     task
+}
+
+fn insert_test_threads(args: &mut Vec<String>, test_threads: u64) {
+    let separator = args
+        .iter()
+        .position(|argument| argument == "--")
+        .expect("validated test step must contain a Cargo -- separator");
+    args.splice(
+        separator + 1..separator + 1,
+        ["--test-threads".to_string(), test_threads.to_string()],
+    );
 }
 
 fn execute(task: Task, parser: Option<&ParserConfig>, steps: &mut Vec<TaskResult>) -> Result<()> {
@@ -415,6 +425,32 @@ mod tests {
         };
         let log = "\u{1b}[1mTests\u{1b}[22m  \u{1b}[32m58 passed\u{1b}[39m";
         assert_eq!(parse_result_count(log, &parser).expect("count"), (58, 1));
+    }
+
+    #[test]
+    fn test_threads_are_inserted_after_cargo_separator() {
+        let mut args = vec![
+            "test".to_string(),
+            "--manifest-path".to_string(),
+            "backend/Cargo.toml".to_string(),
+            "--".to_string(),
+            "--nocapture".to_string(),
+        ];
+
+        insert_test_threads(&mut args, 4);
+
+        assert_eq!(
+            args,
+            vec![
+                "test",
+                "--manifest-path",
+                "backend/Cargo.toml",
+                "--",
+                "--test-threads",
+                "4",
+                "--nocapture",
+            ]
+        );
     }
 
     #[test]
