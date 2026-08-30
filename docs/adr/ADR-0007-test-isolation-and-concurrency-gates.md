@@ -3,7 +3,7 @@
 - 状态：Accepted
 - 日期：2026-08-30
 - 决策人：DevRail 项目维护者
-- 关联变更：[backend-test-throughput OpenSpec change](../../openspec/changes/backend-test-throughput/proposal.md)
+- 关联变更：[2026-08-30-backend-test-throughput OpenSpec change](../../openspec/changes/archive/2026-08-30-backend-test-throughput/)
 - 关联运行手册：[后端测试吞吐基线](../verification/backend-test-throughput-2026-08-29.md)
 
 ## 背景
@@ -33,3 +33,7 @@
 ## 关联实施
 
 本 ADR 与 `backend-test-throughput` OpenSpec change 同步验收。实现证据包括 `backend/src/db.rs` 的测试数据库夹具、`codex-audit-pipeline/tools/arc-flow` 的配置与线程编排测试，以及 Security workflow 权限检查。只有 `cargo flow verify --all`、OpenSpec 严格校验和对应测试全部通过后，才视为本 ADR 完成落地。
+
+- 实现提交：`1b4868703aab128b5d18bc8f4b3fc3a757f5b03c`
+- 交付 PR：[DevRail#89](https://github.com/musutrade/DevRail/pull/89)
+- 远端验证：CI、Supply chain security 和 arc-flow platform 均成功；CodeQL 按工作流配置跳过。
