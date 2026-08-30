@@ -229,7 +229,7 @@ pub struct StepConfig {
     pub services: Vec<String>,
     #[serde(default)]
     pub remove_env: Vec<String>,
-    /// Maximum Rust test harness threads for test steps. The value is appended after `--`.
+    /// Maximum Rust test harness threads for test steps. The value is inserted after `--`.
     #[serde(default)]
     pub test_threads: Option<u64>,
     /// Environment variable that overrides `test_threads` when the workflow is loaded.
@@ -661,11 +661,17 @@ fn validate_step(config: &FlowConfig, step: &StepConfig) -> Result<()> {
             step.id
         );
     }
+    if step.test_threads.is_some() && !step.args.iter().any(|argument| argument == "--") {
+        bail!(
+            "step {:?} test_threads requires a Cargo -- argument separator",
+            step.id
+        );
+    }
     if matches!(step.test_isolation, Some(TestIsolationMode::Shared))
-        && step.test_threads.is_some_and(|threads| threads > 1)
+        && step.test_threads != Some(1)
     {
         bail!(
-            "step {:?} cannot run shared test state with more than one thread",
+            "step {:?} shared test state requires test_threads = 1",
             step.id
         );
     }
@@ -1201,7 +1207,24 @@ mod tests {
     }
 
     #[test]
-    fn shared_test_state_rejects_parallel_threads() {
+    fn parallel_test_step_requires_cargo_separator() {
+        let mut config = repository_config();
+        let step = config
+            .steps
+            .iter_mut()
+            .find(|step| step.id == "backend.tests")
+            .expect("backend tests step");
+        step.args.retain(|argument| argument != "--");
+        let error = config
+            .validate()
+            .expect_err("test threads must have a Cargo separator");
+        assert!(error
+            .to_string()
+            .contains("test_threads requires a Cargo -- argument separator"));
+    }
+
+    #[test]
+    fn shared_test_state_requires_one_thread() {
         let mut config = repository_config();
         let step = config
             .steps
@@ -1209,10 +1232,11 @@ mod tests {
             .find(|step| step.id == "backend.tests")
             .expect("backend tests step");
         step.test_isolation = Some(TestIsolationMode::Shared);
+        step.test_threads = None;
         let error = config.validate().expect_err("shared state must be serial");
         assert!(error
             .to_string()
-            .contains("cannot run shared test state with more than one thread"));
+            .contains("shared test state requires test_threads = 1"));
     }
 
     #[test]

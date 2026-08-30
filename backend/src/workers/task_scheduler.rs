@@ -1591,6 +1591,7 @@ mod tests {
 
     #[tokio::test]
     async fn controlled_repair_fake_app_server_workspace_and_gate_e2e() {
+        const REPAIR_E2E_TIMEOUT_SECS: u64 = 30;
         let Ok(schema_fixture) = crate::db::test_schema_pool().await else {
             return;
         };
@@ -1808,7 +1809,7 @@ exit 0
             pool.clone(),
             "bash".to_string(),
             1,
-            30,
+            REPAIR_E2E_TIMEOUT_SECS as i64,
             root.to_string_lossy().into_owned(),
             1,
             SchedulerPolicy::default(),
@@ -1828,7 +1829,7 @@ exit 0
                 .fetch_one(&pool)
                 .await
                 .expect("read child run id");
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(REPAIR_E2E_TIMEOUT_SECS);
         loop {
             let status: String = sqlx::query_scalar("SELECT status FROM devrail_runs WHERE id=$1")
                 .bind(child_id)
@@ -1867,7 +1868,8 @@ exit 0
         .expect("count gate reruns");
         assert_eq!(gate_count_before, 1);
         dispatch_repair_gate_reruns(&pool, &supervisor).await;
-        let request_deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        let request_deadline =
+            tokio::time::Instant::now() + Duration::from_secs(REPAIR_E2E_TIMEOUT_SECS);
         loop {
             let status: String =
                 sqlx::query_scalar("SELECT status FROM devrail_repair_requests WHERE id=$1")

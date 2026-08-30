@@ -31,4 +31,4 @@
 
 - [x] 6.1 运行后端完整测试、随机顺序、线程数 1/2/4 对比和至少一次重复压力套件，记录失败率、数据库锁等待、CPU/内存和总耗时（6 个独立、正确环境的 1/2/4 轮次均通过；另有 1 次批处理测量因共享报告覆盖而无法复现，锁等待时长未由 harness 暴露，均已记录）
 - [x] 6.2 运行 `TMPDIR=/tmp cargo flow verify --all`、`openspec validate --all --strict`、secret scan、架构审计和前端回归，确认输出仍包含 `TEST_SUMMARY: PASS`
-- [ ] 6.3 更新测试运行手册和实现状态，记录基线、目标、并发默认值、隔离回滚开关和已知限制；仅在总耗时和稳定性达到验收阈值后勾选完成（文档已更新；仍有一次未能恢复错误详情的 2 线程失败，待确认后完成验收）
+- [x] 6.3 更新测试运行手册和实现状态，记录基线、目标、并发默认值、隔离回滚开关和已知限制；仅在总耗时和稳定性达到验收阈值后勾选完成（2026-08-30 修复 migration advisory lock 竞争后，1/2/4 线程各一轮均以 157 个结果通过；全量 backend/frontend/workflow 门禁与 OpenSpec 严格校验通过，详见 `docs/verification/backend-test-throughput-2026-08-29.md` 和 ADR-0007）

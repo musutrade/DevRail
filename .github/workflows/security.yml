@@ -9,7 +9,6 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: write
   contents: read
   pull-requests: read
 
@@ -85,6 +84,9 @@ jobs:
     timeout-minutes: 45
     needs: changes
     if: needs.changes.outputs.images == 'true'
+    permissions:
+      actions: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:
