@@ -110,6 +110,8 @@ jobs:
           file: ${{ matrix.dockerfile }}
           tags: ${{ matrix.image }}
           load: true
+          pull: true
+          no-cache-filters: runtime
           cache-from: type=gha,scope=${{ matrix.cache_scope }}
           cache-to: type=gha,mode=max,scope=${{ matrix.cache_scope }}
       - name: Scan high and critical vulnerabilities
