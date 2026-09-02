@@ -111,7 +111,7 @@ pub(crate) async fn insert(
     input: &NewArtifact<'_>,
 ) -> Result<DevRailArtifactRow, sqlx::Error> {
     sqlx::query_as::<_, DevRailArtifactRow>(AssertSqlSafe(format!(
-        "INSERT INTO devrail_artifacts (organization_id,department_id,owner_user_id,project_id,task_id,run_id,quality_gate_id,artifact_type,storage_key,file_name,content_type,byte_size,sha256,summary,expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING {ARTIFACT_COLUMNS}"
+        "INSERT INTO devrail_artifacts AS a (organization_id,department_id,owner_user_id,project_id,task_id,run_id,quality_gate_id,artifact_type,storage_key,file_name,content_type,byte_size,sha256,summary,expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING {ARTIFACT_COLUMNS}"
     )))
     .bind(input.organization_id)
     .bind(input.department_id)
@@ -167,4 +167,71 @@ pub(crate) async fn mark_cleanup_failed(
     .execute(pool)
     .await?;
     Ok(result.rows_affected() == 1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn artifact_insert_returns_the_scoped_row() {
+        let Ok(fixture) = crate::db::test_schema_pool().await else {
+            return;
+        };
+        let pool = fixture.pool().clone();
+        let suffix = uuid::Uuid::new_v4().simple().to_string();
+        let (owner_user_id, organization_id, department_id, task_id) =
+            crate::repositories::devrail_runs::create_harness_test_task(&pool, &suffix)
+                .await
+                .expect("create artifact test task");
+        let project_id = sqlx::query_scalar::<_, i64>(
+            "SELECT project_id FROM devrail_tasks WHERE organization_id=$1 AND id=$2",
+        )
+        .bind(organization_id)
+        .bind(task_id)
+        .fetch_one(&pool)
+        .await
+        .expect("read artifact test project");
+        let storage_key = format!("artifacts/{organization_id}/{suffix}.bin");
+        let digest = "0".repeat(64);
+        let expires_at = chrono::Utc::now() + chrono::Duration::days(1);
+
+        let mut transaction = pool.begin().await.expect("begin artifact insert");
+        let artifact = insert(
+            &mut transaction,
+            &NewArtifact {
+                organization_id,
+                department_id,
+                owner_user_id,
+                project_id,
+                task_id,
+                run_id: None,
+                quality_gate_id: Some("repository-insert-regression"),
+                artifact_type: "log",
+                storage_key: &storage_key,
+                file_name: "gate.log",
+                content_type: "text/plain",
+                byte_size: 4,
+                sha256: &digest,
+                summary: Some("质量门禁日志"),
+                expires_at,
+            },
+        )
+        .await
+        .expect("insert artifact and return scoped row");
+        assert_eq!(artifact.organization_id, organization_id);
+        assert_eq!(artifact.project_id, project_id);
+        assert_eq!(artifact.task_id, task_id);
+        assert_eq!(
+            artifact.quality_gate_id.as_deref(),
+            Some("repository-insert-regression")
+        );
+        transaction
+            .rollback()
+            .await
+            .expect("rollback artifact insert");
+
+        drop(pool);
+        fixture.cleanup().await.expect("cleanup artifact schema");
+    }
 }
