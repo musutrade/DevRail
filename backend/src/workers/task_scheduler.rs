@@ -1642,13 +1642,16 @@ mod tests {
             repository.join("app-server"),
             r#"IFS= read -r initialize
 printf '%s\n' '{"id":"initialize","result":{}}'
+IFS= read -r initialized
 IFS= read -r thread_request
+printf '%s\n' '{"id":"thread-start","result":{"thread":{"id":"repair-thread"}}}'
 IFS= read -r turn_request
+printf '%s\n' '{"id":"turn-start","result":{"turn":{"id":"repair-turn"}}}'
 printf '%s\n' '{"type":"agent_message","id":"sensitive-event","message":"repair complete","token":"FAKE_TOKEN","authorization":"Bearer FAKE_AUTH","command":"npm run test:ci","cwd":"/absolute/secret/workspace","path":"/absolute/secret/file"}'
-printf '%s\n' '{"type":"agent_message","id":"repair-thread-event","message":"workspace updated","thread_id":"repair-thread","turn_id":"repair-turn"}'
-printf '%s\n' '{"type":"turn_complete","id":"repair-done","message":"完成"}'
+printf '%s\n' '{"method":"item/completed","params":{"threadId":"repair-thread","turnId":"repair-turn","item":{"id":"sensitive-event","type":"agentMessage","text":"repair complete","token":"FAKE_TOKEN","authorization":"Bearer FAKE_AUTH","command":"npm run test:ci","cwd":"/absolute/secret/workspace","path":"/absolute/secret/file"}}}'
 printf '%s\n' 'repaired' > tracked.txt
-exit 0
+printf '%s\n' '{"method":"turn/completed","params":{"threadId":"repair-thread","turn":{"id":"repair-turn","status":"completed"}}}'
+IFS= read -r shutdown || exit 0
 "#,
         )
         .await

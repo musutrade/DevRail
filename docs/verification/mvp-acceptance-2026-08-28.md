@@ -1,6 +1,6 @@
 # DevRail MVP 验收证据矩阵
 
-日期：2026-08-29
+日期：2026-09-02
 
 ## 使用规则
 
@@ -31,7 +31,9 @@
 
 ## 当前门禁记录
 
-- 执行时间：2026-08-29T03:26:11Z；命令：`TMPDIR=/tmp cargo flow verify --all`；结果：secret scan、架构审计、backend format/Clippy/compile/tests、frontend lint/format/tests/Playwright/full-stack smoke/build、OpenAPI/配置/供应链和 arc-flow 检查均通过；backend/frontend/arc-flow 测试分别为 151/113/69 项，`TEST_SUMMARY: PASS`。脱敏报告：[test_result.md](../../codex-audit-pipeline/.codex/reports/test_result.md)。
+- 执行时间：2026-09-02；范围：隔离 PostgreSQL、受控临时 workspace、本机 Codex app-server `0.152.1`；结果：DevRail task `4` 为 `succeeded`、run `4` 为 `completed`，真实 harness/thread/turn 标识已持久化，`turn/completed` 状态为 `completed`，Agent 精确返回 `DEVRAIL_REAL_CODEX_OK`，未发生工具执行，workspace cleanup 为 `completed`。另以拒绝式探针验证命令审批服务器请求使用数值 JSON-RPC id，回写同一 id 的 `decline` 后 app-server 发出 `serverRequest/resolved`；探针未批准或执行命令。该证据只覆盖本机协议链路，不将 Agent run 生命周期或整体 MVP 行更新为“通过”。
+
+- 执行时间：2026-09-02T08:11:22Z；命令：`cargo flow verify --all`；结果：secret scan、架构审计、backend format/Clippy/tests（160 项）、frontend lint/format/tests（113 项）、桌面/移动 Playwright、真实 full-stack smoke、生产构建、OpenAPI/配置/供应链和 arc-flow（74 项）均通过，`TEST_SUMMARY: PASS`。脱敏报告：[test_result.md](../../codex-audit-pipeline/.codex/reports/test_result.md)。
 - 执行时间：2026-08-29；命令：`openspec validate --all --strict`；结果：7 个 spec/change 项全部通过。repair E2E 的数据库、事件、诊断、审计、通知和 outbox 断言仅检查固定敏感标记是否缺失，不在仓库写入真实凭据或完整路径。
 
 - 执行时间：2026-08-28T20:29:43Z；命令：`cargo flow verify --all`。

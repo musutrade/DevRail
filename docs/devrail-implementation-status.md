@@ -1,6 +1,6 @@
 # DevRail 实现状态
 
-更新日期：2026-08-29
+更新日期：2026-09-02
 
 本文档是 DevRail 当前实现范围的唯一状态口径，用于避免把 arc-admin 基线或 `arc-flow` 审计工具误认为 Codex Harness 产品 MVP。产品需求和完成条件仍以 [requirements.md](requirements.md) 为准。
 
@@ -14,7 +14,7 @@ DevRail 的 Codex Harness 开发系统 MVP **尚未实现完成**，因此不能
 - `arc-flow` 审计工具生产化：配置 schema v2、词法边界、稳健性测试、性能基准、SBOM、跨平台 CI 和操作文档；
 - 工程治理：项目公约、审计门禁、CI、供应链检查和交付流程；
 - Phase 0 首批产品骨架：`devrail` 业务权限、项目/仓库/环境/任务迁移、受数据范围约束的 Rust CRUD API、OpenAPI/Angular 客户端生成和 `/devrail/projects` 基础页面；仓库远端 HEAD、默认分支、分支数量、完整远端分支列表、受控工作区提交摘要和环境健康检查已加入；
-- Phase 1 Harness 基础闭环：后端 `HarnessSupervisor` 受控启动 `codex app-server`，清空环境变量并限制工作区/并发/时限；运行快照、运行元数据、脱敏 JSONL 事件、单调游标、幂等键、异常退出摘要、优雅中断/强制终止、运行查询和 SSE API 已加入；受控 follow-up 工具事件支持 EOF/重启重放幂等；
+- Phase 1 Harness 基础闭环：后端 `HarnessSupervisor` 受控启动 `codex app-server`，清空环境变量并限制工作区/并发/时限；运行快照、运行元数据、脱敏 JSONL 事件、单调游标、幂等键、异常退出摘要、优雅中断/强制终止、运行查询和 SSE API 已加入；受控 follow-up 工具事件支持 EOF/重启重放幂等。2026-09-02 已在隔离 PostgreSQL 与受控 workspace 中使用本机 Codex `0.152.1` 完成真实最小协议演练，覆盖 `initialize → initialized → thread/start → turn/start → turn/completed`、harness/thread/turn 元数据持久化与 workspace cleanup；该记录不替代审批全流程、浏览器、供应商或生产验收；
 - Symphony P0 调度可靠性：控制循环按 `reconcile → dispatch → reap/metrics` 运行并支持优雅停止；任务使用 `task_id + attempt` 稳定幂等键、PostgreSQL `SKIP LOCKED`、可续租 claim、System Actor、优先级 aging、指数退避和最大 attempt；Supervisor 提供心跳/stall 清理、同 attempt 的 thread/resume 断流恢复、重启扫描和幂等终态通知；任务/run API 与 Angular 页面已展示 attempt、重试时间、原因、恢复建议和清理状态；
 - Symphony P1 工作流基础：调度器已切换到可注入 `TaskTracker` 领域端口；`WORKFLOW.md` 支持严格 schema、封闭模板、平台安全交集、受控路径和安全默认值；任务在入队时固化不可变 workflow 快照，run 通过 SQL 身份校验复用同一快照；动态 reload、持久化 last-known-good、失败去重、System Actor 审计、指标以及任务/run 诊断字段和简体中文页面已加入；
 - Symphony P1 任务工作区：已按 task/attempt 持久化独立 workspace，完成受控根目录与符号链接越界校验、Git worktree/等价目录物化、基础提交校验、受限 hooks、Supervisor 绑定、终态清理、失败退避对账、审计/指标/outbox、API 与 Angular 诊断操作；
@@ -37,7 +37,7 @@ DevRail 的 Codex Harness 开发系统 MVP **尚未实现完成**，因此不能
 | 项目、仓库、环境、成员、策略 | 部分实现 | 项目/仓库/环境列表与详情、仓库/环境创建表单、成员和项目策略 API/页面已加入；仓库远端 HEAD、默认分支、分支数量、完整远端分支列表、受控工作区提交摘要、工作树状态检查以及环境健康检查已完成。 |
 | 任务、快照和运行 | 部分实现 | 已有任务详情页、服务端关键词/状态/负责人/标签筛选、分页、不可变任务快照、任务与项目仓库/环境关联、run 生命周期字段、单任务活动运行唯一约束、幂等创建、终态重试、指定 turn 恢复、repair 谱系和运行详情页；完整状态验收仍待补齐。 |
 | Symphony 任务调度器 | P0、DAG/follow-up、任务工作区与 continuation 已实现 | queued 任务已支持稳定 attempt、优先级 aging、活动 run 排除、依赖资格、claim 租约/恢复、取消传播、重启 reconciliation、低基数指标和 System Actor 审计；continuation 在普通 queued 派发前优先 claim，并以 handoff 证据重建独立 workspace、绑定唯一 child run 后启动。 |
-| Codex `app-server` Harness Supervisor | P0 恢复与 continuation turn 已实现 | 后端独占启动受控 `codex app-server`，完成初始化、thread/turn 启动、同 attempt thread/resume 断流恢复（最多 2 次）、continuation 同 thread 新 turn、稳定 start key、心跳/stall/超时清理、活动 run 重启恢复、不可恢复通知、审批等待状态恢复、stderr 摘要、恢复建议和优雅中断。 |
+| Codex `app-server` Harness Supervisor | P0 恢复与 continuation turn 已实现 | 后端独占启动受控 `codex app-server`，按响应顺序完成初始化、thread/turn 启动，支持同 attempt thread/resume 断流恢复（最多 2 次）、continuation 同 thread 新 turn、JSON-RPC 审批关联、稳定 start key、心跳/stall/超时清理、活动 run 重启恢复、不可恢复通知、审批等待状态恢复、stderr 摘要、恢复建议和携带 thread/turn ID 的优雅中断；2026-09-02 本机 Codex `0.152.1` 最小真实协议演练通过。 |
 | thread/turn/item 事件与 SSE | 基础实现 | JSONL 事件按安全类型脱敏持久化，提供 cursor 补拉、Last-Event-ID 与 after_cursor SSE 补拉、固定心跳和质量门禁事件映射；运行详情断线重连会从最后游标继续。 |
 | 工具命令审批 | 部分实现 | 已有审批表、数据范围 API、审批中心列表/详情、批准/拒绝/撤回决策、过期时间、过期 worker、追加决策审计、策略版本强校验和 Supervisor resolve；请求、批准、拒绝、撤回和过期均已写入站内通知/outbox。 |
 | 变更集与质量门禁 | 部分实现 | 运行详情可从脱敏文件变更事件生成 changeset，并查询质量门禁事件；已支持从项目模板执行受限白名单质量门禁，记录命令摘要、执行器版本、稳定日志引用、退出码/耗时/脱敏摘要，并通过稳定引用读取受限分页日志；失败时联动 run/task 失败。 |
