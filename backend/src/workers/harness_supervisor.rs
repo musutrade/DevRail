@@ -52,6 +52,17 @@ struct ProcessContext {
     _slot: tokio::sync::OwnedSemaphorePermit,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProtocolOutcome {
+    Continue,
+    Terminal {
+        status: &'static str,
+        reason: &'static str,
+        recovery: Option<&'static str>,
+    },
+    Invalid,
+}
+
 pub(crate) struct RunReservation(tokio::sync::OwnedSemaphorePermit);
 
 #[derive(Debug, thiserror::Error)]
@@ -69,7 +80,18 @@ pub enum SupervisorError {
 #[derive(Debug)]
 enum ControlMessage {
     Interrupt(InterruptCause),
-    Approval { approval_id: i64, approved: bool },
+    Approval {
+        approval_id: i64,
+        request_id: Option<Value>,
+        decision: ApprovalDecision,
+    },
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ApprovalDecision {
+    Accept,
+    Decline,
+    Cancel,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -333,7 +355,43 @@ impl HarnessSupervisor {
         &self,
         run_id: i64,
         approval_id: i64,
+        idempotency_key: &str,
         approved: bool,
+    ) -> Result<(), SupervisorError> {
+        self.send_approval(
+            run_id,
+            approval_id,
+            idempotency_key,
+            if approved {
+                ApprovalDecision::Accept
+            } else {
+                ApprovalDecision::Decline
+            },
+        )
+        .await
+    }
+
+    pub async fn cancel_approval(
+        &self,
+        run_id: i64,
+        approval_id: i64,
+        idempotency_key: &str,
+    ) -> Result<(), SupervisorError> {
+        self.send_approval(
+            run_id,
+            approval_id,
+            idempotency_key,
+            ApprovalDecision::Cancel,
+        )
+        .await
+    }
+
+    async fn send_approval(
+        &self,
+        run_id: i64,
+        approval_id: i64,
+        idempotency_key: &str,
+        decision: ApprovalDecision,
     ) -> Result<(), SupervisorError> {
         let sender = self
             .controls
@@ -345,7 +403,8 @@ impl HarnessSupervisor {
         sender
             .send(ControlMessage::Approval {
                 approval_id,
-                approved,
+                request_id: decode_protocol_request_id(idempotency_key),
+                decision,
             })
             .await
             .map_err(|_| SupervisorError::ControlUnavailable)
@@ -499,6 +558,26 @@ impl HarnessSupervisor {
     }
 }
 
+async fn fail_protocol_startup(
+    supervisor: &HarnessSupervisor,
+    launch: &RunLaunch,
+    child: &mut Child,
+) {
+    let _ = finish_run(
+        supervisor,
+        launch,
+        "failed",
+        "initialization_failed",
+        None,
+        None,
+        Some("Harness 初始化握手失败；检查 app-server 版本和启动参数"),
+    )
+    .await;
+    let _ = child.start_kill();
+    let _ = child.wait().await;
+    supervisor.controls.lock().await.remove(&launch.run_id);
+}
+
 async fn run_process(context: ProcessContext) {
     let ProcessContext {
         supervisor,
@@ -514,44 +593,44 @@ async fn run_process(context: ProcessContext) {
     let pool = supervisor.pool.clone();
     let mut out_reader = BufReader::new(stdout);
     let mut err_reader = BufReader::new(stderr);
-    let _ = write_json(&mut stdin, json!({"id":"initialize","method":"initialize","params":{"clientName":"devrail","clientVersion":"1"}})).await;
-    let mut handshake_line = String::new();
-    let handshake_ok = tokio::time::timeout(
+    if write_json(&mut stdin, initialize_request()).await.is_err() {
+        fail_protocol_startup(&supervisor, &launch, &mut child).await;
+        return;
+    }
+    let handshake = match tokio::time::timeout(
         Duration::from_secs(10),
-        out_reader.read_line(&mut handshake_line),
+        read_success_response(&mut out_reader, "initialize"),
     )
     .await
-    .ok()
-    .and_then(Result::ok)
-    .and_then(|count| {
-        (count > 0)
-            .then(|| serde_json::from_str::<Value>(handshake_line.trim()).ok())
-            .flatten()
-    })
-    .is_some_and(|value| {
-        value.get("id").and_then(Value::as_str) == Some("initialize")
-            || value.get("method").and_then(Value::as_str) == Some("initialized")
-            || value.get("result").is_some()
-    });
-    if !handshake_ok {
-        let _ = finish_run(
-            &supervisor,
-            &launch,
-            "failed",
-            "initialization_failed",
-            None,
-            None,
-            Some("Harness 初始化握手失败；检查 app-server 版本和启动参数"),
-        )
-        .await;
-        let _ = child.start_kill();
-        supervisor.controls.lock().await.remove(&launch.run_id);
+    {
+        Ok(Ok(value)) => value,
+        Ok(Err(())) | Err(_) => {
+            fail_protocol_startup(&supervisor, &launch, &mut child).await;
+            return;
+        }
+    };
+    let harness_version = handshake
+        .pointer("/result/userAgent")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    if write_json(&mut stdin, json!({"method":"initialized"}))
+        .await
+        .is_err()
+    {
+        fail_protocol_startup(&supervisor, &launch, &mut child).await;
         return;
     }
     // The startup lease is the final gate before any thread/turn request is
     // sent. A stale worker must not start an Agent after another worker has
     // taken over the run.
-    match persist_started(&pool, &launch, start_claim_token).await {
+    match persist_started(
+        &pool,
+        &launch,
+        start_claim_token,
+        harness_version.as_deref(),
+    )
+    .await
+    {
         Ok(true) => {}
         Ok(false) | Err(_) => {
             let _ = child.start_kill();
@@ -564,9 +643,46 @@ async fn run_process(context: ProcessContext) {
             return;
         }
     }
-    let (thread_request, turn_request) = start_requests(&launch);
-    let _ = write_json(&mut stdin, thread_request).await;
-    let _ = write_json(&mut stdin, turn_request).await;
+    if write_json(&mut stdin, thread_start_request(&launch))
+        .await
+        .is_err()
+    {
+        fail_protocol_startup(&supervisor, &launch, &mut child).await;
+        return;
+    }
+    let thread_response = match tokio::time::timeout(
+        Duration::from_secs(10),
+        read_success_response(&mut out_reader, "thread-start"),
+    )
+    .await
+    {
+        Ok(Ok(value)) => value,
+        Ok(Err(())) | Err(_) => {
+            fail_protocol_startup(&supervisor, &launch, &mut child).await;
+            return;
+        }
+    };
+    let Some(thread_id) = thread_response
+        .pointer("/result/thread/id")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+    else {
+        fail_protocol_startup(&supervisor, &launch, &mut child).await;
+        return;
+    };
+    if !persist_protocol_metadata(&pool, &launch, &thread_response, start_claim_token).await {
+        let _ = child.start_kill();
+        let _ = child.wait().await;
+        supervisor.controls.lock().await.remove(&launch.run_id);
+        return;
+    }
+    if write_json(&mut stdin, turn_start_request(&launch, &thread_id))
+        .await
+        .is_err()
+    {
+        fail_protocol_startup(&supervisor, &launch, &mut child).await;
+        return;
+    }
     let _ = persist_event(
         &pool,
         &launch,
@@ -584,6 +700,8 @@ async fn run_process(context: ProcessContext) {
     let mut err_line = String::new();
     let mut stderr_summary = String::new();
     let mut protocol_failed = false;
+    let active_thread_id = thread_id;
+    let mut active_turn_id = None;
     let mut timeout_sleep = Box::pin(tokio::time::sleep(supervisor.max_duration));
     let mut heartbeat = tokio::time::interval(Duration::from_secs(15));
     let mut stall_sleep = Box::pin(tokio::time::sleep(
@@ -614,17 +732,33 @@ async fn run_process(context: ProcessContext) {
             }
             command = controls.recv() => {
                 if let Some(ControlMessage::Interrupt(cause)) = command {
-                    if let Err(error) = write_json(&mut stdin, json!({"method":"turn/interrupt","params":{}})).await {
-                        append_summary(&mut stderr_summary, &format!("transport write error: {error}"));
+                    if let Some(turn_id) = active_turn_id.as_deref() {
+                        if let Err(error) = write_json(
+                            &mut stdin,
+                            json!({
+                                "id": "turn-interrupt",
+                                "method": "turn/interrupt",
+                                "params": {
+                                    "threadId": active_thread_id,
+                                    "turnId": turn_id,
+                                },
+                            }),
+                        )
+                        .await
+                        {
+                            append_summary(&mut stderr_summary, &format!("transport write error: {error}"));
+                        }
                     }
+                    let _ = stdin.shutdown().await;
                     let status = tokio::time::timeout(supervisor.graceful_interrupt, child.wait()).await;
                     let exit_code = match status { Ok(Ok(s)) => s.code(), _ => { let _ = child.start_kill(); child.wait().await.ok().and_then(|s| s.code()) } };
                     let (terminal_status, reason, recovery) = cause.terminal();
                     let _ = finish_run(&supervisor, &launch, terminal_status, reason, exit_code, Some(&stderr_summary), Some(recovery)).await;
                     break;
                 }
-                if let Some(ControlMessage::Approval { approval_id, approved }) = command {
-                    let _ = write_json(&mut stdin, json!({"method":"approval/resolve","params":{"approvalId":approval_id,"approved":approved}})).await;
+                if let Some(ControlMessage::Approval { approval_id, request_id, decision }) = command {
+                    let response = approval_response(approval_id, request_id, decision);
+                    let _ = write_json(&mut stdin, response).await;
                 }
             }
             result = out_reader.read_line(&mut out_line) => {
@@ -639,7 +773,73 @@ async fn run_process(context: ProcessContext) {
                             .as_mut()
                             .reset(tokio::time::Instant::now() + supervisor.scheduler_policy.stall_timeout);
                         let line = out_line.trim();
-                        if !line.is_empty() && !handle_stdout(&pool, &launch, line, start_claim_token).await { protocol_failed = true; let _ = child.start_kill(); }
+                        if !line.is_empty() {
+                            let value = match serde_json::from_str::<Value>(line) {
+                                Ok(value) => value,
+                                Err(_) => {
+                                    let _ = persist_event(
+                                        &pool,
+                                        &launch,
+                                        "error",
+                                        None,
+                                        json!({"message":"Harness 返回了无效 JSONL"}),
+                                        Some("Harness 协议解析失败"),
+                                    )
+                                    .await;
+                                    protocol_failed = true;
+                                    let _ = child.start_kill();
+                                    out_line.clear();
+                                    continue;
+                                }
+                            };
+                            if let Some(turn_id) = value
+                                .pointer("/result/turn/id")
+                                .or_else(|| value.pointer("/params/turn/id"))
+                                .and_then(Value::as_str)
+                            {
+                                active_turn_id = Some(turn_id.to_string());
+                            }
+                            match handle_protocol_value(
+                                &pool,
+                                &launch,
+                                &value,
+                                start_claim_token,
+                            )
+                            .await
+                            {
+                                ProtocolOutcome::Continue => {}
+                                ProtocolOutcome::Invalid => {
+                                    protocol_failed = true;
+                                    let _ = child.start_kill();
+                                }
+                                ProtocolOutcome::Terminal { status, reason, recovery } => {
+                                    let _ = stdin.shutdown().await;
+                                    let stopped = tokio::time::timeout(
+                                        supervisor.graceful_interrupt,
+                                        child.wait(),
+                                    )
+                                    .await;
+                                    let exit_code = match stopped {
+                                        Ok(Ok(status)) => status.code(),
+                                        _ => {
+                                            let _ = child.start_kill();
+                                            child.wait().await.ok().and_then(|status| status.code())
+                                        }
+                                    };
+                                    let _ = finish_run(
+                                        &supervisor,
+                                        &launch,
+                                        status,
+                                        reason,
+                                        exit_code,
+                                        Some(&stderr_summary),
+                                        recovery,
+                                    )
+                                    .await;
+                                    break;
+                                }
+                            }
+                        }
                         out_line.clear();
                     }
                     Err(error) => {
@@ -756,84 +956,211 @@ async fn write_json(stdin: &mut tokio::process::ChildStdin, value: Value) -> std
     stdin.write_all(&line).await
 }
 
-fn start_requests(launch: &RunLaunch) -> (Value, Value) {
+async fn read_success_response(
+    reader: &mut BufReader<ChildStdout>,
+    expected_id: &str,
+) -> Result<Value, ()> {
+    loop {
+        let mut line = String::new();
+        let count = reader.read_line(&mut line).await.map_err(|_| ())?;
+        if count == 0 {
+            return Err(());
+        }
+        let value = serde_json::from_str::<Value>(line.trim()).map_err(|_| ())?;
+        if value.get("id").and_then(Value::as_str) == Some(expected_id) {
+            return (value.get("error").is_none() && value.get("result").is_some())
+                .then_some(value)
+                .ok_or(());
+        }
+    }
+}
+
+fn protocol_request_key(value: &Value) -> Option<String> {
+    let method = value.get("method").and_then(Value::as_str)?;
+    if !(method.ends_with("/requestApproval")
+        || matches!(method, "applyPatchApproval" | "execCommandApproval"))
+    {
+        return None;
+    }
+    let request_id = value.get("id")?;
+    if !matches!(request_id, Value::String(_) | Value::Number(_)) {
+        return None;
+    }
+    let encoded = serde_json::to_string(request_id).ok()?;
+    let key = format!("rpc:{encoded}");
+    (key.len() <= 256).then_some(key)
+}
+
+fn decode_protocol_request_id(key: &str) -> Option<Value> {
+    key.strip_prefix("rpc:")
+        .and_then(|encoded| serde_json::from_str::<Value>(encoded).ok())
+        .filter(|value| matches!(value, Value::String(_) | Value::Number(_)))
+}
+
+fn approval_response(
+    approval_id: i64,
+    request_id: Option<Value>,
+    decision: ApprovalDecision,
+) -> Value {
+    let approved = matches!(decision, ApprovalDecision::Accept);
+    request_id.map_or_else(
+        || json!({"method":"approval/resolve","params":{"approvalId":approval_id,"approved":approved}}),
+        |request_id| json!({
+            "id": request_id,
+            "result": {"decision": match decision {
+                ApprovalDecision::Accept => "accept",
+                ApprovalDecision::Decline => "decline",
+                ApprovalDecision::Cancel => "cancel",
+            }},
+        }),
+    )
+}
+
+fn scalar_id_string(value: &Value) -> Option<String> {
+    match value {
+        Value::String(value) => Some(value.clone()),
+        Value::Number(value) => Some(value.to_string()),
+        _ => None,
+    }
+}
+
+fn initialize_request() -> Value {
+    json!({
+        "id": "initialize",
+        "method": "initialize",
+        "params": {
+            "clientInfo": {
+                "name": "devrail",
+                "title": "DevRail",
+                "version": env!("CARGO_PKG_VERSION"),
+            },
+            "capabilities": {},
+        },
+    })
+}
+
+fn thread_start_request(launch: &RunLaunch) -> Value {
     let thread_method = if launch.resume_thread_id.is_some() {
         "thread/resume"
     } else {
         "thread/start"
     };
-    let thread_params = if let Some(thread_id) = launch.resume_thread_id.as_deref() {
-        json!({"threadId": thread_id, "cwd": launch.cwd})
-    } else {
-        json!({"cwd": launch.cwd})
-    };
-    (
-        json!({"id":"thread-start","method":thread_method,"params":thread_params}),
-        json!({"id":"turn-start","method":"turn/start","params":{"input":launch.input,"threadId":launch.resume_thread_id,"resumeFromTurnId":launch.resume_turn_id}}),
-    )
+    let mut thread_params = json!({
+        "cwd": launch.cwd,
+        "approvalPolicy": "on-request",
+        "sandbox": "workspace-write",
+    });
+    if let Some(thread_id) = launch.resume_thread_id.as_deref() {
+        thread_params["threadId"] = Value::String(thread_id.to_string());
+    }
+    json!({"id":"thread-start","method":thread_method,"params":thread_params})
 }
 
-async fn handle_stdout(
+fn turn_start_request(launch: &RunLaunch, thread_id: &str) -> Value {
+    json!({
+        "id": "turn-start",
+        "method": "turn/start",
+        "params": {
+            "threadId": thread_id,
+            "input": [{
+                "type": "text",
+                "text": launch.input,
+                "text_elements": [],
+            }],
+        },
+    })
+}
+
+async fn persist_protocol_metadata(
     pool: &PgPool,
     launch: &RunLaunch,
-    line: &str,
+    value: &Value,
     start_claim_token: uuid::Uuid,
 ) -> bool {
-    let value: Value = match serde_json::from_str(line) {
-        Ok(value) => value,
-        Err(_) => {
-            let _ = persist_event(
-                pool,
-                launch,
-                "error",
-                None,
-                json!({"message":"Harness 返回了无效 JSONL"}),
-                Some("Harness 协议解析失败"),
-            )
-            .await;
-            return false;
-        }
-    };
-    let (event_type, source_id, summary, payload) = classify_event(&value);
     let thread_id = value
         .get("thread_id")
+        .or_else(|| value.get("threadId"))
         .or_else(|| value.pointer("/result/thread/id"))
+        .or_else(|| value.pointer("/result/threadId"))
+        .or_else(|| value.pointer("/params/thread/id"))
+        .or_else(|| value.pointer("/params/threadId"))
         .and_then(Value::as_str);
     let turn_id = value
         .get("turn_id")
+        .or_else(|| value.get("turnId"))
         .or_else(|| value.pointer("/result/turn/id"))
+        .or_else(|| value.pointer("/result/turnId"))
+        .or_else(|| value.pointer("/params/turn/id"))
+        .or_else(|| value.pointer("/params/turnId"))
         .and_then(Value::as_str);
     let harness_version = value
         .get("harness_version")
         .or_else(|| value.get("serverVersion"))
+        .or_else(|| value.pointer("/result/userAgent"))
         .and_then(Value::as_str);
-    if thread_id.is_some() || turn_id.is_some() || harness_version.is_some() {
-        let accepted = if let Ok(mut tx) = pool.begin().await {
-            match devrail_runs::update_run_started(
-                &mut tx,
-                launch.run_id,
-                thread_id,
-                turn_id,
-                harness_version,
-                start_claim_token,
-            )
-            .await
-            {
-                Ok(updated) => updated && tx.commit().await.is_ok(),
-                Err(_) => false,
-            }
-        } else {
-            false
-        };
-        if !accepted {
-            // A stale process must not persist thread/turn metadata after its
-            // startup lease has been taken over by another Supervisor.
-            return false;
-        }
-    }
-    if followup_proposal(&value).is_some() {
-        handle_followup_proposal(pool, launch, &value).await;
+    if thread_id.is_none() && turn_id.is_none() && harness_version.is_none() {
         return true;
+    }
+    if let Ok(mut tx) = pool.begin().await {
+        match devrail_runs::update_run_started(
+            &mut tx,
+            launch.run_id,
+            thread_id,
+            turn_id,
+            harness_version,
+            start_claim_token,
+        )
+        .await
+        {
+            Ok(updated) => updated && tx.commit().await.is_ok(),
+            Err(_) => false,
+        }
+    } else {
+        false
+    }
+}
+
+fn protocol_terminal(value: &Value) -> Option<ProtocolOutcome> {
+    if value.get("method").and_then(Value::as_str) != Some("turn/completed") {
+        return None;
+    }
+    Some(
+        match value.pointer("/params/turn/status").and_then(Value::as_str) {
+            Some("completed") => ProtocolOutcome::Terminal {
+                status: "completed",
+                reason: "completed",
+                recovery: None,
+            },
+            Some("interrupted") => ProtocolOutcome::Terminal {
+                status: "cancelled",
+                reason: "interrupted",
+                recovery: Some("Codex turn 已中断"),
+            },
+            Some("failed") => ProtocolOutcome::Terminal {
+                status: "failed",
+                reason: "turn_failed",
+                recovery: Some("Codex turn 执行失败；请检查脱敏事件后重试"),
+            },
+            _ => ProtocolOutcome::Invalid,
+        },
+    )
+}
+
+async fn handle_protocol_value(
+    pool: &PgPool,
+    launch: &RunLaunch,
+    value: &Value,
+    start_claim_token: uuid::Uuid,
+) -> ProtocolOutcome {
+    if !persist_protocol_metadata(pool, launch, value, start_claim_token).await {
+        // A stale process must not persist metadata after its startup lease
+        // has been taken over by another Supervisor.
+        return ProtocolOutcome::Invalid;
+    }
+    let (event_type, source_id, summary, payload) = classify_event(value);
+    if followup_proposal(value).is_some() {
+        handle_followup_proposal(pool, launch, value).await;
+        return ProtocolOutcome::Continue;
     }
     let _ = persist_event(
         pool,
@@ -848,6 +1175,7 @@ async fn handle_stdout(
         let tool_name = value
             .get("tool")
             .or_else(|| value.get("tool_name"))
+            .or_else(|| value.get("method"))
             .and_then(Value::as_str)
             .unwrap_or("unknown-tool");
         let risk_level = value
@@ -855,7 +1183,9 @@ async fn handle_stdout(
             .and_then(Value::as_str)
             .filter(|risk| matches!(*risk, "low" | "medium" | "high" | "critical"))
             .unwrap_or("high");
-        let approval_key = source_id.as_deref().unwrap_or("approval:unknown");
+        let approval_key = protocol_request_key(value)
+            .or_else(|| source_id.clone())
+            .unwrap_or_else(|| "approval:unknown".to_string());
         let cwd = launch.cwd.to_string_lossy().to_string();
         let _ = crate::services::devrail_approvals::request_from_harness(
             pool,
@@ -865,15 +1195,24 @@ async fn handle_stdout(
                 department_id: launch.department_id,
                 owner_user_id: launch.owner_user_id,
                 tool_name: tool_name.to_string(),
-                args_summary: sanitize(value.get("args").unwrap_or(&json!({}))),
+                args_summary: sanitize(
+                    value
+                        .get("args")
+                        .or_else(|| value.get("params"))
+                        .unwrap_or(&json!({})),
+                ),
                 cwd,
                 risk_level: risk_level.to_string(),
-                idempotency_key: approval_key.to_string(),
+                idempotency_key: approval_key,
             },
         )
         .await;
     }
-    true
+    if value.get("id").and_then(Value::as_str) == Some("turn-start") && value.get("error").is_some()
+    {
+        return ProtocolOutcome::Invalid;
+    }
+    protocol_terminal(value).unwrap_or(ProtocolOutcome::Continue)
 }
 
 fn followup_proposal(value: &Value) -> Option<Result<CreateDevRailFollowupTaskRequest, ()>> {
@@ -928,17 +1267,13 @@ fn followup_actor(launch: &RunLaunch) -> ActorContext {
 }
 
 fn followup_event_source(value: &Value) -> Option<String> {
-    value
-        .get("id")
-        .and_then(Value::as_str)
-        .filter(|id| {
-            !id.is_empty()
-                && id.len() <= 256
-                && !id
-                    .bytes()
-                    .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
-        })
-        .map(str::to_string)
+    value.get("id").and_then(scalar_id_string).filter(|id| {
+        !id.is_empty()
+            && id.len() <= 256
+            && !id
+                .bytes()
+                .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
+    })
 }
 
 async fn handle_followup_proposal(pool: &PgPool, launch: &RunLaunch, value: &Value) {
@@ -1048,6 +1383,23 @@ fn classify_event(value: &Value) -> (String, Option<String>, Option<String>, Val
         .and_then(Value::as_str)
         .unwrap_or("lifecycle");
     let event_type = match kind {
+        "thread/status/changed"
+        | "thread/started"
+        | "thread/archived"
+        | "thread/closed"
+        | "thread/deleted"
+        | "thread/unarchived"
+        | "thread/reverted"
+        | "thread/name/updated"
+        | "thread/goal/updated"
+        | "thread/goal/cleared"
+        | "thread/queue/changed"
+        | "thread/project/updated"
+        | "thread/environment/connected"
+        | "thread/environment/disconnected"
+        | "thread/settings/updated"
+        | "thread/tokenUsage/updated"
+        | "thread/compacted" => "lifecycle",
         k if k.contains("approval") => "approval_request",
         k if k.contains("command") && (k.contains("start") || k.contains("begin")) => {
             "command_start"
@@ -1067,14 +1419,8 @@ fn classify_event(value: &Value) -> (String, Option<String>, Option<String>, Val
     .to_string();
     let source_id = value
         .get("id")
-        .and_then(Value::as_str)
-        .map(str::to_string)
-        .or_else(|| {
-            value
-                .get("event_id")
-                .and_then(Value::as_str)
-                .map(str::to_string)
-        });
+        .and_then(scalar_id_string)
+        .or_else(|| value.get("event_id").and_then(scalar_id_string));
     let summary = value
         .get("summary")
         .or_else(|| value.get("message"))
@@ -1144,6 +1490,7 @@ async fn persist_started(
     pool: &PgPool,
     launch: &RunLaunch,
     start_claim_token: uuid::Uuid,
+    harness_version: Option<&str>,
 ) -> Result<bool, sqlx::Error> {
     let mut tx = pool.begin().await?;
     let updated = devrail_runs::update_run_started(
@@ -1151,7 +1498,7 @@ async fn persist_started(
         launch.run_id,
         None,
         None,
-        None,
+        harness_version,
         start_claim_token,
     )
     .await?;
@@ -1521,13 +1868,46 @@ mod tests {
             automatic: true,
             scheduler_policy: SchedulerPolicy::default(),
         };
-        let (thread, turn) = start_requests(&launch);
+        let initialize = initialize_request();
+        assert_eq!(initialize["params"]["clientInfo"]["name"], "devrail");
+        assert!(initialize["params"].get("clientName").is_none());
+        let thread = thread_start_request(&launch);
+        let turn = turn_start_request(&launch, "thread-source");
         assert_eq!(thread["method"], "thread/resume");
         assert_eq!(thread["params"]["threadId"], "thread-source");
         assert_eq!(turn["method"], "turn/start");
         assert_eq!(turn["params"]["threadId"], "thread-source");
-        assert_eq!(turn["params"]["resumeFromTurnId"], "turn-source");
+        assert_eq!(turn["params"]["input"][0]["type"], "text");
+        assert_eq!(turn["params"]["input"][0]["text"], "请继续处理");
+        assert_eq!(turn["params"]["input"][0]["text_elements"], json!([]));
+        assert!(turn["params"].get("resumeFromTurnId").is_none());
         assert_ne!(thread["id"], turn["id"]);
+    }
+
+    #[test]
+    fn codex_turn_completion_maps_to_a_run_terminal() {
+        assert_eq!(
+            protocol_terminal(&json!({
+                "method": "turn/completed",
+                "params": {"turn": {"status": "completed"}},
+            })),
+            Some(ProtocolOutcome::Terminal {
+                status: "completed",
+                reason: "completed",
+                recovery: None,
+            })
+        );
+        assert_eq!(
+            protocol_terminal(&json!({
+                "method": "turn/completed",
+                "params": {"turn": {"status": "failed"}},
+            })),
+            Some(ProtocolOutcome::Terminal {
+                status: "failed",
+                reason: "turn_failed",
+                recovery: Some("Codex turn 执行失败；请检查脱敏事件后重试"),
+            })
+        );
     }
 
     #[test]
@@ -1546,6 +1926,48 @@ mod tests {
             classify_event(&json!({"type":"reasoning_summary","summary":"private"}));
         assert_eq!(kind, "reasoning_summary");
         assert_eq!(payload, json!({"summary":"private"}));
+        let (kind, _, _, _) = classify_event(&json!({
+            "method": "thread/status/changed",
+            "params": {"threadId": "thread-1"}
+        }));
+        assert_eq!(kind, "lifecycle");
+    }
+
+    #[test]
+    fn approval_protocol_key_round_trips_json_rpc_id_types() {
+        let numeric = json!({"id": 0, "method": "item/commandExecution/requestApproval"});
+        let numeric_key = protocol_request_key(&numeric).expect("numeric request key");
+        assert_eq!(numeric_key, "rpc:0");
+        assert_eq!(decode_protocol_request_id(&numeric_key), Some(json!(0)));
+
+        let string = json!({"id": "approval-1", "method": "item/fileChange/requestApproval"});
+        let string_key = protocol_request_key(&string).expect("string request key");
+        assert_eq!(string_key, "rpc:\"approval-1\"");
+        assert_eq!(
+            decode_protocol_request_id(&string_key),
+            Some(json!("approval-1"))
+        );
+        assert_eq!(
+            approval_response(9, Some(json!(0)), ApprovalDecision::Accept),
+            json!({"id": 0, "result": {"decision": "accept"}})
+        );
+        assert_eq!(
+            approval_response(9, Some(json!(0)), ApprovalDecision::Decline),
+            json!({"id": 0, "result": {"decision": "decline"}})
+        );
+        assert_eq!(
+            approval_response(9, Some(json!(0)), ApprovalDecision::Cancel),
+            json!({"id": 0, "result": {"decision": "cancel"}})
+        );
+        assert_eq!(
+            approval_response(9, None, ApprovalDecision::Cancel),
+            json!({"method":"approval/resolve","params":{"approvalId":9,"approved":false}})
+        );
+        assert!(protocol_request_key(&json!({
+            "type": "approval_request",
+            "id": "legacy-approval"
+        }))
+        .is_none());
     }
 
     #[test]
@@ -1659,7 +2081,14 @@ mod tests {
             .expect("create controlled workspace");
         tokio::fs::write(
             workspace.join("app-server"),
-            b"IFS= read -r line\nprintf '%s\\n' '{\"id\":\"initialize\",\"result\":{}}'\nsleep 30\n",
+            br#"IFS= read -r initialize
+printf '%s\n' '{"id":"initialize","result":{}}'
+IFS= read -r initialized
+IFS= read -r thread_request
+printf '%s\n' '{"id":"thread-start","result":{"thread":{"id":"thread-stall"}}}'
+IFS= read -r turn_request
+sleep 30
+"#,
         )
         .await
         .expect("write fake app-server");
@@ -1794,7 +2223,9 @@ mod tests {
             workspace.join("app-server"),
             br#"IFS= read -r initialize
 printf '%s\n' '{"id":"initialize","result":{}}'
+IFS= read -r initialized
 IFS= read -r thread_command
+printf '%s\n' '{"id":"thread-start","result":{"thread":{"id":"thread-transport"}}}'
 IFS= read -r turn_command
 if [ ! -f transport-recovered ]; then
   : > transport-recovered
@@ -1864,8 +2295,8 @@ sleep 30
                 owner_user_id,
                 cwd: workspace.clone(),
                 input: "验证断流恢复".to_string(),
-                resume_thread_id: None,
-                resume_turn_id: None,
+                resume_thread_id: Some("thread-transport".to_string()),
+                resume_turn_id: Some("turn-transport".to_string()),
                 attempt: 2,
                 max_attempts: 3,
                 automatic: true,
@@ -1917,7 +2348,14 @@ sleep 30
 
         tokio::fs::write(
             workspace.join("app-server"),
-            b"IFS= read -r line\nprintf '%s\\n' '{\"id\":\"initialize\",\"result\":{}}'\nsleep 30\n",
+            br#"IFS= read -r initialize
+printf '%s\n' '{"id":"initialize","result":{}}'
+IFS= read -r initialized
+IFS= read -r thread_request
+printf '%s\n' '{"id":"thread-start","result":{"thread":{"id":"thread-timeout"}}}'
+IFS= read -r turn_request
+sleep 30
+"#,
         )
         .await
         .expect("write timing-out app-server");

@@ -258,7 +258,7 @@ async fn decide(
     tx.commit().await.map_err(db_error)?;
     if decision == "approved" {
         supervisor
-            .resolve_approval(approval.run_id, id, true)
+            .resolve_approval(approval.run_id, id, &approval.idempotency_key, true)
             .await
             .map_err(|e| ApiError::conflict(e.to_string()))?;
     }
@@ -315,7 +315,7 @@ pub async fn reject(
 ) -> Result<DevRailApprovalResponse, ApiError> {
     let result = decide(pool, actor, supervisor, id, "rejected", reason).await?;
     supervisor
-        .resolve_approval(result.run_id, id, false)
+        .resolve_approval(result.run_id, id, &result.idempotency_key, false)
         .await
         .map_err(|e| ApiError::conflict(e.to_string()))?;
     Ok(result)
@@ -365,7 +365,7 @@ pub async fn withdraw(
     .map_err(db_error)?;
     tx.commit().await.map_err(db_error)?;
     supervisor
-        .resolve_approval(approval.run_id, id, false)
+        .cancel_approval(approval.run_id, id, &approval.idempotency_key)
         .await
         .map_err(|e| ApiError::conflict(e.to_string()))?;
     Ok(response(row))
@@ -402,7 +402,9 @@ pub async fn expire_due(
         )
         .await?;
         tx.commit().await?;
-        let _ = supervisor.resolve_approval(row.run_id, row.id, false).await;
+        let _ = supervisor
+            .cancel_approval(row.run_id, row.id, &row.idempotency_key)
+            .await;
     }
     Ok(rows.len())
 }

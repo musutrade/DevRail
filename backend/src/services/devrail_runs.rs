@@ -1299,7 +1299,7 @@ mod tests {
         .expect("write workflow contract");
         tokio::fs::write(
             workspace.join("app-server"),
-            b"IFS= read -r initialize\nprintf '%s\\n' '{\"id\":\"initialize\",\"result\":{}}'\nIFS= read -r thread\nIFS= read -r turn\nprintf '%s\\n' \"$turn\" > captured-turn.json\nsleep 30\n",
+            b"IFS= read -r initialize\nprintf '%s\\n' '{\"id\":\"initialize\",\"result\":{}}'\nIFS= read -r initialized\nIFS= read -r thread\nprintf '%s\\n' '{\"id\":\"thread-start\",\"result\":{\"thread\":{\"id\":\"workflow-thread\"}}}'\nIFS= read -r turn\nprintf '%s\\n' \"$turn\" > captured-turn.json\nprintf '%s\\n' '{\"id\":\"turn-start\",\"result\":{\"turn\":{\"id\":\"workflow-turn\"}}}'\nsleep 30\n",
         )
         .await
         .expect("write fake app-server");
@@ -1385,7 +1385,7 @@ mod tests {
         let turn: serde_json::Value =
             serde_json::from_str(captured.trim()).expect("parse captured turn");
         let input = turn
-            .pointer("/params/input")
+            .pointer("/params/input/0/text")
             .and_then(serde_json::Value::as_str)
             .expect("turn input");
         assert!(input.contains("工作流端到端任务"));
