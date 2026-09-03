@@ -1043,7 +1043,7 @@ async fn authentication_and_mfa_flow() {
     let (status, _, replayed_session) = login_with_totp_secret(
         &app,
         "admin",
-        "updated-integration-admin-password",
+        &token.password,
         true,
         token.totp_secret.as_deref(),
     )
