@@ -435,7 +435,21 @@ pub async fn create(
     if req.reviewer_user_id == actor.user_id {
         return Err(ApiError::validation("审查人不能是任务发起人"));
     }
+    if repositories::users::find_by_id_for_actor(pool, actor, req.reviewer_user_id)
+        .await
+        .map_err(db_error)?
+        .is_none()
+    {
+        return Err(ApiError::not_found("审查人不存在"));
+    }
     let mut tx = pool.begin().await.map_err(db_error)?;
+    if repositories::users::find_by_id_for_actor_in_connection(&mut tx, actor, req.reviewer_user_id)
+        .await
+        .map_err(db_error)?
+        .is_none()
+    {
+        return Err(ApiError::not_found("审查人不存在"));
+    }
     let row = devrail_reviews::create(
         &mut tx,
         actor,
@@ -444,7 +458,10 @@ pub async fn create(
         req.summary.as_deref(),
     )
     .await
-    .map_err(db_error)?;
+    .map_err(|error| match error {
+        sqlx::Error::RowNotFound => ApiError::not_found("运行或审查人不存在"),
+        other => db_error(other),
+    })?;
     repositories::audit_logs::record(
         &mut tx,
         Some(actor.user_id),

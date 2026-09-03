@@ -43,6 +43,16 @@ function initializeRuntimeProduct(): void {
   const document = inject(DOCUMENT);
   inject(Title).setTitle(runtimeConfig.appName);
   document.documentElement.dataset['appSlug'] = runtimeConfig.appSlug;
+  try {
+    const theme =
+      localStorage.getItem(runtimeConfig.themeStorageKey) ??
+      (runtimeConfig.themeStorageKey === 'arc-theme' ? null : localStorage.getItem('arc-theme'));
+    if (theme === 'dark') {
+      document.documentElement.dataset['theme'] = 'dark';
+    }
+  } catch {
+    // Storage can be unavailable under browser privacy policies; use the default theme.
+  }
 }
 
 function generatedApiConfiguration(): ApiConfiguration {

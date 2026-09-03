@@ -10,7 +10,11 @@ DevRail 的产品范围见 [需求文档](requirements.md)，当前实现口径�
 
 ## 当前验证记录
 
-当前工作区为 `main` HEAD `b66e4c1`，含未提交的受控 repair 变更。2026-08-28T20:29:43Z 执行 `cargo flow verify --all` 通过，backend/frontend/arc-flow 测试分别为 146/113/69 项，`TEST_SUMMARY: PASS`；脱敏报告见 [test_result.md](../codex-audit-pipeline/.codex/reports/test_result.md)。该记录是工作区工程门禁证据，不是 repair 代码已合并到主干的证明。
+历史工作区 `main` HEAD `b66e4c1`（含当时未提交的受控 repair 变更）曾于
+2026-08-28T20:29:43Z 执行本地 `cargo flow verify --all`。该本地 reports
+文件未纳入版本控制，不能独立复核，也不作为 repair 已合并或 MVP 已验收的证明。
+可复核的 `b66e4c1` 远端 CI 记录见下方链接；当前变更证据格式见
+[验证证据格式](verification/evidence-format.md)。
 
 `b66e4c1` 对应的可读 CI 历史：[CI](https://github.com/musutrade/DevRail/actions/runs/33145794157)、[arc-flow platform](https://github.com/musutrade/DevRail/actions/runs/33145794179)、[Supply chain security](https://github.com/musutrade/DevRail/actions/runs/33145794140)。CodeQL skipped 符合 workflow 条件。
 

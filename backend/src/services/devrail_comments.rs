@@ -126,6 +126,10 @@ pub async fn create(
     let row = devrail_comments::create(&mut tx, actor, task_id, &request, &value)
         .await
         .map_err(db_error)?;
+    let project_id = devrail_comments::task_project_id(&mut tx, actor.organization_id, task_id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("任务不存在或超出数据范围"))?;
     let users = devrail_comments::mentioned_users(&mut tx, actor.organization_id, &names)
         .await
         .map_err(db_error)?;
@@ -146,7 +150,7 @@ pub async fn create(
                 summary: &format!("@{username}，你在任务评论中被提及"),
                 resource_type: Some("devrail_task"),
                 resource_id: Some(task_id),
-                deep_link: Some(&format!("/devrail/tasks/{task_id}")),
+                deep_link: Some(&format!("/devrail/projects/{project_id}/tasks/{task_id}")),
                 source_key: &source,
             },
         )

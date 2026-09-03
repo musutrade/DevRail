@@ -84,10 +84,17 @@ const REPAIR: DevRailRepairResponse = {
 };
 
 class EventSourceStub {
+  static instances: EventSourceStub[] = [];
   onmessage: ((event: MessageEvent) => void) | null = null;
   onerror: (() => void) | null = null;
   readonly listeners = new Map<string, EventListenerOrEventListenerObject>();
   closed = false;
+  readonly url: string;
+
+  constructor(url: string | URL) {
+    this.url = String(url);
+    EventSourceStub.instances.push(this);
+  }
 
   addEventListener(type: string, listener: EventListenerOrEventListenerObject): void {
     this.listeners.set(type, listener);
@@ -121,6 +128,7 @@ describe('DevRailRunPage', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    EventSourceStub.instances = [];
     permissionState.set(new Set());
     vi.stubGlobal('EventSource', EventSourceStub);
     await TestBed.configureTestingModule({
@@ -148,6 +156,7 @@ describe('DevRailRunPage', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -240,5 +249,20 @@ describe('DevRailRunPage', () => {
     expect(text).toContain('turn-parent');
     await page.cancelPendingContinuation({ ...CONTINUATION, status: 'dispatched' });
     expect(apiStub.cancelContinuation).not.toHaveBeenCalled();
+  });
+
+  it('使用运行时 API 基址并在销毁后取消待执行重连', () => {
+    const page = fixture.componentInstance;
+    page.run.set({ ...RUN, status: 'active' });
+    const source = EventSourceStub.instances.at(-1);
+    expect(source?.url).toContain('/api/v1/runs/19/events/stream');
+
+    vi.useFakeTimers();
+    source?.onerror?.();
+    expect(source?.closed).toBe(true);
+    fixture.destroy();
+    vi.advanceTimersByTime(1_500);
+
+    expect(EventSourceStub.instances).toHaveLength(1);
   });
 });

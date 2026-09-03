@@ -78,7 +78,11 @@ repair 策略默认关闭，配置随任务 workflow 快照固化。低风险类
 
 建议将 `arc_admin_repair_diagnosis_rejected_total`、`arc_admin_repair_claim_conflict_total`、`arc_admin_repair_handoff_total`、`arc_admin_repair_budget_rejected_total` 和 `arc_admin_repair_hook_circuit_total` 的持续增长视为人工复核信号；`arc_admin_repair_dispatch_latency_seconds` P95 超过任务 SLO、`arc_admin_repair_child_result_total{result="failed"}` 或 `arc_admin_repair_gate_rerun_total{result="failed"}` 短时突增时，暂停新增自动 repair 并保留 trace 关联。所有标签由代码白名单归一化，禁止写入 request/run、组织、路径、命令或错误正文。
 
-验证证据：当前工作区（`main` HEAD `b66e4c1`，包含未提交的 repair 变更）于 2026-08-28T20:29:43Z 执行 `cargo flow verify --all` 通过，backend/frontend/arc-flow 测试分别为 146/113/69 项，报告见 [test_result.md](../codex-audit-pipeline/.codex/reports/test_result.md)。该门禁证明工程检查通过，不替代受控假 app-server/workspace/质量门禁、真实设备、供应商回调或生产恢复验收。
+历史工作区 `b66e4c1` 曾执行本地全量门禁，但其本地 reports 文件未纳入版本
+控制，不能作为独立可复核证据。可复核的远端 CI 入口见
+[项目交接](HANDOFF.md)，当前及后续变更按
+[验证证据格式](verification/evidence-format.md)归档；工程门禁不替代真实设备、
+供应商回调或生产恢复验收。
 
 分阶段启用：先执行 `20260909100000_add_controlled_repair_runs.sql` 和 `20260909100100_add_devrail_repair_permissions.sql` 等 additive migration，保持所有 repair 策略关闭；观察诊断拒绝、claim、workspace 清理、child 终态和人工交接指标后，按组织或 workflow 逐步启用低风险建议，再启用低风险自动执行，最后才开放质量门禁或审查触发。每一阶段都要保留脱敏运行记录和回滚责任人。
 

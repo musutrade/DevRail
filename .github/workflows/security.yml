@@ -24,10 +24,10 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       images: ${{ steps.filter.outputs.images }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3
         id: filter
         with:
           filters: |
@@ -41,28 +41,33 @@ jobs:
               - 'frontend/**'
               - 'backend/Dockerfile'
               - 'frontend/Dockerfile'
-              - 'docker/**'
+              - 'deployment/nginx/**'
+              - 'compose.production.yaml'
 
   rust-dependencies:
     name: Rust dependency policy
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true'
     permissions:
       contents: read
       checks: write
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Verify time-bounded advisory acceptances
+        run: node scripts/check-risk-acceptances.mjs
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
         with:
           toolchain: 1.97.1
           components: rustfmt, clippy
           cache: true
           cache-key: v1-backend-${{ hashFiles('backend/Cargo.lock', 'rust-toolchain.toml') }}
           cache-workspaces: backend -> backend/target
+      - name: Install pinned cargo-audit
+        run: cargo install cargo-audit --version 0.22.1 --locked --force
       - name: Audit RustSec advisories
-        uses: rustsec/audit-check@v2.0.0
+        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           working-directory: backend
@@ -72,7 +77,7 @@ jobs:
           ignore: RUSTSEC-2023-0071
       - name: Check licenses, sources, duplicates, and advisories
         if: always()
-        uses: EmbarkStudios/cargo-deny-action@v2.1.1
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         env:
           # The action runs in Alpine with this musl toolchain preinstalled.
           RUSTUP_TOOLCHAIN: 1.85.0-x86_64-unknown-linux-musl
@@ -86,7 +91,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: changes
-    if: needs.changes.outputs.images == 'true'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.images == 'true'
     permissions:
       actions: write
       contents: read
@@ -103,11 +108,11 @@ jobs:
             artifact: arc-admin-frontend.spdx.json
             cache_scope: frontend-image
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - name: Build production image
         id: build-image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: ${{ matrix.dockerfile }}
@@ -118,7 +123,7 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.cache_scope }}
           cache-to: type=gha,mode=max,scope=${{ matrix.cache_scope }}
       - name: Scan high and critical vulnerabilities
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ matrix.image }}
           format: table
@@ -128,7 +133,7 @@ jobs:
           severity: HIGH,CRITICAL
       - name: Generate SPDX JSON SBOM
         if: ${{ always() && steps.build-image.outcome == 'success' }}
-        uses: anchore/sbom-action@v0.24.0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           image: ${{ matrix.image }}
           format: spdx-json
@@ -137,7 +142,7 @@ jobs:
           upload-release-assets: false
       - name: Upload SBOM
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}

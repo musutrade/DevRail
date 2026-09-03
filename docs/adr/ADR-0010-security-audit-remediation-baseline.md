@@ -120,14 +120,14 @@ Repair 门禁重跑统一采用数据库持久化租约，不采用“把租约�
 
 ## 决策追踪矩阵
 
-| 复核条目 | 实现载体 | 最低验收证据 | 当前状态 |
-| --- | --- | --- | --- |
-| P1-6 repair 门禁租约 | 独立 OpenSpec；`task_scheduler`、`devrail_repairs`、迁移 | 两 worker 竞争、续租、失租约终止、重复 cwd 测试；PostgreSQL；`cargo flow verify --all` | Open |
-| P1-2 RUSTSEC 到期 | 供应链 OpenSpec；workflow + 可执行日期检查 | 到期前通过、到期后失败、ignore 路径检查；UTC 时间测试 | Open |
-| P2 授权与数据范围 | 授权 OpenSpec；members/MFA/auth/services/repositories | 跨组织拒绝、同范围成功、重放拒绝；隔离 PostgreSQL | Open |
-| P2 供应链与 CI | 供应链 OpenSpec；workflow、脚本、Dockerfile、deployment | SHA/digest 检查、schedule 执行、nginx 触发扫描；CI required checks | Open |
-| P2 前端 | 前端安全 OpenSpec；SSE/CSP/URL/error UI | Chromium 桌面与移动浏览器回归；Angular tests | Open |
-| P2 证据链 | 治理/证据 OpenSpec；报告归档与文档引用 | 干净 clone 可重建证据；文档一致性检查 | Open |
+| 追踪 ID | 复核条目 | 实现载体 | 最低验收证据 | 当前状态 |
+| --- | --- | --- | --- | --- |
+| SEC-REPAIR-001 | P1-6 repair 门禁租约 | 本 change；`task_scheduler`、`devrail_repairs`、迁移 | 两 worker 竞争、续租、失租约终止、重复 cwd 测试；PostgreSQL；`cargo flow verify --all` | Open |
+| SEC-RISK-002 | P1-2 RUSTSEC 到期 | 本 change；workflow + 可执行日期检查 | 到期前通过、到期后失败、ignore 路径检查；UTC 时间测试 | Open |
+| SEC-AUTH-003 | P2 授权与数据范围 | 本 change；members/MFA/auth/services/repositories | 跨组织拒绝、同范围成功、重放拒绝；隔离 PostgreSQL | Open |
+| SEC-SUPPLY-004 | P2 供应链与 CI | 本 change；workflow、脚本、Dockerfile、deployment | SHA/digest 检查、schedule 执行、nginx 触发扫描；CI required checks | Open |
+| SEC-FRONT-005 | P2 前端 | 本 change；SSE/CSP/URL/error UI | Chromium 桌面与移动浏览器回归；Angular tests | Open |
+| SEC-EVIDENCE-006 | P2 证据链 | 本 change；报告归档与文档引用 | 干净 clone 可重建证据；文档一致性检查 | Open |
 
 追踪矩阵是 ADR 的关闭入口：任何实现 PR 必须先更新对应 OpenSpec 和矩阵状态，
 不能只提交代码后把本 ADR 改成 Accepted。

@@ -21,8 +21,6 @@ const SECURE_SESSION_COOKIE: &str = "__Host-arc_session";
 const CSRF_COOKIE: &str = "arc_csrf";
 const SECURE_CSRF_COOKIE: &str = "__Host-arc_csrf";
 pub const CSRF_HEADER: HeaderName = HeaderName::from_static("x-csrf-token");
-const MAX_FORWARDED_FOR_LENGTH: usize = 1_024;
-const MAX_FORWARDED_FOR_HOPS: usize = 16;
 
 #[derive(Debug, Clone)]
 pub struct AuthSessionConfig {
@@ -73,22 +71,12 @@ pub fn resolve_client_ip(
     let Some(forwarded_for) = headers
         .get("x-forwarded-for")
         .and_then(|value| value.to_str().ok())
-        .filter(|value| value.len() <= MAX_FORWARDED_FOR_LENGTH)
-    else {
-        return peer_ip;
-    };
-    let forwarded = forwarded_for
-        .split(',')
-        .map(parse_forwarded_ip)
-        .collect::<Option<Vec<_>>>();
-    let Some(forwarded) =
-        forwarded.filter(|values| !values.is_empty() && values.len() <= MAX_FORWARDED_FOR_HOPS)
     else {
         return peer_ip;
     };
 
     let mut candidate = peer_ip;
-    for forwarded_ip in forwarded.into_iter().rev() {
+    for forwarded_ip in forwarded_for.rsplit(',').filter_map(parse_forwarded_ip) {
         if !is_trusted_proxy(candidate, trusted_proxy_cidrs) {
             return candidate;
         }
@@ -404,7 +392,7 @@ mod tests {
     }
 
     #[test]
-    fn malformed_forwarded_chain_falls_back_to_peer() {
+    fn malformed_forwarded_chain_uses_nearest_parseable_client() {
         let mut headers = HeaderMap::new();
         headers.insert(
             "x-forwarded-for",
@@ -414,7 +402,24 @@ mod tests {
 
         assert_eq!(
             resolve_client_ip("10.2.0.5".parse().expect("peer IP"), &headers, &trusted),
-            "10.2.0.5".parse::<IpAddr>().expect("expected IP")
+            "198.51.100.20".parse::<IpAddr>().expect("expected IP")
+        );
+    }
+
+    #[test]
+    fn oversized_forwarded_chain_uses_bounded_rightmost_hops() {
+        let mut headers = HeaderMap::new();
+        let mut hops = vec!["198.51.100.33"];
+        hops.extend(std::iter::repeat_n("10.1.0.4", 20));
+        headers.insert(
+            "x-forwarded-for",
+            HeaderValue::from_str(&hops.join(", ")).expect("forwarded header"),
+        );
+        let trusted = vec!["10.0.0.0/8".parse().expect("trusted proxy CIDR")];
+
+        assert_eq!(
+            resolve_client_ip("10.2.0.5".parse().expect("peer IP"), &headers, &trusted),
+            "198.51.100.33".parse::<IpAddr>().expect("expected IP")
         );
     }
 }

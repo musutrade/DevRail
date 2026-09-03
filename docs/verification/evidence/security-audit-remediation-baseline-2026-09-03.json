@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-03-security-audit-remediation-baseline",
+  "sourceBaseSha": "b325e2c7428ddbc6bfe8432d1392f3256f002c13",
+  "deliverySha": null,
+  "generatedAtUtc": "2026-09-03T16:39:14Z",
+  "scope": [
+    "backend",
+    "frontend",
+    "workflow"
+  ],
+  "checks": [
+    {
+      "command": "cargo flow scope",
+      "status": "passed",
+      "summary": "工作区范围识别为 backend、frontend、workflow，共 62 个变更文件",
+      "artifactUrl": null
+    },
+    {
+      "command": "cargo flow verify --components backend",
+      "status": "passed",
+      "summary": "secret scan、架构审计、Rust 格式、Clippy 与隔离 PostgreSQL 测试通过",
+      "artifactUrl": null
+    },
+    {
+      "command": "npm run test:ci",
+      "status": "passed",
+      "summary": "27 个测试文件共 118 项 Vitest 通过",
+      "artifactUrl": null
+    },
+    {
+      "command": "npm run build -- --configuration production",
+      "status": "passed",
+      "summary": "Angular 生产构建通过",
+      "artifactUrl": null
+    },
+    {
+      "command": "npx playwright test --project=chromium --project=mobile-chromium",
+      "status": "passed",
+      "summary": "Chromium 桌面与移动端共 6 项浏览器回归通过",
+      "artifactUrl": null
+    },
+    {
+      "command": "node --test scripts/check-supply-chain.test.mjs scripts/check-risk-acceptances.test.mjs scripts/check-documentation-evidence.test.mjs",
+      "status": "passed",
+      "summary": "供应链、风险接受到期和文档证据门禁正向/负向共 11 项测试通过",
+      "artifactUrl": null
+    },
+    {
+      "command": "node scripts/check-supply-chain.mjs && node scripts/check-production-deployment.mjs && node scripts/check-documentation-evidence.mjs",
+      "status": "passed",
+      "summary": "供应链安全、生产部署配置和文档证据一致性检查通过",
+      "artifactUrl": null
+    },
+    {
+      "command": "cargo flow verify --all",
+      "status": "passed",
+      "summary": "secret scan、架构审计、后端/前端门禁、供应链与 arc-flow 全部通过",
+      "artifactUrl": null
+    },
+    {
+      "command": "openspec validate --all --strict",
+      "status": "passed",
+      "summary": "9 个 OpenSpec change/spec 项严格校验通过",
+      "artifactUrl": null
+    }
+  ]
+}

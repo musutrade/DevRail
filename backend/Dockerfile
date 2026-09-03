@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1.7
 
-FROM rust:1.97.1-bookworm AS builder
+FROM rust:1.97.1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS builder
 WORKDIR /build
 COPY rust-toolchain.toml ./
 COPY WORKFLOW.md ./
 COPY backend ./backend
 RUN cargo build --locked --release --manifest-path backend/Cargo.toml --bins
 
-FROM debian:bookworm-slim AS runtime
+FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171 AS runtime
 RUN apt-get update \
     && apt-get install --no-install-recommends -y ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \

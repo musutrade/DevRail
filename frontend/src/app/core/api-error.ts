@@ -9,7 +9,7 @@ export function apiErrorMessage(error: unknown, fallback: string): string {
   const candidate = body?.error?.message;
   const message = typeof candidate === 'string' && candidate.length > 0 ? candidate : fallback;
   if (error.status < 500) {
-    return message;
+    return safeClientMessage(message, fallback);
   }
   const bodyTraceId = body?.error?.traceId;
   const headerTraceId = error.headers.get('x-request-id');
@@ -18,7 +18,13 @@ export function apiErrorMessage(error: unknown, fallback: string): string {
     : validTraceId(headerTraceId)
       ? headerTraceId
       : null;
-  return traceId ? `${message}（问题编号：${traceId}）` : message;
+  const internalMessage = '服务器内部错误，请稍后重试';
+  return traceId ? `${internalMessage}（问题编号：${traceId}）` : internalMessage;
+}
+
+function safeClientMessage(message: string, fallback: string): string {
+  const trimmed = message.trim();
+  return trimmed.length > 0 && trimmed.length <= 512 ? trimmed : fallback;
 }
 
 function validTraceId(value: unknown): value is string {

@@ -63,6 +63,21 @@ pub async fn mentioned_users(
     .await
 }
 
+pub async fn task_project_id(
+    connection: &mut PgConnection,
+    organization_id: i64,
+    task_id: i64,
+) -> Result<Option<i64>, sqlx::Error> {
+    sqlx::query_scalar(
+        "SELECT project_id FROM devrail_tasks
+         WHERE id=$1 AND organization_id=$2 AND archived_at IS NULL",
+    )
+    .bind(task_id)
+    .bind(organization_id)
+    .fetch_optional(connection)
+    .await
+}
+
 pub async fn hydrate(c: &mut PgConnection, id: i64) -> Result<DevRailTaskCommentRow, sqlx::Error> {
     sqlx::query_as::<_, DevRailTaskCommentRow>(AssertSqlSafe(format!("SELECT {COLUMNS} FROM devrail_task_comments c JOIN users u ON u.id=c.author_user_id WHERE c.id=$1"))).bind(id).fetch_one(c).await
 }

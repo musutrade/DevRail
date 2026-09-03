@@ -137,12 +137,36 @@ const REPAIR: DevRailRepairResponse = {
   updatedAt: '2026-08-26T00:02:00Z',
 };
 
+class EventSourceStub {
+  static instances: EventSourceStub[] = [];
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  onerror: (() => void) | null = null;
+  closed = false;
+  readonly url: string;
+
+  constructor(url: string | URL) {
+    this.url = String(url);
+    EventSourceStub.instances.push(this);
+  }
+
+  addEventListener(_type: string, _listener: EventListenerOrEventListenerObject): void {
+    void _type;
+    void _listener;
+  }
+
+  close(): void {
+    this.closed = true;
+  }
+}
+
 describe('DevRailTaskDetailPage', () => {
   let fixture: ComponentFixture<DevRailTaskDetailPage>;
   let apiStub: Partial<DevRailApiService>;
   const permissionState = signal<ReadonlySet<string>>(new Set());
 
   beforeEach(async () => {
+    EventSourceStub.instances = [];
+    vi.stubGlobal('EventSource', EventSourceStub);
     apiStub = {
       getTask: vi.fn(async () => TASK),
       listRepositories: vi.fn(async () => ({ items: [], total: 0, page: 1, pageSize: 20 })),
@@ -235,7 +259,11 @@ describe('DevRailTaskDetailPage', () => {
     await fixture.whenStable();
   });
 
-  afterEach(() => permissionState.set(new Set()));
+  afterEach(() => {
+    permissionState.set(new Set());
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
 
   it('显示任务修订号和工作流身份', () => {
     const text = fixture.nativeElement.textContent as string;
@@ -350,6 +378,22 @@ describe('DevRailTaskDetailPage', () => {
     await fixture.whenStable();
     await Promise.resolve();
     expect(document.activeElement).toBe(heading);
+  });
+
+  it('事件流断开后重连，并在组件销毁后清除待执行重连', () => {
+    const source = EventSourceStub.instances.at(-1);
+    expect(source?.url).toBe('/api/v1/tasks/7/events/stream');
+
+    vi.useFakeTimers();
+    source?.onerror?.();
+    vi.advanceTimersByTime(1_500);
+    expect(EventSourceStub.instances).toHaveLength(2);
+
+    const reconnected = EventSourceStub.instances.at(-1);
+    reconnected?.onerror?.();
+    fixture.destroy();
+    vi.advanceTimersByTime(1_500);
+    expect(EventSourceStub.instances).toHaveLength(2);
   });
 
   it('策略关闭时隐藏修复入口且不调用创建接口', async () => {

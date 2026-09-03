@@ -50,10 +50,31 @@ pub async fn add(
     if !matches!(role, "admin" | "developer" | "observer") {
         return Err(ApiError::validation("项目成员角色无效"));
     }
+    if repositories::devrail::find_project(pool, actor, project_id)
+        .await
+        .map_err(ApiError::internal)?
+        .is_none()
+        || repositories::users::find_by_id_for_actor(pool, actor, req.user_id)
+            .await
+            .map_err(ApiError::internal)?
+            .is_none()
+    {
+        return Err(ApiError::not_found("项目或用户不存在"));
+    }
     let mut tx = pool.begin().await.map_err(ApiError::internal)?;
+    if repositories::users::find_by_id_for_actor_in_connection(&mut tx, actor, req.user_id)
+        .await
+        .map_err(ApiError::internal)?
+        .is_none()
+    {
+        return Err(ApiError::not_found("项目或用户不存在"));
+    }
     let row = devrail_members::add(&mut tx, actor, project_id, req.user_id, role)
         .await
-        .map_err(ApiError::internal)?;
+        .map_err(|error| match error {
+            sqlx::Error::RowNotFound => ApiError::not_found("项目或用户不存在"),
+            other => ApiError::internal(other),
+        })?;
     repositories::audit_logs::record(
         &mut tx,
         Some(actor.user_id),

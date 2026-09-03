@@ -4,7 +4,7 @@
 
 系统 SHALL 将 repair run 表示为来源失败之后具有独立 run、attempt、修复序号和稳定幂等身份的受控执行。普通 retry、传输恢复、continuation、follow-up task 与 repair run MUST 使用可区分的运行种类、谱系和限额。修复策略 MUST 默认关闭，并在来源任务的不可变快照中固化允许触发、最大修复次数、诊断大小、审批要求和人工交接阈值；来源 run 的状态、终态时间、changeset 与审计事实 MUST NOT 被改写。
 
-Repair 门禁重跑 MUST 使用可续租、可过期且与唯一 owner/token 绑定的执行权。执行期间租约失效时，原执行者 MUST 停止提交结果并终止正在运行的门禁；接管者 MUST 只能领取已失效的执行权。任一 repair 门禁在同一时刻 MUST 至多有一个有���执行者。
+Repair 门禁重跑 MUST 使用可续租、可过期且与唯一 owner/token 绑定的执行权。执行期间租约失效时，原执行者 MUST 停止提交结果并终止正在运行的门禁；接管者 MUST 只能领取已失效的执行权。任一 repair 门禁在同一时刻 MUST 至多有一个有效执行者。
 
 #### Scenario: Eligible failure creates one repair request
 

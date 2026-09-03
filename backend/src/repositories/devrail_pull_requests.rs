@@ -36,6 +36,6 @@ pub async fn claim_event(
 pub async fn repository_owner(
     c: &mut PgConnection,
     repository_id: i64,
-) -> Result<Option<(i64, Option<i64>, i64)>, sqlx::Error> {
-    sqlx::query_as("SELECT organization_id,department_id,owner_user_id FROM devrail_repositories WHERE id=$1 AND archived_at IS NULL").bind(repository_id).fetch_optional(&mut *c).await
+) -> Result<Option<(i64, Option<i64>, i64, i64)>, sqlx::Error> {
+    sqlx::query_as("SELECT organization_id,department_id,owner_user_id,project_id FROM devrail_repositories WHERE id=$1 AND archived_at IS NULL").bind(repository_id).fetch_optional(&mut *c).await
 }
