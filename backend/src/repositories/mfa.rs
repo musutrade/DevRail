@@ -325,6 +325,19 @@ pub async fn list_passkeys(pool: &PgPool, user_id: i64) -> Result<Vec<PasskeyRow
     .await
 }
 
+pub async fn list_passkeys_in_connection(
+    connection: &mut PgConnection,
+    user_id: i64,
+) -> Result<Vec<PasskeyRow>, sqlx::Error> {
+    sqlx::query_as(
+        "SELECT id, name, credential, last_used_at, created_at
+         FROM user_passkeys WHERE user_id = $1 ORDER BY created_at, id",
+    )
+    .bind(user_id)
+    .fetch_all(connection)
+    .await
+}
+
 pub async fn create_passkey(
     connection: &mut PgConnection,
     user_id: i64,

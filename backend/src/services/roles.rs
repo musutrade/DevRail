@@ -134,7 +134,12 @@ pub async fn create(
         }
         let permission_codes =
             validate_permission_dependencies(&mut transaction, permission_ids).await?;
-        validate_permission_grant_scope(pool, actor_user_id, &permission_codes).await?;
+        validate_permission_grant_scope_in_connection(
+            &mut transaction,
+            actor_user_id,
+            &permission_codes,
+        )
+        .await?;
         repositories::roles::assign_permissions(&mut transaction, id, permission_ids)
             .await
             .map_err(db_error)?;
@@ -328,10 +333,16 @@ pub async fn assign_permissions(
     let mut transaction = pool.begin().await.map_err(db_error)?;
     let permission_codes =
         validate_permission_dependencies(&mut transaction, &req.permission_ids).await?;
-    validate_permission_grant_scope(pool, actor_user_id, &permission_codes).await?;
-    let previous_permission_ids = repositories::roles::permission_ids_by_role(pool, id)
-        .await
-        .map_err(db_error)?;
+    validate_permission_grant_scope_in_connection(
+        &mut transaction,
+        actor_user_id,
+        &permission_codes,
+    )
+    .await?;
+    let previous_permission_ids =
+        repositories::roles::permission_ids_by_role_in_connection(&mut transaction, id)
+            .await
+            .map_err(db_error)?;
     repositories::roles::assign_permissions(&mut transaction, id, &req.permission_ids)
         .await
         .map_err(db_error)?;
@@ -399,6 +410,31 @@ async fn validate_permission_grant_scope(
             .map_err(db_error)?
             .into_iter()
             .collect::<BTreeSet<_>>();
+    if requested_permissions
+        .iter()
+        .any(|permission| !actor_permissions.contains(permission))
+    {
+        return Err(ApiError::forbidden("不能授予操作者自身未拥有的权限"));
+    }
+    Ok(())
+}
+
+async fn validate_permission_grant_scope_in_connection(
+    connection: &mut sqlx::PgConnection,
+    actor_user_id: Option<i64>,
+    requested_permissions: &BTreeSet<String>,
+) -> Result<(), ApiError> {
+    let Some(actor_user_id) = actor_user_id else {
+        return Ok(());
+    };
+    let actor_permissions = repositories::permissions::permission_codes_by_user_in_connection(
+        connection,
+        actor_user_id,
+    )
+    .await
+    .map_err(db_error)?
+    .into_iter()
+    .collect::<BTreeSet<_>>();
     if requested_permissions
         .iter()
         .any(|permission| !actor_permissions.contains(permission))

@@ -1075,6 +1075,31 @@ pub async fn execute_quality_gates(
     if !matches!(run.status.as_str(), "completed" | "failed") {
         return Err(ApiError::conflict("运行尚未结束，不能执行质量门禁"));
     }
+    let token = uuid::Uuid::new_v4();
+    let owner = format!("quality-gate:{}:{}", actor.user_id, token.simple());
+    let claimed = devrail_runs::claim_quality_gate_execution(pool, id, &owner, token, 10_800)
+        .await
+        .map_err(db_error)?;
+    if !claimed {
+        return Err(ApiError::conflict("质量门禁正在执行，请稍后再试"));
+    }
+    let result = execute_quality_gates_inner(pool, actor, id, controlled_artifact_root).await;
+    if let Err(error) = devrail_runs::release_quality_gate_execution(pool, id, token).await {
+        tracing::warn!(run_id = id, %error, "failed to release quality gate execution lease");
+    }
+    result
+}
+
+async fn execute_quality_gates_inner(
+    pool: &PgPool,
+    actor: &ActorContext,
+    id: i64,
+    controlled_artifact_root: &std::path::Path,
+) -> Result<DevRailQualityGatePage, ApiError> {
+    let run = get_run(pool, actor, id).await?;
+    if !matches!(run.status.as_str(), "completed" | "failed") {
+        return Err(ApiError::conflict("运行尚未结束，不能执行质量门禁"));
+    }
     let task = devrail::find_task_by_id(pool, actor, run.task_id)
         .await
         .map_err(db_error)?
@@ -1181,8 +1206,9 @@ pub async fn execute_quality_gates(
         tx.commit().await.map_err(db_error)?;
     }
     let mut tx = pool.begin().await.map_err(db_error)?;
+    let mut transitioned = true;
     if failed {
-        devrail_runs::mark_quality_gate_failed(&mut tx, id, task.id)
+        transitioned = devrail_runs::mark_quality_gate_failed(&mut tx, id, task.id)
             .await
             .map_err(db_error)?;
     }
@@ -1192,7 +1218,7 @@ pub async fn execute_quality_gates(
         "devrail.quality_gate.execute",
         "devrail_run",
         Some(id),
-        json!({"taskId":task.id,"failed":failed,"count":commands.len()}),
+        json!({"taskId":task.id,"failed":failed,"count":commands.len(),"transitioned":transitioned}),
     )
     .await
     .map_err(db_error)?;

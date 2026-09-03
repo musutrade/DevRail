@@ -64,6 +64,18 @@ pub async fn find_by_id(pool: &PgPool, id: i64) -> Result<Option<UserRow>, sqlx:
     .await
 }
 
+pub async fn find_by_id_in_connection(
+    connection: &mut PgConnection,
+    id: i64,
+) -> Result<Option<UserRow>, sqlx::Error> {
+    sqlx::query_as::<_, UserRow>(AssertSqlSafe(format!(
+        "SELECT {USER_COLUMNS} FROM users WHERE id = $1 AND deleted_at IS NULL"
+    )))
+    .bind(id)
+    .fetch_optional(connection)
+    .await
+}
+
 pub async fn find_by_id_for_actor(
     pool: &PgPool,
     actor: &ActorContext,
@@ -438,6 +450,16 @@ pub async fn role_ids_by_user(pool: &PgPool, user_id: i64) -> Result<Vec<i64>, s
     sqlx::query_scalar("SELECT role_id FROM user_roles WHERE user_id = $1 ORDER BY role_id")
         .bind(user_id)
         .fetch_all(pool)
+        .await
+}
+
+pub async fn role_ids_by_user_in_connection(
+    connection: &mut PgConnection,
+    user_id: i64,
+) -> Result<Vec<i64>, sqlx::Error> {
+    sqlx::query_scalar("SELECT role_id FROM user_roles WHERE user_id = $1 ORDER BY role_id")
+        .bind(user_id)
+        .fetch_all(connection)
         .await
 }
 

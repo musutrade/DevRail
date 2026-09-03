@@ -205,7 +205,21 @@ impl HarnessSupervisor {
                 return Err(SupervisorError::ControlUnavailable);
             }
             let (tx, rx) = mpsc::channel(2);
-            self.controls.lock().await.insert(launch.run_id, tx);
+            if self
+                .controls
+                .lock()
+                .await
+                .insert(launch.run_id, tx)
+                .is_some()
+            {
+                let _ = devrail_runs::release_harness_start(
+                    &self.pool,
+                    launch.run_id,
+                    start_claim_token,
+                )
+                .await;
+                return Err(SupervisorError::ControlUnavailable);
+            }
 
             let mut command = Command::new(self.command.as_str());
             command
@@ -472,6 +486,25 @@ impl HarnessSupervisor {
             .and_then(Value::as_str)
             .unwrap_or("继续执行原任务")
             .to_string();
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|error| SupervisorError::Spawn(error.to_string()))?;
+        let claimed = devrail_runs::claim_approval_recovery(&mut transaction, run.id, run.task_id)
+            .await
+            .map_err(|error| SupervisorError::Spawn(error.to_string()))?;
+        if !claimed {
+            transaction
+                .rollback()
+                .await
+                .map_err(|error| SupervisorError::Spawn(error.to_string()))?;
+            return Err(SupervisorError::ControlUnavailable);
+        }
+        transaction
+            .commit()
+            .await
+            .map_err(|error| SupervisorError::Spawn(error.to_string()))?;
         self.launch(RunLaunch {
             run_id: run.id,
             task_id: run.task_id,

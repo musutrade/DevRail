@@ -108,7 +108,7 @@ pub(crate) async fn decide(
     c: &mut PgConnection,
     input: &ApprovalDecision<'_>,
 ) -> Result<Option<DevRailApprovalRow>, sqlx::Error> {
-    let updated = sqlx::query_as::<_, DevRailApprovalRow>(AssertSqlSafe(format!("WITH RECURSIVE visible_departments AS (SELECT id FROM departments WHERE id=$4 AND organization_id=$2 UNION SELECT child.id FROM departments child JOIN visible_departments parent ON child.parent_id=parent.id WHERE child.organization_id=$2) UPDATE devrail_approvals a SET status=$6, decided_by=$3, decision_reason=$7, updated_at=now() WHERE a.id=$5 AND a.status='pending' AND a.expires_at > now() AND {} RETURNING {APPROVAL_COLUMNS}", scope("a"))))
+    let updated = sqlx::query_as::<_, DevRailApprovalRow>(AssertSqlSafe(format!("WITH RECURSIVE visible_departments AS (SELECT id FROM departments WHERE id=$4 AND organization_id=$2 UNION SELECT child.id FROM departments child JOIN visible_departments parent ON child.parent_id=parent.id WHERE child.organization_id=$2) UPDATE devrail_approvals a SET status=$6, decided_by=$3, decision_reason=$7, updated_at=now() WHERE a.id=$5 AND a.status='pending' AND a.expires_at > now() AND a.requested_by <> $3 AND {} RETURNING {APPROVAL_COLUMNS}", scope("a"))))
         .bind(input.actor.data_scope.as_str()).bind(input.actor.organization_id).bind(input.actor.user_id).bind(input.actor.department_id).bind(input.id).bind(input.decision).bind(input.reason).fetch_optional(&mut *c).await?;
     let Some(row) = updated else {
         return Ok(None);
@@ -148,20 +148,130 @@ pub(crate) async fn mark_waiting(
     c: &mut PgConnection,
     run_id: i64,
     task_id: i64,
-) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE devrail_runs SET status='awaiting_approval', updated_at=now() WHERE id=$1 AND status IN ('starting','active')").bind(run_id).execute(&mut *c).await?;
-    sqlx::query("UPDATE devrail_tasks SET status='awaiting_approval', updated_at=now() WHERE id=$1")
-        .bind(task_id)
-        .execute(c)
-        .await
-        .map(|_| ())
+) -> Result<bool, sqlx::Error> {
+    let Some((run_status, task_status)) = sqlx::query_as::<_, (String, String)>(
+        "SELECT r.status, t.status
+         FROM devrail_tasks t
+         JOIN devrail_runs r ON r.task_id=t.id
+         WHERE t.id=$2 AND r.id=$1
+         FOR UPDATE OF t, r",
+    )
+    .bind(run_id)
+    .bind(task_id)
+    .fetch_optional(&mut *c)
+    .await?
+    else {
+        return Ok(false);
+    };
+    if run_status == "awaiting_approval" && task_status == "awaiting_approval" {
+        return Ok(true);
+    }
+    if !matches!(run_status.as_str(), "starting" | "active") || task_status != "running" {
+        return Ok(false);
+    }
+    sqlx::query(
+        "UPDATE devrail_runs
+         SET status='awaiting_approval', updated_at=now()
+         WHERE id=$1",
+    )
+    .bind(run_id)
+    .execute(&mut *c)
+    .await?;
+    sqlx::query(
+        "UPDATE devrail_tasks
+         SET status='awaiting_approval', updated_at=now()
+         WHERE id=$1",
+    )
+    .bind(task_id)
+    .execute(&mut *c)
+    .await?;
+    Ok(true)
 }
 
 pub(crate) async fn mark_resumed(
     c: &mut PgConnection,
     run_id: i64,
     task_id: i64,
-) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE devrail_runs SET status='active', updated_at=now() WHERE id=$1 AND status='awaiting_approval'").bind(run_id).execute(&mut *c).await?;
-    sqlx::query("UPDATE devrail_tasks SET status='running', updated_at=now() WHERE id=$1 AND status='awaiting_approval'").bind(task_id).execute(c).await.map(|_| ())
+) -> Result<bool, sqlx::Error> {
+    let Some((run_status, task_status)) = sqlx::query_as::<_, (String, String)>(
+        "SELECT r.status, t.status
+         FROM devrail_tasks t
+         JOIN devrail_runs r ON r.task_id=t.id
+         WHERE t.id=$2 AND r.id=$1
+         FOR UPDATE OF t, r",
+    )
+    .bind(run_id)
+    .bind(task_id)
+    .fetch_optional(&mut *c)
+    .await?
+    else {
+        return Ok(false);
+    };
+    if run_status != "awaiting_approval" || task_status != "awaiting_approval" {
+        return Ok(false);
+    }
+    sqlx::query(
+        "UPDATE devrail_runs
+         SET status='active', updated_at=now()
+         WHERE id=$1",
+    )
+    .bind(run_id)
+    .execute(&mut *c)
+    .await?;
+    sqlx::query(
+        "UPDATE devrail_tasks
+         SET status='running', updated_at=now()
+         WHERE id=$1",
+    )
+    .bind(task_id)
+    .execute(&mut *c)
+    .await?;
+    Ok(true)
+}
+
+pub(crate) async fn fail_expired_run(
+    c: &mut PgConnection,
+    run_id: i64,
+    task_id: i64,
+    trace_id: &str,
+) -> Result<bool, sqlx::Error> {
+    let Some((run_status, task_status)) = sqlx::query_as::<_, (String, String)>(
+        "SELECT r.status, t.status
+         FROM devrail_tasks t
+         JOIN devrail_runs r ON r.task_id=t.id
+         WHERE t.id=$2 AND r.id=$1
+         FOR UPDATE OF t, r",
+    )
+    .bind(run_id)
+    .bind(task_id)
+    .fetch_optional(&mut *c)
+    .await?
+    else {
+        return Ok(false);
+    };
+    if run_status != "awaiting_approval" || task_status != "awaiting_approval" {
+        return Ok(false);
+    }
+    sqlx::query(
+        "UPDATE devrail_runs
+         SET status='failed', exit_reason='approval_expired',
+             recovery_suggestion='审批已过期；请重新发起 run',
+             trace_id=$3, completed_at=COALESCE(completed_at,now()), updated_at=now()
+         WHERE id=$1 AND task_id=$2",
+    )
+    .bind(run_id)
+    .bind(task_id)
+    .bind(trace_id)
+    .execute(&mut *c)
+    .await?;
+    sqlx::query(
+        "UPDATE devrail_tasks
+         SET status='failed', scheduler_claim_token=NULL, scheduler_claimed_at=NULL,
+             scheduler_retry_at=NULL, updated_at=now()
+         WHERE id=$1",
+    )
+    .bind(task_id)
+    .execute(&mut *c)
+    .await?;
+    Ok(true)
 }

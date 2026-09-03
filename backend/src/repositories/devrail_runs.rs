@@ -131,8 +131,8 @@ pub(crate) async fn create_run(
     input: &NewRun<'_>,
 ) -> Result<Option<DevRailRunRow>, sqlx::Error> {
     let sql = format!(
-        "INSERT INTO devrail_runs (organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, attempt, task_revision, workflow_source, workflow_version, workflow_digest, workflow_snapshot, actor_type, parent_run_id, parent_turn_id, run_kind, branch_name, branch_expires_at, status, cwd, policy, startup_args_summary, model_id)
-         SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,CASE WHEN $14 IS NOT NULL OR ($13='system' AND $7 > 1) THEN 'retry' ELSE 'primary' END,$16,$17,'starting',$18,$19,$20,$21
+        "INSERT INTO devrail_runs (organization_id, department_id, owner_user_id, task_id, snapshot_id, idempotency_key, attempt, task_revision, workflow_source, workflow_version, workflow_digest, workflow_snapshot, actor_type, parent_run_id, parent_turn_id, harness_start_key, run_kind, branch_name, branch_expires_at, status, cwd, policy, startup_args_summary, model_id)
+         SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,concat('run-start:', md5(concat_ws(':',$1::text,$4::text,$7::text,$6))),CASE WHEN $14 IS NOT NULL OR ($13='system' AND $7 > 1) THEN 'retry' ELSE 'primary' END,$16,$17,'starting',$18,$19,$20,$21
          FROM devrail_tasks t
          WHERE t.id=$4 AND t.organization_id=$1 AND t.revision=$8
            AND t.workflow_source=$9 AND t.workflow_version=$10 AND t.workflow_digest=$11
@@ -349,7 +349,7 @@ pub(crate) async fn update_run_started(
     harness_version: Option<&str>,
     start_claim_token: uuid::Uuid,
 ) -> Result<bool, sqlx::Error> {
-    let result = sqlx::query("UPDATE devrail_runs SET status='active', thread_id=COALESCE($2,thread_id), turn_id=COALESCE($3,turn_id), harness_version=COALESCE($4,harness_version), harness_started_token=CASE WHEN harness_start_key IS NULL THEN harness_started_token WHEN harness_start_claim_token=$5 THEN $5 ELSE harness_started_token END, harness_start_claim_owner=NULL, harness_start_claim_token=NULL, harness_start_claim_expires_at=NULL, started_at=COALESCE(started_at,now()), last_heartbeat_at=now(), updated_at=now() WHERE id=$1 AND status IN ('created','starting','active') AND (harness_start_key IS NULL OR harness_start_claim_token=$5 OR (status='active' AND harness_started_token=$5))")
+    let result = sqlx::query("UPDATE devrail_runs SET status='active', thread_id=COALESCE($2,thread_id), turn_id=COALESCE($3,turn_id), harness_version=COALESCE($4,harness_version), harness_started_token=$5, harness_start_claim_owner=NULL, harness_start_claim_token=NULL, harness_start_claim_expires_at=NULL, started_at=COALESCE(started_at,now()), last_heartbeat_at=now(), updated_at=now() WHERE id=$1 AND status IN ('created','starting','active') AND harness_start_key IS NOT NULL AND (harness_start_claim_token=$5 OR (status='active' AND harness_started_token=$5))")
         .bind(run_id).bind(thread_id).bind(turn_id).bind(harness_version).bind(start_claim_token).execute(c).await?;
     Ok(result.rows_affected() == 1)
 }
@@ -369,10 +369,11 @@ pub(crate) async fn claim_harness_start(
              harness_started_token=CASE WHEN harness_start_key IS NULL THEN harness_started_token ELSE NULL END,
              updated_at=now()
          WHERE id=$1
-           AND (harness_start_key IS NULL OR (
+           AND harness_start_key IS NOT NULL
+           AND (
                status='starting'
                AND (harness_start_claim_token IS NULL OR harness_start_claim_expires_at<=now())
-           ))",
+           )",
     )
     .bind(run_id)
     .bind(owner)
@@ -393,6 +394,54 @@ pub(crate) async fn release_harness_start(
          SET harness_start_claim_owner=NULL, harness_start_claim_token=NULL,
              harness_start_claim_expires_at=NULL, updated_at=now()
          WHERE id=$1 AND status='starting' AND harness_start_claim_token=$2",
+    )
+    .bind(run_id)
+    .bind(token)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() == 1)
+}
+
+pub(crate) async fn claim_quality_gate_execution(
+    pool: &PgPool,
+    run_id: i64,
+    owner: &str,
+    token: uuid::Uuid,
+    lease_seconds: i64,
+) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query(
+        "UPDATE devrail_runs
+         SET quality_gate_claim_owner=$2,
+             quality_gate_claim_token=$3,
+             quality_gate_claim_expires_at=now()+make_interval(secs => $4),
+             updated_at=now()
+         WHERE id=$1
+           AND status IN ('completed','failed')
+           AND (quality_gate_claim_token IS NULL
+                OR quality_gate_claim_expires_at IS NULL
+                OR quality_gate_claim_expires_at<=now())",
+    )
+    .bind(run_id)
+    .bind(owner)
+    .bind(token)
+    .bind(lease_seconds.clamp(60, 10_800))
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() == 1)
+}
+
+pub(crate) async fn release_quality_gate_execution(
+    pool: &PgPool,
+    run_id: i64,
+    token: uuid::Uuid,
+) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query(
+        "UPDATE devrail_runs
+         SET quality_gate_claim_owner=NULL,
+             quality_gate_claim_token=NULL,
+             quality_gate_claim_expires_at=NULL,
+             updated_at=now()
+         WHERE id=$1 AND quality_gate_claim_token=$2",
     )
     .bind(run_id)
     .bind(token)
@@ -470,12 +519,19 @@ pub(crate) async fn mark_quality_gate_failed(
     c: &mut PgConnection,
     run_id: i64,
     task_id: i64,
-) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE devrail_runs SET status='failed',exit_reason='quality_gate_failed',recovery_suggestion='质量门禁未通过；请查看门禁结果后重试',completed_at=COALESCE(completed_at,now()),updated_at=now() WHERE id=$1")
+) -> Result<bool, sqlx::Error> {
+    let updated = sqlx::query("UPDATE devrail_runs SET status='failed',exit_reason='quality_gate_failed',recovery_suggestion='质量门禁未通过；请查看门禁结果后重试',completed_at=COALESCE(completed_at,now()),updated_at=now() WHERE id=$1 AND status='completed'")
         .bind(run_id)
         .execute(&mut *c)
         .await?;
-    update_task_status(c, task_id, "failed").await
+    if updated.rows_affected() != 1 {
+        return Ok(false);
+    }
+    sqlx::query("UPDATE devrail_tasks SET status='failed', scheduler_claim_token=NULL, scheduler_claimed_at=NULL, scheduler_retry_at=NULL, updated_at=now() WHERE id=$1 AND status='succeeded'")
+        .bind(task_id)
+        .execute(&mut *c)
+        .await?;
+    Ok(true)
 }
 
 pub(crate) async fn list_recoverable_runs(
@@ -496,6 +552,44 @@ pub(crate) async fn find_for_recovery(
     .bind(run_id)
     .fetch_optional(pool)
     .await
+}
+
+pub(crate) async fn claim_approval_recovery(
+    c: &mut PgConnection,
+    run_id: i64,
+    task_id: i64,
+) -> Result<bool, sqlx::Error> {
+    let Some((run_status, task_status)) = sqlx::query_as::<_, (String, String)>(
+        "SELECT r.status, t.status
+         FROM devrail_tasks t
+         JOIN devrail_runs r ON r.task_id=t.id
+         WHERE t.id=$2 AND r.id=$1 AND r.thread_id IS NOT NULL
+         FOR UPDATE OF t, r",
+    )
+    .bind(run_id)
+    .bind(task_id)
+    .fetch_optional(&mut *c)
+    .await?
+    else {
+        return Ok(false);
+    };
+    if run_status != "awaiting_approval" || task_status != "awaiting_approval" {
+        return Ok(false);
+    }
+    sqlx::query("UPDATE devrail_runs SET status='starting', updated_at=now() WHERE id=$1")
+        .bind(run_id)
+        .execute(&mut *c)
+        .await?;
+    sqlx::query(
+        "UPDATE devrail_tasks
+         SET status='running', scheduler_claim_token=NULL, scheduler_claimed_at=NULL,
+             scheduler_retry_at=NULL, updated_at=now()
+         WHERE id=$1",
+    )
+    .bind(task_id)
+    .execute(&mut *c)
+    .await?;
+    Ok(true)
 }
 
 pub(crate) async fn scheduler_retry_policy(
@@ -1334,6 +1428,112 @@ mod workflow_identity_tests {
         );
         drop(pool);
         fixture.cleanup().await.expect("cleanup harness run schema");
+    }
+
+    #[tokio::test]
+    async fn quality_gate_execution_claim_has_one_owner_until_release() {
+        let Ok(fixture) = crate::db::test_schema_pool().await else {
+            return;
+        };
+        let pool = fixture.pool().clone();
+        let suffix = uuid::Uuid::new_v4().simple().to_string();
+        let (owner_user_id, organization_id, department_id, task_id) =
+            create_harness_test_task(&pool, &suffix)
+                .await
+                .expect("create task");
+        let actor = ActorContext {
+            actor_type: crate::access::ActorType::System,
+            user_id: owner_user_id,
+            session_id: 0,
+            organization_id,
+            department_id,
+            data_scope: crate::access::DataScope::Organization,
+            permission_codes: std::collections::BTreeSet::new(),
+        };
+        let dispatch_snapshot = sqlx::query_scalar::<_, Value>(
+            "SELECT dispatch_snapshot FROM devrail_tasks WHERE id=$1",
+        )
+        .bind(task_id)
+        .fetch_one(&pool)
+        .await
+        .expect("read task snapshot");
+        let workflow_snapshot = dispatch_snapshot
+            .get("workflow")
+            .cloned()
+            .expect("workflow snapshot");
+        let mut tx = pool.begin().await.expect("begin gate claim fixture");
+        let snapshot_id =
+            create_snapshot(&mut tx, &actor, task_id, &dispatch_snapshot, department_id)
+                .await
+                .expect("create snapshot");
+        let run = create_run(
+            &mut tx,
+            &NewRun {
+                actor: &actor,
+                task_id,
+                snapshot_id,
+                idempotency_key: "quality-gate-claim",
+                attempt: 1,
+                task_revision: 1,
+                workflow_source: "legacy",
+                workflow_version: "legacy-v1",
+                workflow_digest: &"0".repeat(64),
+                workflow_snapshot: &workflow_snapshot,
+                actor_type: "system",
+                parent_run_id: None,
+                parent_turn_id: None,
+                branch_name: None,
+                branch_expires_at: None,
+                cwd: "/tmp/devrail-quality-gate-claim",
+                policy: &serde_json::json!({}),
+                startup_args: &serde_json::json!(["app-server"]),
+                model_id: None,
+                department_id,
+            },
+        )
+        .await
+        .expect("create run")
+        .expect("run inserted");
+        sqlx::query("UPDATE devrail_runs SET status='completed' WHERE id=$1")
+            .bind(run.id)
+            .execute(&mut *tx)
+            .await
+            .expect("complete run");
+        tx.commit().await.expect("commit gate claim fixture");
+
+        let first = uuid::Uuid::new_v4();
+        let second = uuid::Uuid::new_v4();
+        assert!(
+            claim_quality_gate_execution(&pool, run.id, "gate:first", first, 300)
+                .await
+                .expect("claim first gate")
+        );
+        assert!(
+            !claim_quality_gate_execution(&pool, run.id, "gate:second", second, 300)
+                .await
+                .expect("reject second gate")
+        );
+        assert!(release_quality_gate_execution(&pool, run.id, first)
+            .await
+            .expect("release first gate"));
+        assert!(
+            claim_quality_gate_execution(&pool, run.id, "gate:second", second, 300)
+                .await
+                .expect("claim after release")
+        );
+        assert!(release_quality_gate_execution(&pool, run.id, second)
+            .await
+            .expect("release second gate"));
+        let mut terminal_tx = pool.begin().await.expect("begin terminal guard");
+        assert!(mark_quality_gate_failed(&mut terminal_tx, run.id, task_id)
+            .await
+            .expect("mark first terminal failure"));
+        assert!(!mark_quality_gate_failed(&mut terminal_tx, run.id, task_id)
+            .await
+            .expect("reject repeated terminal failure"));
+        terminal_tx.commit().await.expect("commit terminal guard");
+        drop(pool);
+        fixture.cleanup().await.expect("cleanup gate claim schema");
     }
 }
 
