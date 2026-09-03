@@ -328,9 +328,10 @@ pub async fn delete(pool: &PgPool, id: i64, actor: Option<&ActorContext>) -> Res
     }
     let mut transaction = pool.begin().await.map_err(db_error)?;
     protect_last_super_admin(&mut transaction, id).await?;
-    let previous_role_ids = repositories::users::role_ids_by_user(pool, id)
-        .await
-        .map_err(db_error)?;
+    let previous_role_ids =
+        repositories::users::role_ids_by_user_in_connection(&mut transaction, id)
+            .await
+            .map_err(db_error)?;
     let deleted = repositories::users::soft_delete(&mut transaction, id)
         .await
         .map_err(db_error)?;
@@ -376,9 +377,10 @@ pub async fn delete_many(
     let mut transaction = pool.begin().await.map_err(db_error)?;
     for &user_id in &req.user_ids {
         protect_last_super_admin(&mut transaction, user_id).await?;
-        let previous_role_ids = repositories::users::role_ids_by_user(pool, user_id)
-            .await
-            .map_err(db_error)?;
+        let previous_role_ids =
+            repositories::users::role_ids_by_user_in_connection(&mut transaction, user_id)
+                .await
+                .map_err(db_error)?;
         let deleted = repositories::users::soft_delete(&mut transaction, user_id)
             .await
             .map_err(db_error)?;
@@ -492,9 +494,10 @@ pub async fn assign_roles_many(
         .map_err(db_error)?;
     let mut transaction = pool.begin().await.map_err(db_error)?;
     for &user_id in &req.user_ids {
-        let previous_role_ids = repositories::users::role_ids_by_user(pool, user_id)
-            .await
-            .map_err(db_error)?;
+        let previous_role_ids =
+            repositories::users::role_ids_by_user_in_connection(&mut transaction, user_id)
+                .await
+                .map_err(db_error)?;
         if !super_admin_role_id.is_some_and(|id| req.role_ids.contains(&id)) {
             protect_last_super_admin(&mut transaction, user_id).await?;
         }

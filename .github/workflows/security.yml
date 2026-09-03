@@ -33,8 +33,9 @@ jobs:
           filters: |
             backend:
               - 'backend/**'
-              - 'Cargo.toml'
-              - 'Cargo.lock'
+              - 'deny.toml'
+              - '.github/workflows/security.yml'
+              - 'rust-toolchain.toml'
             images:
               - 'backend/**'
               - 'frontend/**'
@@ -65,7 +66,9 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           working-directory: backend
-          # SQLx keeps its inactive MySQL driver in Cargo.lock; the backend only enables PostgreSQL.
+          # Temporary, owner-reviewed risk acceptance expires 2026-12-31.
+          # The exact dependency path and compensating controls are documented
+          # in docs/security/rustsec-2023-0071-risk-acceptance-2026-09.md.
           ignore: RUSTSEC-2023-0071
       - name: Check licenses, sources, duplicates, and advisories
         if: always()

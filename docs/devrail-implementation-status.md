@@ -1,6 +1,6 @@
 # DevRail 实现状态
 
-更新日期：2026-09-02
+更新日期：2026-09-03
 
 本文档是 DevRail 当前实现范围的唯一状态口径，用于避免把 arc-admin 基线或 `arc-flow` 审计工具误认为 Codex Harness 产品 MVP。产品需求和完成条件仍以 [requirements.md](requirements.md) 为准。
 
@@ -24,6 +24,7 @@ DevRail 的 Codex Harness 开发系统 MVP **尚未实现完成**，因此不能
 - 受控修复 run（工程实现已完成，产品验收进行中）：已加入 repair 请求/诊断/审批/人工交接事实、独立 repair child run、受控 workspace、任务和 run 谱系 API/UI、过期 claim 恢复、门禁重跑幂等记录，以及 Supervisor 终态到门禁重跑的闭环；可信 CI/审查事件适配已接通，并通过来源白名单、HMAC、证据新鲜度、changeset 摘要、跨范围和重复回调的真实 PostgreSQL 测试。2026-08-29 受控假 app-server/workspace/质量门禁 E2E 与全量 `cargo flow verify --all` 已通过（报告见 [MVP 验收证据矩阵](verification/mvp-acceptance-2026-08-28.md)），但真实设备、供应商/生产端到端演练仍未完成，不能视为 MVP 已验收；
 - Phase 2 通知基础能力：站内通知事实表、按通知来源幂等的 transactional outbox、通知查询/未读计数/已读 API、终态 run 通知、审批状态通知、用户通知偏好 API/页面和 Angular 通知中心已加入；Web Push VAPID 配置校验、受保护公开配置接口、Service Worker 订阅初始化、设备注册、列表、撤销及加密存储已加入，dispatcher、delivery 重试、投递审计和 Grafana 投递告警已完成；完整自动化验收仍待补齐；
 - Phase 3 协作基础能力：任务评论持久化、数据范围查询、评论发布、编辑、软删除、变更审计、`@用户名` 提及通知和任务详情页评论区已加入；代码审查请求、指定审查人、通过/驳回决策、组织边界、审计、运行详情页审查区和逐文件意见已加入；受控工作区补丁导出、敏感文件拒绝和敏感字段脱敏、GitHub/GitLab 仓库识别、安全创建合并请求深链接、API 自动创建、状态同步和外部审查意见同步已加入；临时分支创建与删除 API 已加入，run 可持久化绑定临时分支并由后台 worker 通过受控凭据删除 GitHub/GitLab 远程分支后清理绑定（远程删除失败时保留绑定并重试）；GitHub/GitLab 外部评论的全部可见 note、编辑内容、删除标记以及 GitLab 和 GitHub 原生线程 resolved 状态已归一化，并通过 `changesetMatched` 完成基于 run 文件变更事件的文件级关联；
+- 2026-09-03 安全边界修复（工程实现，仍待远端 CI 与产品验收）：外部评审同步现在绑定参与者、任务、项目、仓库和组织；Webhook 目标/事件身份来自验签正文并拒绝空密钥、缺失身份和头体不一致；审批禁止发起人自批，等待/恢复/过期状态转换有数据库条件守卫；Harness 启动与审批恢复使用单一数据库抢占，质量门禁使用持久化执行租约并保护终态；事务内快照查询复用同一连接；CodeQL/依赖审查不再因 INTERNAL 可见性跳过，`rsa` 风险按真实依赖链和 2026-12-31 到期日记录。对应 ADR-0009 和 OpenSpec 变更仍为 Proposed；不表示 MVP 已验收。
 - PR #23（审批撤回与过期 worker）和 PR #24（changeset/质量门禁查询）已合并到 `main`，合并提交分别为 `f50bb5c` 和 `2fc8d0c`，对应 CI、`arc-flow platform` 和供应链检查均成功。
 - PR #84（continuation turns，合并提交 `acb3bc0`）和 PR #86（Hook 失败熔断，合并提交 `b66e4c1`）已合并到 `main`。本仓库不在状态文档中补写无法复查的历史 CI 结论；当前 MVP 验收以 [MVP 验收证据矩阵](verification/mvp-acceptance-2026-08-28.md) 的可追溯记录为准。
 

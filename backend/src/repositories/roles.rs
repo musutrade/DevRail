@@ -177,6 +177,18 @@ pub async fn permission_ids_by_role(pool: &PgPool, role_id: i64) -> Result<Vec<i
     .await
 }
 
+pub async fn permission_ids_by_role_in_connection(
+    connection: &mut PgConnection,
+    role_id: i64,
+) -> Result<Vec<i64>, sqlx::Error> {
+    sqlx::query_scalar::<_, i64>(
+        "SELECT permission_id FROM role_permissions WHERE role_id = $1 ORDER BY permission_id",
+    )
+    .bind(role_id)
+    .fetch_all(connection)
+    .await
+}
+
 pub async fn permission_group_ids_by_role(
     pool: &PgPool,
     role_id: i64,

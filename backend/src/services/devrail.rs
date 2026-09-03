@@ -13,6 +13,7 @@ use axum::{body::Bytes, http::HeaderMap};
 use chrono::Utc;
 use reqwest::Client;
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use std::path::Path;
 use std::process::Stdio;
@@ -54,20 +55,24 @@ fn validate_webhook_payload(payload: &DevRailPullRequestWebhookRequest) -> Resul
 }
 
 fn validate_event_id(event_id: Option<&str>) -> Result<(), ApiError> {
-    if let Some(value) = event_id {
-        if value.is_empty()
-            || value.len() > 256
-            || value
-                .bytes()
-                .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
-        {
-            return Err(ApiError::validation("Webhook 事件 ID 无效"));
-        }
+    let Some(value) = event_id else {
+        return Err(ApiError::validation("Webhook 缺少事件 ID"));
+    };
+    if value.is_empty()
+        || value.len() > 256
+        || value
+            .bytes()
+            .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
+    {
+        return Err(ApiError::validation("Webhook 事件 ID 无效"));
     }
     Ok(())
 }
 
 fn verify_webhook_signature(secret: &str, signature: &str, body: &[u8]) -> bool {
+    if secret.trim().is_empty() {
+        return false;
+    }
     use hmac::{Hmac, Mac};
     use sha2_legacy::Sha256;
     let Ok(mut mac) = Hmac::<Sha256>::new_from_slice(secret.as_bytes()) else {
@@ -82,21 +87,48 @@ fn verify_webhook_signature(secret: &str, signature: &str, body: &[u8]) -> bool 
         ))
 }
 
+fn signed_body_event_id(provider: &str, body: &[u8]) -> String {
+    let mut digest = Sha256::new();
+    digest.update(provider.as_bytes());
+    digest.update([0]);
+    digest.update(body);
+    format!("body:{}", hex::encode(digest.finalize()))
+}
+
+fn native_repository_id(value: &Value, provider: &str) -> Option<i64> {
+    let candidates = if provider == "github" {
+        vec![value.pointer("/repository/id"), value.get("repository_id")]
+    } else {
+        vec![
+            value.pointer("/project/id"),
+            value.get("project_id"),
+            value.pointer("/object_attributes/source_project_id"),
+        ]
+    };
+    candidates
+        .into_iter()
+        .flatten()
+        .find_map(Value::as_i64)
+        .filter(|id| *id > 0)
+}
+
+fn optional_body_event_id(value: &Value) -> Option<String> {
+    ["event_id", "eventId", "delivery_id", "deliveryId"]
+        .into_iter()
+        .find_map(|key| value.get(key).and_then(Value::as_str).map(str::to_owned))
+}
+
 fn normalize_webhook_payload(
     headers: &HeaderMap,
     body: &Bytes,
 ) -> Result<DevRailPullRequestWebhookRequest, ApiError> {
     if let Ok(payload) = serde_json::from_slice::<DevRailPullRequestWebhookRequest>(body) {
         validate_webhook_payload(&payload)?;
+        validate_event_id(payload.event_id.as_deref())?;
         return Ok(payload);
     }
     let value: Value =
         serde_json::from_slice(body).map_err(|_| ApiError::validation("Webhook payload 无效"))?;
-    let repository_id = headers
-        .get("x-devrail-repository-id")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.parse::<i64>().ok())
-        .ok_or_else(|| ApiError::validation("原生 Webhook 缺少仓库 ID"))?;
     let provider = if headers.get("x-github-event").is_some() {
         "github"
     } else if headers.get("x-gitlab-event").is_some() {
@@ -104,6 +136,17 @@ fn normalize_webhook_payload(
     } else {
         return Err(ApiError::validation("缺少 GitHub/GitLab Webhook 事件头"));
     };
+    let repository_id = native_repository_id(&value, provider)
+        .ok_or_else(|| ApiError::validation("原生 Webhook 缺少签名仓库 ID"))?;
+    if let Some(header_id) = headers
+        .get("x-devrail-repository-id")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<i64>().ok())
+    {
+        if header_id != repository_id {
+            return Err(ApiError::validation("Webhook 仓库头与签名正文不一致"));
+        }
+    }
     let (number, url, status) = if provider == "github" {
         let action = value
             .get("action")
@@ -161,7 +204,8 @@ fn normalize_webhook_payload(
         number,
         url,
         status,
-        event_id: None,
+        event_id: optional_body_event_id(&value)
+            .or_else(|| Some(signed_body_event_id(provider, body))),
     };
     validate_webhook_payload(&payload)?;
     Ok(payload)
@@ -174,6 +218,9 @@ pub async fn handle_pull_request_webhook(
 ) -> Result<(), ApiError> {
     let secret = std::env::var("DEVRAIL_GIT_WEBHOOK_SECRET")
         .map_err(|_| ApiError::forbidden("Webhook 未配置"))?;
+    if secret.trim().is_empty() {
+        return Err(ApiError::forbidden("Webhook 未配置"));
+    }
     let signature = headers
         .get("x-devrail-signature")
         .and_then(|v| v.to_str().ok())
@@ -181,15 +228,14 @@ pub async fn handle_pull_request_webhook(
     if !verify_webhook_signature(&secret, signature, body) {
         return Err(ApiError::forbidden("Webhook 签名无效"));
     }
-    let mut payload = normalize_webhook_payload(headers, body)?;
-    payload.event_id = headers
-        .get("x-github-delivery")
-        .or_else(|| headers.get("x-gitlab-event-uuid"))
-        .and_then(|v| v.to_str().ok())
-        .map(str::to_owned)
-        .or(payload.event_id);
+    let payload = normalize_webhook_payload(headers, body)?;
     validate_event_id(payload.event_id.as_deref())?;
     let mut tx = pool.begin().await.map_err(db_error)?;
+    let owner =
+        repositories::devrail_pull_requests::repository_owner(&mut tx, payload.repository_id)
+            .await
+            .map_err(db_error)?
+            .ok_or_else(|| ApiError::not_found("仓库不存在或已归档"))?;
     if let Some(event_id) = payload.event_id.as_deref() {
         if !repositories::devrail_pull_requests::claim_event(&mut tx, &payload.provider, event_id)
             .await
@@ -199,12 +245,9 @@ pub async fn handle_pull_request_webhook(
             return Ok(());
         }
     }
-    let owner =
-        repositories::devrail_pull_requests::repository_owner(&mut tx, payload.repository_id)
-            .await
-            .map_err(db_error)?;
     let updated = repositories::devrail_pull_requests::update_webhook(
         &mut tx,
+        owner.0,
         &payload.provider,
         payload.repository_id,
         payload.number,
@@ -215,38 +258,46 @@ pub async fn handle_pull_request_webhook(
     .map_err(db_error)?;
     tx.commit().await.map_err(db_error)?;
     if updated {
-        if let Some((organization_id, department_id, owner_user_id)) = owner {
-            let mut tx = pool.begin().await.map_err(db_error)?;
-            let source_key = format!(
-                "pull_request:{}:{}:{}",
-                payload.provider, payload.repository_id, payload.number
-            );
-            let deep_link = format!("/devrail/repositories/{}", payload.repository_id);
-            let summary = format!(
-                "{} 合并请求 #{} 状态：{}",
-                payload.provider, payload.number, payload.status
-            );
-            repositories::devrail_notifications::create(
-                &mut tx,
-                &repositories::devrail_notifications::NewNotification {
-                    organization_id,
-                    department_id,
-                    recipient_user_id: owner_user_id,
-                    event_type: "devrail.pull_request.updated",
-                    level: "info",
-                    title: "合并请求状态已更新",
-                    summary: &summary,
-                    resource_type: Some("devrail_repository"),
-                    resource_id: Some(payload.repository_id),
-                    deep_link: Some(&deep_link),
-                    source_key: &source_key,
-                },
-            )
-            .await
-            .map_err(db_error)?;
-            repositories::devrail_notifications::outbox(&mut tx, organization_id, "notification.created", "devrail_pull_request", Some(payload.repository_id), &json!({"notificationSource": source_key, "eventType": "devrail.pull_request.updated"})).await.map_err(db_error)?;
-            tx.commit().await.map_err(db_error)?;
-        }
+        let (organization_id, department_id, owner_user_id) = owner;
+        let mut tx = pool.begin().await.map_err(db_error)?;
+        let source_key = format!(
+            "pull_request:{}:{}:{}",
+            payload.provider, payload.repository_id, payload.number
+        );
+        let deep_link = format!("/devrail/repositories/{}", payload.repository_id);
+        let summary = format!(
+            "{} 合并请求 #{} 状态：{}",
+            payload.provider, payload.number, payload.status
+        );
+        repositories::devrail_notifications::create(
+            &mut tx,
+            &repositories::devrail_notifications::NewNotification {
+                organization_id,
+                department_id,
+                recipient_user_id: owner_user_id,
+                event_type: "devrail.pull_request.updated",
+                level: "info",
+                title: "合并请求状态已更新",
+                summary: &summary,
+                resource_type: Some("devrail_repository"),
+                resource_id: Some(payload.repository_id),
+                deep_link: Some(&deep_link),
+                source_key: &source_key,
+            },
+        )
+        .await
+        .map_err(db_error)?;
+        repositories::devrail_notifications::outbox(
+            &mut tx,
+            organization_id,
+            "notification.created",
+            "devrail_pull_request",
+            Some(payload.repository_id),
+            &json!({"notificationSource": source_key, "eventType": "devrail.pull_request.updated"}),
+        )
+        .await
+        .map_err(db_error)?;
+        tx.commit().await.map_err(db_error)?;
         Ok(())
     } else {
         Ok(())
@@ -293,13 +344,24 @@ mod webhook_tests {
         use axum::http::{HeaderMap, HeaderValue};
         let mut headers = HeaderMap::new();
         headers.insert("x-github-event", HeaderValue::from_static("pull_request"));
-        headers.insert("x-devrail-repository-id", HeaderValue::from_static("9"));
         let body = Bytes::from(
-            r#"{"action":"closed","pull_request":{"number":4,"merged":true,"html_url":"https://github.com/o/r/pull/4"}}"#,
+            r#"{"action":"closed","repository":{"id":9},"pull_request":{"number":4,"merged":true,"html_url":"https://github.com/o/r/pull/4"}}"#,
         );
         let payload = normalize_webhook_payload(&headers, &body).expect("native payload");
         assert_eq!(payload.status, "merged");
         assert_eq!(payload.number, 4);
+    }
+
+    #[test]
+    fn rejects_unsigned_repository_header_mismatch() {
+        use axum::http::{HeaderMap, HeaderValue};
+        let mut headers = HeaderMap::new();
+        headers.insert("x-github-event", HeaderValue::from_static("pull_request"));
+        headers.insert("x-devrail-repository-id", HeaderValue::from_static("10"));
+        let body = Bytes::from(
+            r#"{"action":"opened","repository":{"id":9},"pull_request":{"number":4,"html_url":"https://github.com/o/r/pull/4"}}"#,
+        );
+        assert!(normalize_webhook_payload(&headers, &body).is_err());
     }
 
     #[test]
@@ -310,14 +372,14 @@ mod webhook_tests {
             "x-gitlab-event",
             HeaderValue::from_static("Merge Request Hook"),
         );
-        headers.insert("x-devrail-repository-id", HeaderValue::from_static("11"));
         let body = Bytes::from(
-            r#"{"object_attributes":{"action":"update","iid":8,"state":"opened","url":"https://gitlab.com/o/r/-/merge_requests/8"}}"#,
+            r#"{"project":{"id":11},"object_attributes":{"action":"update","iid":8,"state":"opened","url":"https://gitlab.com/o/r/-/merge_requests/8"}}"#,
         );
         let payload = normalize_webhook_payload(&headers, &body).expect("native payload");
         assert_eq!(payload.provider, "gitlab");
         assert_eq!(payload.status, "open");
         assert_eq!(payload.number, 8);
+        assert!(payload.event_id.is_some());
     }
 
     #[test]
@@ -344,12 +406,13 @@ mod webhook_tests {
             br#"{"action":"closed"}"#
         ));
         assert!(!verify_webhook_signature(secret, "sha256=bad", body));
+        assert!(!verify_webhook_signature(" ", &signature, body));
     }
 
     #[test]
     fn validates_webhook_event_id_boundaries() {
         assert!(validate_event_id(Some("github-delivery-1")).is_ok());
-        assert!(validate_event_id(None).is_ok());
+        assert!(validate_event_id(None).is_err());
         assert!(validate_event_id(Some(" ")).is_err());
         assert!(validate_event_id(Some(&"x".repeat(257))).is_err());
         assert!(validate_event_id(Some("id\nwith-control")).is_err());

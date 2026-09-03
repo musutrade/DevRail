@@ -185,7 +185,7 @@ pub async fn verify_totp_login(
     let secret = mfa
         .decrypt_totp_secret(challenge.user_id, &encrypted)
         .map_err(ApiError::internal)?;
-    let user = repositories::users::find_by_id(pool, challenge.user_id)
+    let user = repositories::users::find_by_id_in_connection(&mut transaction, challenge.user_id)
         .await
         .map_err(db_error)?
         .ok_or_else(ApiError::unauthorized)?;
@@ -284,7 +284,7 @@ async fn verify_totp_enrollment(
     let secret = mfa
         .decrypt_totp_secret(challenge.user_id, &encrypted)
         .map_err(ApiError::internal)?;
-    let user = repositories::users::find_by_id(pool, challenge.user_id)
+    let user = repositories::users::find_by_id_in_connection(&mut transaction, challenge.user_id)
         .await
         .map_err(db_error)?
         .ok_or_else(ApiError::unauthorized)?;
@@ -499,9 +499,10 @@ pub async fn start_passkey_authentication(
     .ok_or_else(ApiError::unauthorized)?;
     let login: LoginContext =
         serde_json::from_value(challenge.state.0.clone()).map_err(ApiError::internal)?;
-    let passkeys = repositories::mfa::list_passkeys(pool, challenge.user_id)
-        .await
-        .map_err(db_error)?;
+    let passkeys =
+        repositories::mfa::list_passkeys_in_connection(&mut transaction, challenge.user_id)
+            .await
+            .map_err(db_error)?;
     let credentials = passkeys
         .iter()
         .map(|key| key.credential.0.clone())
@@ -556,9 +557,10 @@ pub async fn finish_passkey_authentication(
     .ok_or_else(ApiError::unauthorized)?;
     let state: PasskeyAuthenticationState =
         serde_json::from_value(challenge.state.0.clone()).map_err(ApiError::internal)?;
-    let passkeys = repositories::mfa::list_passkeys(pool, challenge.user_id)
-        .await
-        .map_err(db_error)?;
+    let passkeys =
+        repositories::mfa::list_passkeys_in_connection(&mut transaction, challenge.user_id)
+            .await
+            .map_err(db_error)?;
     let mut credentials = passkeys
         .iter()
         .map(|key| key.credential.0.clone())

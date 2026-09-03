@@ -57,6 +57,11 @@ async fn add_notification(
 fn db_error(error: sqlx::Error) -> ApiError {
     ApiError::internal(error)
 }
+
+fn approval_actor_can_decide(requested_by: i64, actor_user_id: i64) -> bool {
+    requested_by != actor_user_id
+}
+
 fn response(row: DevRailApprovalRow) -> DevRailApprovalResponse {
     DevRailApprovalResponse {
         id: row.id,
@@ -96,11 +101,11 @@ pub async fn request_from_harness(
     request: HarnessApprovalRequest,
 ) -> Result<i64, sqlx::Error> {
     let task_id = devrail_runs::task_id_for_run(pool, request.run_id).await?;
-    let expires_at = Utc::now() + Duration::minutes(15);
-    let mut tx = pool.begin().await?;
     let policy_version = devrail_runs::policy_version_for_run(pool, request.run_id)
         .await?
         .or_else(|| Some("devrail-policy-v1".to_string()));
+    let expires_at = Utc::now() + Duration::minutes(15);
+    let mut tx = pool.begin().await?;
     let row = devrail_approvals::create_pending(
         &mut tx,
         &devrail_approvals::NewApproval {
@@ -121,7 +126,11 @@ pub async fn request_from_harness(
         },
     )
     .await?;
-    devrail_approvals::mark_waiting(&mut tx, request.run_id, task_id).await?;
+    if !devrail_approvals::mark_waiting(&mut tx, request.run_id, task_id).await? {
+        return Err(sqlx::Error::Protocol(
+            "审批请求对应的运行或任务状态已改变".to_string(),
+        ));
+    }
     repositories::audit_logs::record(
         &mut tx,
         Some(request.owner_user_id),
@@ -187,16 +196,19 @@ async fn decide(
     if approval.status != "pending" {
         return Err(ApiError::conflict("审批已处理，不能重复决策"));
     }
+    if !approval_actor_can_decide(approval.requested_by, actor.user_id) {
+        return Err(ApiError::forbidden("审批发起人不能处理自己的审批"));
+    }
     let current_policy = devrail_runs::policy_version_for_run(pool, approval.run_id)
         .await
         .map_err(db_error)?;
     if approval.policy_version != current_policy {
         return Err(ApiError::conflict("审批策略已更新，不能使用旧策略决策"));
     }
-    let mut tx = pool.begin().await.map_err(db_error)?;
     let task_id = devrail_runs::task_id_for_run(pool, approval.run_id)
         .await
         .map_err(db_error)?;
+    let mut tx = pool.begin().await.map_err(db_error)?;
     let row = devrail_approvals::decide(
         &mut tx,
         &devrail_approvals::ApprovalDecision {
@@ -219,10 +231,12 @@ async fn decide(
     )
     .await
     .map_err(db_error)?;
-    if decision == "approved" {
-        devrail_approvals::mark_resumed(&mut tx, approval.run_id, task_id)
+    if decision == "approved"
+        && !devrail_approvals::mark_resumed(&mut tx, approval.run_id, task_id)
             .await
-            .map_err(db_error)?;
+            .map_err(db_error)?
+    {
+        return Err(ApiError::conflict("运行状态已改变，不能恢复审批"));
     }
     if decision == "rejected" {
         let trace = uuid::Uuid::new_v4().to_string();
@@ -380,20 +394,12 @@ pub async fn expire_due(
         let task_id = devrail_runs::task_id_for_run(pool, row.run_id).await?;
         let mut tx = pool.begin().await?;
         let trace = uuid::Uuid::new_v4().to_string();
-        devrail_runs::update_run_terminal(
-            &mut tx,
-            &devrail_runs::TerminalRunUpdate {
-                run_id: row.run_id,
-                status: "failed",
-                exit_reason: "approval_expired",
-                exit_code: None,
-                stderr_summary: None,
-                trace_id: &trace,
-                recovery_suggestion: Some("审批已过期；请重新发起 run"),
-            },
-        )
-        .await?;
-        devrail_runs::update_task_status(&mut tx, task_id, "failed").await?;
+        let transitioned =
+            devrail_approvals::fail_expired_run(&mut tx, row.run_id, task_id, &trace).await?;
+        if !transitioned {
+            tx.rollback().await?;
+            continue;
+        }
         add_notification(
             &mut tx,
             row,
@@ -420,7 +426,7 @@ pub async fn expire(
 
 #[cfg(test)]
 mod tests {
-    use super::notification_copy;
+    use super::{approval_actor_can_decide, notification_copy};
 
     #[test]
     fn notification_copy_maps_all_approval_states() {
@@ -432,5 +438,11 @@ mod tests {
         assert_eq!(notification_copy("rejected").0, "error");
         assert_eq!(notification_copy("cancelled").0, "warning");
         assert_eq!(notification_copy("expired").2, "devrail.approval.expired");
+    }
+
+    #[test]
+    fn approval_requester_cannot_decide_own_request() {
+        assert!(!approval_actor_can_decide(42, 42));
+        assert!(approval_actor_can_decide(42, 43));
     }
 }

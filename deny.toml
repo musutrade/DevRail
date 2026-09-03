@@ -7,8 +7,9 @@ version = 2
 yanked = "deny"
 unmaintained = "workspace"
 unsound = "workspace"
-# SQLx 0.8 records its inactive MySQL driver in Cargo.lock. The application only enables PostgreSQL.
-ignore = ["RUSTSEC-2023-0071"]
+ignore = [
+  { id = "RUSTSEC-2023-0071", reason = "Temporary risk acceptance through 2026-12-31; the reachable path is web-push -> jwt-simple -> superboring -> rsa, no upstream patch exists, Web Push is disabled unless all VAPID settings are present, and the dependency must be re-evaluated before expiry (docs/security/rustsec-2023-0071-risk-acceptance-2026-09.md)." },
+]
 
 [licenses]
 confidence-threshold = 0.93

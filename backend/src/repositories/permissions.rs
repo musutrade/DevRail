@@ -2,7 +2,7 @@
 
 use crate::access::ActorContext;
 use crate::models::{DashboardStatsRow, PermissionGroupRow, PermissionRow};
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 
 pub async fn auth_context(
     pool: &PgPool,
@@ -90,6 +90,24 @@ pub async fn permission_codes_by_user(
     )
     .bind(user_id)
     .fetch_all(pool)
+    .await
+}
+
+pub async fn permission_codes_by_user_in_connection(
+    connection: &mut PgConnection,
+    user_id: i64,
+) -> Result<Vec<String>, sqlx::Error> {
+    sqlx::query_scalar::<_, String>(
+        "SELECT DISTINCT p.code FROM permissions p
+         JOIN role_permissions rp ON rp.permission_id = p.id
+         JOIN roles r ON r.id = rp.role_id AND r.is_active = TRUE
+         JOIN user_roles ur ON ur.role_id = r.id
+         JOIN users u ON u.id = ur.user_id
+         WHERE ur.user_id = $1 AND u.deleted_at IS NULL AND u.status = 'active'
+         ORDER BY p.code",
+    )
+    .bind(user_id)
+    .fetch_all(connection)
     .await
 }
 

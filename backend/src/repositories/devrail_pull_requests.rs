@@ -14,14 +14,15 @@ pub async fn upsert(
 }
 pub async fn update_webhook(
     c: &mut PgConnection,
+    organization_id: i64,
     provider: &str,
     repository_id: i64,
     number: i64,
     url: &str,
     status: &str,
 ) -> Result<bool, sqlx::Error> {
-    let result = sqlx::query(AssertSqlSafe("UPDATE devrail_pull_requests p SET url=$4,status=$5,last_synced_at=now(),updated_at=now() WHERE p.provider=$1 AND p.repository_id=$2 AND p.number=$3"))
-        .bind(provider).bind(repository_id).bind(number).bind(url).bind(status).execute(&mut *c).await?;
+    let result = sqlx::query(AssertSqlSafe("UPDATE devrail_pull_requests p SET url=$5,status=$6,last_synced_at=now(),updated_at=now() WHERE p.organization_id=$1 AND p.provider=$2 AND p.repository_id=$3 AND p.number=$4"))
+        .bind(organization_id).bind(provider).bind(repository_id).bind(number).bind(url).bind(status).execute(&mut *c).await?;
     Ok(result.rows_affected() > 0)
 }
 pub async fn claim_event(

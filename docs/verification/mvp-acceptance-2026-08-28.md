@@ -31,6 +31,8 @@
 
 ## 当前门禁记录
 
+- 2026-09-03 本地安全边界变更已完成编译、格式、供应链配置和 `cargo deny check advisories` 核验；在独立 PostgreSQL schema 中执行了 151 项后端单元/集成测试，包含新增迁移、Webhook 目标绑定、质量门禁执行租约和终态保护回归。远端 PR required checks 与 staging/生产演练仍待完成；该记录不改变十项 DoD 的“待验收”状态。
+
 - 执行时间：2026-09-02；范围：隔离 PostgreSQL、受控临时 workspace、本机 Codex app-server `0.152.1`；结果：DevRail task `4` 为 `succeeded`、run `4` 为 `completed`，真实 harness/thread/turn 标识已持久化，`turn/completed` 状态为 `completed`，Agent 精确返回 `DEVRAIL_REAL_CODEX_OK`，未发生工具执行，workspace cleanup 为 `completed`。另以拒绝式探针验证命令审批服务器请求使用数值 JSON-RPC id，回写同一 id 的 `decline` 后 app-server 发出 `serverRequest/resolved`；探针未批准或执行命令。该证据只覆盖本机协议链路，不将 Agent run 生命周期或整体 MVP 行更新为“通过”。
 
 - 执行时间：2026-09-02T08:11:22Z；命令：`cargo flow verify --all`；结果：secret scan、架构审计、backend format/Clippy/tests（160 项）、frontend lint/format/tests（113 项）、桌面/移动 Playwright、真实 full-stack smoke、生产构建、OpenAPI/配置/供应链和 arc-flow（74 项）均通过，`TEST_SUMMARY: PASS`。脱敏报告：[test_result.md](../../codex-audit-pipeline/.codex/reports/test_result.md)。

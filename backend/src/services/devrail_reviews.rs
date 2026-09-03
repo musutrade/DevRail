@@ -141,6 +141,16 @@ pub async fn sync_external_comments(
     if req.number < 1 {
         return Err(ApiError::validation("合并请求编号无效"));
     }
+    let organization_id = repositories::devrail_external_review_comments::sync_target(
+        pool,
+        actor,
+        review_id,
+        req.project_id,
+        req.repository_id,
+    )
+    .await
+    .map_err(db_error)?
+    .ok_or_else(|| ApiError::not_found("评审不存在或不属于请求仓库"))?;
     let provider =
         crate::services::devrail::get_git_provider(pool, actor, req.project_id, req.repository_id)
             .await?;
@@ -304,10 +314,14 @@ pub async fn sync_external_comments(
                     note.get("body").is_none() || note.get("body").is_some_and(Value::is_null),
                 )
             };
+            if id == "0" || id.trim().is_empty() {
+                return Err(ApiError::validation("外部审查意见缺少稳定 ID"));
+            }
             external_ids.push(id.clone());
             repositories::devrail_external_review_comments::upsert(
                 &mut tx,
                 &repositories::devrail_external_review_comments::ExternalReviewCommentInput {
+                    organization_id,
                     review_id,
                     provider: provider_name,
                     external_id: &id,
@@ -327,6 +341,7 @@ pub async fn sync_external_comments(
     }
     repositories::devrail_external_review_comments::mark_missing_deleted(
         &mut tx,
+        organization_id,
         review_id,
         provider_name,
         &external_ids,
