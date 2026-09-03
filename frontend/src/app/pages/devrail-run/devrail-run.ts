@@ -13,6 +13,8 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { apiErrorMessage } from '../../core/api-error';
+import { API_BASE_URL } from '../../core/runtime-config';
+import { safeDownloadFileName, safeDownloadUrl } from '../../core/safe-navigation';
 import { AuthService } from '../../core/auth.service';
 import { DevRailApiService } from '../../features/devrail/data-access/devrail-api.service';
 import { DEVRAIL_PERMISSIONS } from '../../features/devrail/devrail.permissions';
@@ -73,7 +75,10 @@ export class DevRailRunPage implements OnInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly api = inject(DevRailApiService);
   private readonly snack = inject(MatSnackBar);
+  private readonly apiBaseUrl = inject(API_BASE_URL);
   private eventSource?: EventSource;
+  private reconnectTimer?: number;
+  private destroyed = false;
   private runId = 0;
   private lastEventCursor = 0;
 
@@ -83,7 +88,13 @@ export class DevRailRunPage implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
+    if (this.reconnectTimer !== undefined) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
+    }
     this.eventSource?.close();
+    this.eventSource = undefined;
   }
 
   async interrupt(): Promise<void> {
@@ -143,7 +154,7 @@ export class DevRailRunPage implements OnInit, OnDestroy {
       const url = URL.createObjectURL(new Blob([patch.content], { type: 'text/x-diff' }));
       const link = document.createElement('a');
       link.href = url;
-      link.download = patch.fileName;
+      link.download = safeDownloadFileName(patch.fileName) ?? `devrail-run-${this.runId}.patch`;
       link.click();
       URL.revokeObjectURL(url);
       this.snack.open('补丁已下载', '关闭', { duration: 2500 });
@@ -156,9 +167,15 @@ export class DevRailRunPage implements OnInit, OnDestroy {
 
   downloadArtifact(artifact: DevRailArtifactResponse): void {
     if (this.busy()) return;
+    const url = safeDownloadUrl(artifact.downloadUrl);
+    const fileName = safeDownloadFileName(artifact.fileName);
+    if (!url || !fileName) {
+      this.snack.open('产物下载地址或文件名不安全', '关闭', { duration: 5000 });
+      return;
+    }
     const link = document.createElement('a');
-    link.href = artifact.downloadUrl;
-    link.download = artifact.fileName;
+    link.href = url;
+    link.download = fileName;
     link.rel = 'noopener';
     link.click();
   }
@@ -476,9 +493,14 @@ export class DevRailRunPage implements OnInit, OnDestroy {
   }
 
   private connectEvents(): void {
+    if (this.destroyed || typeof EventSource === 'undefined') return;
+    if (this.reconnectTimer !== undefined) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
+    }
     this.eventSource?.close();
     this.eventSource = new EventSource(
-      `/api/v1/runs/${this.runId}/events/stream?after_cursor=${this.lastEventCursor}`,
+      `${this.apiBaseUrl}/runs/${this.runId}/events/stream?after_cursor=${this.lastEventCursor}`,
       {
         withCredentials: true,
       },
@@ -532,8 +554,15 @@ export class DevRailRunPage implements OnInit, OnDestroy {
     }
     this.eventSource.onerror = () => {
       this.eventSource?.close();
-      if (!['completed', 'failed', 'cancelled'].includes(this.run()?.status ?? '')) {
-        window.setTimeout(() => this.connectEvents(), 1500);
+      this.eventSource = undefined;
+      if (
+        !this.destroyed &&
+        !['completed', 'failed', 'cancelled'].includes(this.run()?.status ?? '')
+      ) {
+        this.reconnectTimer = window.setTimeout(() => {
+          this.reconnectTimer = undefined;
+          this.connectEvents();
+        }, 1500);
       }
     };
   }

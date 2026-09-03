@@ -100,5 +100,8 @@ SSE 连接由页面持有明确的 connection state、timer handle 和 destroyed
 
 ## Open Questions
 
-- 具体的 lease grace window 秒数、指标名称和 CI artifact 保留期可在实现变更中确定，不改变本设计的单 owner、续租和失败关闭语义。
-- TOTP challenge 消费字段采用现有表扩展还是独立按用途表，可在数据库设计评审中确定；必须满足本 ADR 的用途分域和并发条件。
+本设计阶段的问题已定案，不再保留会改变实现方向的开放选择：
+
+- repair gate lease：租约 60 秒，worker 每 20 秒续租，连续 10 秒无法续租后进入失权处理；失权处理终止门禁子进程并阻止旧 token 写入。指标使用现有低基数 reconciliation 命名空间，新增 `repair_gate_lease_renewed`、`repair_gate_lease_lost` 和 `repair_gate_stale_completion`。
+- TOTP：在 `auth_mfa_challenges` 上增加 challenge 级消费字段，并以 `kind` 区分 `login`、`totp_enrollment` 与 `reauthentication`；不复用 `user_mfa_settings.last_reauth_totp_counter`。旧 challenge 的新字段默认未消费，过期清理沿用现有 challenge 清理路径，迁移只追加且回滚通过回滚应用代码实现。
+- CI artifact 保留期沿用现有 14/30 天策略；可提交摘要保存命令、UTC 时间、SHA、scope 和 artifact URL，不提交完整日志或敏感值。

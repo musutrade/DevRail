@@ -576,7 +576,10 @@ pub(crate) async fn create(
             summary: &notification_summary,
             resource_type: Some("devrail_task"),
             resource_id: Some(input.task_id),
-            deep_link: Some(&format!("/devrail/tasks/{}", input.task_id)),
+            deep_link: Some(&format!(
+                "/devrail/projects/{}/tasks/{}",
+                input.project_id, input.task_id
+            )),
             source_key: &format!("continuation:{request_id}:created"),
         },
     )
@@ -591,7 +594,11 @@ pub(crate) async fn create(
             "notificationId": request_id,
             "eventType": "devrail.continuation.created",
             "summary": "继续执行请求已创建",
-            "deepLink": format!("/devrail/tasks/{}", input.task_id),
+            "deepLink": format!(
+                "/devrail/projects/{}/tasks/{}",
+                input.project_id,
+                input.task_id
+            ),
         }),
     )
     .await?;
@@ -883,7 +890,11 @@ pub async fn cancel(
             "notificationId": id,
             "eventType": "devrail.continuation.cancelled",
             "summary": "继续执行请求已取消",
-            "deepLink": format!("/devrail/tasks/{}", request.task_id),
+            "deepLink": format!(
+                "/devrail/projects/{}/tasks/{}",
+                request.project_id,
+                request.task_id
+            ),
         }),
     )
     .await?;
@@ -1356,7 +1367,11 @@ pub async fn reject_claim(
             "notificationId": request.id,
             "eventType": "devrail.continuation.rejected",
             "summary": "继续执行请求未通过派发校验",
-            "deepLink": format!("/devrail/tasks/{}", request.task_id),
+            "deepLink": format!(
+                "/devrail/projects/{}/tasks/{}",
+                request.project_id,
+                request.task_id
+            ),
         }),
     )
     .await?;
@@ -2588,7 +2603,10 @@ pub(crate) mod integration_tests {
         .bind(fixture.task_id)
         .bind(fixture.task_id.to_string())
         .bind(fixture.actor.organization_id)
-        .bind(format!("/devrail/tasks/{}", fixture.task_id))
+        .bind(format!(
+            "/devrail/projects/{}/tasks/{}",
+            fixture.project_id, fixture.task_id
+        ))
         .fetch_one(&pool)
         .await
         .expect("rolled back continuation facts");

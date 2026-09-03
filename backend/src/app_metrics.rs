@@ -138,6 +138,10 @@ pub fn initialize() {
             "DevRail repair 门禁重跑结果总数"
         );
         describe_counter!(
+            "arc_admin_repair_gate_lease_total",
+            "DevRail repair 门禁重跑租约事件总数"
+        );
+        describe_counter!(
             "arc_admin_repair_handoff_total",
             "DevRail repair 人工交接总数"
         );
@@ -349,6 +353,11 @@ pub fn record_repair_gate_rerun(result: &str) {
     counter!("arc_admin_repair_gate_rerun_total", "result" => repair_result(result)).increment(1);
 }
 
+pub fn record_repair_gate_lease(event: &str) {
+    counter!("arc_admin_repair_gate_lease_total", "event" => repair_lease_event(event))
+        .increment(1);
+}
+
 pub fn record_repair_handoff(reason: &str) {
     counter!("arc_admin_repair_handoff_total", "reason" => repair_reason(reason)).increment(1);
 }
@@ -410,6 +419,15 @@ fn repair_result(result: &str) -> &'static str {
         "failed" | "gate_failed" => "failed",
         "cancelled" => "cancelled",
         "manual_handoff" | "handed_off" => "manual_handoff",
+        _ => "other",
+    }
+}
+
+fn repair_lease_event(event: &str) -> &'static str {
+    match event {
+        "renewed" => "renewed",
+        "lost" => "lost",
+        "stale_completion" => "stale_completion",
         _ => "other",
     }
 }

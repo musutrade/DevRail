@@ -258,13 +258,16 @@ pub async fn handle_pull_request_webhook(
     .map_err(db_error)?;
     tx.commit().await.map_err(db_error)?;
     if updated {
-        let (organization_id, department_id, owner_user_id) = owner;
+        let (organization_id, department_id, owner_user_id, project_id) = owner;
         let mut tx = pool.begin().await.map_err(db_error)?;
         let source_key = format!(
             "pull_request:{}:{}:{}",
             payload.provider, payload.repository_id, payload.number
         );
-        let deep_link = format!("/devrail/repositories/{}", payload.repository_id);
+        let deep_link = format!(
+            "/devrail/projects/{project_id}/repositories/{}",
+            payload.repository_id
+        );
         let summary = format!(
             "{} 合并请求 #{} 状态：{}",
             payload.provider, payload.number, payload.status
@@ -2632,6 +2635,27 @@ async fn validate_task_resources(
     Ok(())
 }
 
+async fn validate_optional_user_scope(
+    pool: &PgPool,
+    actor: &ActorContext,
+    user_id: Option<i64>,
+    field_name: &str,
+) -> Result<(), ApiError> {
+    let Some(user_id) = user_id else {
+        return Ok(());
+    };
+    if repositories::users::find_by_id_for_actor(pool, actor, user_id)
+        .await
+        .map_err(db_error)?
+        .is_none()
+    {
+        return Err(ApiError::validation(format!(
+            "{field_name}必须属于当前数据范围"
+        )));
+    }
+    Ok(())
+}
+
 #[derive(Debug)]
 struct QueueTaskDraft {
     project_id: i64,
@@ -2810,7 +2834,17 @@ pub async fn create_task(
         req.environment_id,
     )
     .await?;
+    validate_optional_user_scope(pool, actor, req.assignee_user_id, "任务负责人").await?;
     let mut tx = pool.begin().await.map_err(db_error)?;
+    if let Some(assignee_user_id) = req.assignee_user_id {
+        if repositories::users::find_by_id_for_actor_in_connection(&mut tx, actor, assignee_user_id)
+            .await
+            .map_err(db_error)?
+            .is_none()
+        {
+            return Err(ApiError::validation("任务负责人必须属于当前数据范围"));
+        }
+    }
     let row = devrail::create_task(
         &mut tx,
         actor,
@@ -2836,7 +2870,10 @@ pub async fn create_task(
         },
     )
     .await
-    .map_err(db_error)?;
+    .map_err(|error| match error {
+        sqlx::Error::RowNotFound => ApiError::validation("任务负责人必须属于当前数据范围"),
+        other => db_error(other),
+    })?;
     repositories::audit_logs::record(
         &mut tx,
         Some(actor.user_id),
@@ -2920,6 +2957,12 @@ pub async fn update_task(
         next_environment_id,
     )
     .await?;
+    let next_assignee_user_id = if assignee_set {
+        assignee_user_id
+    } else {
+        current.assignee_user_id
+    };
+    validate_optional_user_scope(pool, actor, next_assignee_user_id, "任务负责人").await?;
     let next_title = title.clone().unwrap_or_else(|| current.title.clone());
     let next_goal = goal.clone().unwrap_or_else(|| current.goal.clone());
     let next_background = if background_set {
@@ -2981,6 +3024,15 @@ pub async fn update_task(
         None
     };
     let mut tx = pool.begin().await.map_err(db_error)?;
+    if let Some(assignee_user_id) = next_assignee_user_id {
+        if repositories::users::find_by_id_for_actor_in_connection(&mut tx, actor, assignee_user_id)
+            .await
+            .map_err(db_error)?
+            .is_none()
+        {
+            return Err(ApiError::validation("任务负责人必须属于当前数据范围"));
+        }
+    }
     if let Some(artifacts) = queue_artifacts.as_ref() {
         let queue_environment_id =
             next_environment_id.ok_or_else(|| ApiError::validation("排队任务必须关联运行环境"))?;

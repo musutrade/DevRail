@@ -24,6 +24,9 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 const CLAIM_BATCH_SIZE: i64 = 16;
+const REPAIR_GATE_LEASE_SECONDS: i64 = 60;
+const REPAIR_GATE_RENEW_INTERVAL_SECONDS: u64 = 20;
+const REPAIR_GATE_LEASE_GRACE_SECONDS: u64 = 10;
 
 #[derive(Debug, Clone, Copy)]
 pub struct SchedulerPolicy {
@@ -109,7 +112,7 @@ fn spawn_with_tracker(
                     break;
                 }
                 _ = interval.tick() => {
-                    if let Err(error) = run_tick(&pool, tracker.as_ref(), &supervisor, policy, true).await {
+                    if let Err(error) = run_tick(&pool, tracker.as_ref(), &supervisor, policy, true, shutdown.clone()).await {
                         tracing::error!(error_kind = ?error.kind(), error = %error, "DevRail task scheduler tick failed");
                     }
                 }
@@ -124,6 +127,7 @@ async fn run_tick(
     supervisor: &HarnessSupervisor,
     policy: SchedulerPolicy,
     database_side_channels: bool,
+    shutdown: CancellationToken,
 ) -> Result<(), TrackerError> {
     debug_assert_eq!(TICK_PHASES[0], TickPhase::Reconcile);
     let dependency_propagations = tracker.reconcile_dependencies().await?;
@@ -217,7 +221,7 @@ async fn run_tick(
         debug_assert_eq!(DISPATCH_PHASES[3], DispatchPhase::DispatchedRepairRecovery);
         reconcile_dispatched_repairs(pool, supervisor).await;
         debug_assert_eq!(DISPATCH_PHASES[4], DispatchPhase::RepairGateReruns);
-        dispatch_repair_gate_reruns(pool, supervisor).await;
+        dispatch_repair_gate_reruns(pool, shutdown.clone()).await;
     }
     debug_assert_eq!(DISPATCH_PHASES[5], DispatchPhase::QueuedTasks);
     let claim_token = Uuid::new_v4();
@@ -298,7 +302,7 @@ async fn run_tick(
     Ok(())
 }
 
-async fn dispatch_repair_gate_reruns(pool: &PgPool, supervisor: &HarnessSupervisor) {
+async fn dispatch_repair_gate_reruns(pool: &PgPool, shutdown: CancellationToken) {
     match repositories::devrail_repairs::release_expired_gate_rerun_claims(pool, 500).await {
         Ok(released) if released > 0 => {
             crate::app_metrics::record_reconciliation("repair_gate_claim_released");
@@ -309,40 +313,66 @@ async fn dispatch_repair_gate_reruns(pool: &PgPool, supervisor: &HarnessSupervis
             crate::app_metrics::record_reconciliation("repair_gate_claim_release_failed");
         }
     }
-    let worker_id = format!("repair-gate-scheduler:{}", Uuid::new_v4().simple());
-    let claim_token = Uuid::new_v4();
-    let reruns = match repositories::devrail_repairs::claim_gate_reruns(
-        pool,
-        &worker_id,
-        claim_token,
-        CLAIM_BATCH_SIZE,
-        supervisor.scheduler_policy().claim_lease_seconds,
-    )
-    .await
-    {
-        Ok(reruns) => reruns,
-        Err(error) => {
-            tracing::warn!(error = %error, "repair gate claim failed");
-            crate::app_metrics::record_reconciliation("repair_gate_claim_failed");
-            return;
-        }
-    };
-    for rerun in reruns {
-        let rerun_id = rerun.id;
-        match devrail_repairs::execute_gate_rerun(pool, &worker_id, claim_token, rerun).await {
-            Ok(()) => crate::app_metrics::record_reconciliation("repair_gate_completed"),
+    for _ in 0..CLAIM_BATCH_SIZE {
+        let worker_id = format!("repair-gate-scheduler:{}", Uuid::new_v4().simple());
+        let claim_token = Uuid::new_v4();
+        let rerun = match repositories::devrail_repairs::claim_gate_reruns(
+            pool,
+            &worker_id,
+            claim_token,
+            1,
+            REPAIR_GATE_LEASE_SECONDS,
+        )
+        .await
+        {
+            Ok(mut reruns) => match reruns.pop() {
+                Some(rerun) => rerun,
+                None => break,
+            },
             Err(error) => {
-                tracing::warn!(error = %error, "repair gate rerun failed");
-                let _ = repositories::devrail_repairs::release_gate_rerun_claim(
-                    pool,
-                    rerun_id,
-                    &worker_id,
-                    claim_token,
-                )
-                .await;
-                crate::app_metrics::record_reconciliation("repair_gate_failed");
+                tracing::warn!(error = %error, "repair gate claim failed");
+                crate::app_metrics::record_reconciliation("repair_gate_claim_failed");
+                return;
             }
+        };
+        let rerun_id = rerun.id;
+        if rerun.claim_token != Some(claim_token) {
+            crate::app_metrics::record_repair_gate_lease("lost");
+            crate::app_metrics::record_reconciliation("repair_gate_claim_missing");
+            continue;
         }
+        let execution_pool = pool.clone();
+        let execution_shutdown = shutdown.clone();
+        tokio::spawn(async move {
+            let lease_policy = devrail_repairs::GateRerunLeasePolicy {
+                lease_seconds: REPAIR_GATE_LEASE_SECONDS,
+                renew_interval: Duration::from_secs(REPAIR_GATE_RENEW_INTERVAL_SECONDS),
+                grace_interval: Duration::from_secs(REPAIR_GATE_LEASE_GRACE_SECONDS),
+            };
+            match devrail_repairs::execute_gate_rerun(
+                &execution_pool,
+                &worker_id,
+                claim_token,
+                rerun,
+                lease_policy,
+                execution_shutdown,
+            )
+            .await
+            {
+                Ok(()) => crate::app_metrics::record_reconciliation("repair_gate_completed"),
+                Err(error) => {
+                    tracing::warn!(error = %error, rerun_id, "repair gate rerun failed");
+                    let _ = repositories::devrail_repairs::release_gate_rerun_claim(
+                        &execution_pool,
+                        rerun_id,
+                        &worker_id,
+                        claim_token,
+                    )
+                    .await;
+                    crate::app_metrics::record_reconciliation("repair_gate_failed");
+                }
+            }
+        });
     }
 }
 
@@ -1582,6 +1612,7 @@ mod tests {
             &supervisor,
             SchedulerPolicy::default(),
             false,
+            CancellationToken::new(),
         )
         .await
         .expect("empty tracker tick");
@@ -1870,7 +1901,7 @@ IFS= read -r shutdown || exit 0
         .await
         .expect("count gate reruns");
         assert_eq!(gate_count_before, 1);
-        dispatch_repair_gate_reruns(&pool, &supervisor).await;
+        dispatch_repair_gate_reruns(&pool, CancellationToken::new()).await;
         let request_deadline =
             tokio::time::Instant::now() + Duration::from_secs(REPAIR_E2E_TIMEOUT_SECS);
         loop {
@@ -1887,7 +1918,7 @@ IFS= read -r shutdown || exit 0
                 tokio::time::Instant::now() < request_deadline,
                 "repair request did not finalize"
             );
-            dispatch_repair_gate_reruns(&pool, &supervisor).await;
+            dispatch_repair_gate_reruns(&pool, CancellationToken::new()).await;
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
         let task_status: String =

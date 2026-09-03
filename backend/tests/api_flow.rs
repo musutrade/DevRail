@@ -599,6 +599,22 @@ async fn authentication_and_mfa_flow() {
         .await;
         assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
     }
+    let (status, _) = send_from_ip(
+        &app,
+        Method::POST,
+        "/api/v1/auth/login",
+        Some(json!({
+            "username": "malformed_forwarded_user",
+            "password": "incorrect-password"
+        })),
+        "198.51.100.21, invalid",
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::UNAUTHORIZED,
+        "畸形转发链必须归因到可解析客户端，不能落入已锁定的代理共享桶"
+    );
 
     let (status, _) = send(
         &app,
@@ -1024,6 +1040,18 @@ async fn authentication_and_mfa_flow() {
     let token = token.expect("refreshed session cookies");
     let token = &token;
 
+    let (status, _, replayed_session) = login_with_totp_secret(
+        &app,
+        "admin",
+        "updated-integration-admin-password",
+        true,
+        token.totp_secret.as_deref(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert!(replayed_session.is_none());
+
+    tokio::time::sleep(std::time::Duration::from_secs(MFA_TEST_STEP_SECS)).await;
     let (status, _, logout_session) = login_with_totp_secret(
         &app,
         "admin",

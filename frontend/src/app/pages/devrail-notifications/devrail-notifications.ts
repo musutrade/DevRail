@@ -5,6 +5,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { DevRailApiService } from '../../features/devrail/data-access/devrail-api.service';
 import { apiErrorMessage } from '../../core/api-error';
+import { safeDevRailRoute } from '../../core/safe-navigation';
 import type { DevRailNotificationResponse } from '../../generated/api/models';
 
 @Component({
@@ -24,6 +25,10 @@ export class DevRailNotificationsPage implements OnInit {
   readonly pageSize = 20;
   private readonly api = inject(DevRailApiService);
 
+  safeDeepLink(value: string | null | undefined): string | null {
+    return safeDevRailRoute(value);
+  }
+
   ngOnInit(): void {
     void this.load();
   }
@@ -31,8 +36,11 @@ export class DevRailNotificationsPage implements OnInit {
   async markRead(notification: DevRailNotificationResponse): Promise<void> {
     if (notification.readAt) return;
     await this.api.markNotificationRead(notification.id);
-    notification.readAt = new Date().toISOString();
-    this.notifications.set([...this.notifications()]);
+    this.notifications.update((items) =>
+      items.map((item) =>
+        item.id === notification.id ? { ...item, readAt: new Date().toISOString() } : item,
+      ),
+    );
     this.unread.update((value) => Math.max(0, value - 1));
   }
 

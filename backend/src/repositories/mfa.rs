@@ -248,6 +248,32 @@ pub async fn consume_challenge(
     Ok(())
 }
 
+pub async fn consume_totp_challenge(
+    connection: &mut PgConnection,
+    challenge_id: i64,
+    expected_kind: &str,
+    counter: i64,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar(
+        "UPDATE auth_mfa_challenges
+         SET accepted_totp_counter = $3,
+             accepted_totp_at = now(),
+             consumed_at = now()
+         WHERE id = $1
+           AND kind = $2
+           AND consumed_at IS NULL
+           AND expires_at > now()
+           AND accepted_totp_counter IS NULL
+         RETURNING TRUE",
+    )
+    .bind(challenge_id)
+    .bind(expected_kind)
+    .bind(counter)
+    .fetch_optional(connection)
+    .await
+    .map(|updated| updated.unwrap_or(false))
+}
+
 pub async fn prune_challenges(connection: &mut PgConnection) -> Result<u64, sqlx::Error> {
     sqlx::query(
         "DELETE FROM auth_mfa_challenges

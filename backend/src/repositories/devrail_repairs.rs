@@ -595,7 +595,10 @@ pub(crate) async fn create_or_get(
         "info",
         "受控修复请求已创建",
         "失败诊断已保存，等待策略与审批检查。",
-        &format!("/devrail/repairs/{request_id}"),
+        &format!(
+            "/devrail/projects/{}/tasks/{}",
+            request.project_id, request.task_id
+        ),
     )
     .await?;
     Ok((request, true))
@@ -1183,7 +1186,10 @@ pub async fn complete_for_child_run(
         } else {
             "修复运行未完成自动验证，需要人工处理。"
         },
-        &format!("/devrail/repairs/{}", request.id),
+        &format!(
+            "/devrail/projects/{}/tasks/{}",
+            request.project_id, request.task_id
+        ),
     )
     .await?;
     Ok(Some(request))
@@ -1706,7 +1712,10 @@ pub async fn finalize_gate_reruns(
         } else {
             "受影响门禁仍未通过，需要人工处理。"
         },
-        &format!("/devrail/repairs/{}", completed.id),
+        &format!(
+            "/devrail/projects/{}/tasks/{}",
+            completed.project_id, completed.task_id
+        ),
     )
     .await?;
     Ok(Some(completed))
@@ -1912,7 +1921,10 @@ pub async fn decide_approval(
         },
         title,
         summary,
-        &format!("/devrail/repairs/{}", request.id),
+        &format!(
+            "/devrail/projects/{}/tasks/{}",
+            request.project_id, request.task_id
+        ),
     )
     .await?;
     Ok(Some(row))
@@ -2034,7 +2046,10 @@ pub(crate) async fn handoff(
         "warning",
         "受控修复需要人工处理",
         "自动修复已停止，请由授权人员评估失败诊断。",
-        &format!("/devrail/repairs/{}", request.id),
+        &format!(
+            "/devrail/projects/{}/tasks/{}",
+            request.project_id, request.task_id
+        ),
     )
     .await?;
     Ok(Some(request))
@@ -2135,7 +2150,10 @@ pub async fn cancel(
         "warning",
         "受控修复请求已取消",
         "修复请求已在启动 Agent 前取消。",
-        &format!("/devrail/repairs/{}", request.id),
+        &format!(
+            "/devrail/projects/{}/tasks/{}",
+            request.project_id, request.task_id
+        ),
     )
     .await?;
     Ok(Some(request))
@@ -2709,26 +2727,86 @@ pub(crate) mod integration_tests {
         assert_eq!(gate.id, replayed_gate.id);
         transaction.commit().await.expect("commit repair dispatch");
 
-        let gate_token = Uuid::new_v4();
-        let claimed_gates = claim_gate_reruns(&pool, "gate-worker", gate_token, 10, 60)
-            .await
-            .expect("claim gate rerun");
+        let first_gate_token = Uuid::new_v4();
+        let second_gate_token = Uuid::new_v4();
+        let (first_claim, second_claim) = tokio::join!(
+            claim_gate_reruns(&pool, "gate-worker-a", first_gate_token, 1, 60),
+            claim_gate_reruns(&pool, "gate-worker-b", second_gate_token, 1, 60),
+        );
+        let first_claim = first_claim.expect("first concurrent gate claim");
+        let second_claim = second_claim.expect("second concurrent gate claim");
         assert_eq!(
-            claimed_gates.iter().filter(|row| row.id == gate.id).count(),
+            first_claim
+                .iter()
+                .chain(second_claim.iter())
+                .filter(|row| row.id == gate.id)
+                .count(),
             1
         );
+        let (gate_worker, gate_token) = if first_claim.iter().any(|row| row.id == gate.id) {
+            ("gate-worker-a", first_gate_token)
+        } else {
+            ("gate-worker-b", second_gate_token)
+        };
         assert!(
-            !renew_gate_rerun_claim(&pool, gate.id, "gate-worker", Uuid::new_v4(), 60,)
+            !renew_gate_rerun_claim(&pool, gate.id, gate_worker, Uuid::new_v4(), 60,)
                 .await
                 .expect("reject stale gate token")
         );
+        assert!(
+            renew_gate_rerun_claim(&pool, gate.id, gate_worker, gate_token, 60)
+                .await
+                .expect("renew current gate token")
+        );
+        sqlx::query(
+            "UPDATE devrail_repair_gate_reruns
+             SET claim_expires_at=now()-interval '1 second'
+             WHERE id=$1",
+        )
+        .bind(gate.id)
+        .execute(&pool)
+        .await
+        .expect("expire original gate claim");
+        assert_eq!(
+            release_expired_gate_rerun_claims(&pool, 10)
+                .await
+                .expect("release expired gate claim"),
+            1
+        );
+        let replacement_token = Uuid::new_v4();
+        let replacement =
+            claim_gate_reruns(&pool, "replacement-gate-worker", replacement_token, 1, 60)
+                .await
+                .expect("replacement gate claim");
+        assert_eq!(replacement.first().map(|row| row.id), Some(gate.id));
+        let mut stale_completion_tx = pool.begin().await.expect("begin stale gate completion");
+        assert!(complete_gate_rerun(
+            &mut stale_completion_tx,
+            &CompletedRepairGateRerun {
+                id: gate.id,
+                worker_id: gate_worker,
+                claim_token: gate_token,
+                status: "passed",
+                result_code: Some("passed"),
+                summary: Some("迟到结果不得覆盖"),
+                log_ref: None,
+                duration_ms: Some(100),
+            },
+        )
+        .await
+        .expect("reject stale completion")
+        .is_none());
+        stale_completion_tx
+            .rollback()
+            .await
+            .expect("rollback stale completion");
         let mut completed_gate_tx = pool.begin().await.expect("begin gate rerun completion");
         let completed_gate = complete_gate_rerun(
             &mut completed_gate_tx,
             &CompletedRepairGateRerun {
                 id: gate.id,
-                worker_id: "gate-worker",
-                claim_token: gate_token,
+                worker_id: "replacement-gate-worker",
+                claim_token: replacement_token,
                 status: "passed",
                 result_code: Some("passed"),
                 summary: Some("后端测试通过"),
@@ -2828,7 +2906,10 @@ pub(crate) mod integration_tests {
         assert_eq!(payload["eventType"], "devrail.repair.created");
         assert_eq!(
             payload["deepLink"],
-            format!("/devrail/repairs/{}", request.id)
+            format!(
+                "/devrail/projects/{}/tasks/{}",
+                request.project_id, request.task_id
+            )
         );
         assert_eq!(payload["summary"], "失败诊断已保存，等待策略与审批检查。");
         let fields = payload.as_object().expect("payload object");
@@ -2846,7 +2927,10 @@ pub(crate) mod integration_tests {
             "info",
             "受控修复请求已创建",
             "失败诊断已保存，等待策略与审批检查。",
-            &format!("/devrail/repairs/{}", request.id),
+            &format!(
+                "/devrail/projects/{}/tasks/{}",
+                request.project_id, request.task_id
+            ),
         )
         .await
         .expect("replay lifecycle notification");
@@ -3060,7 +3144,10 @@ pub(crate) mod integration_tests {
         .bind(fixture.task_id)
         .bind(fixture.task_id.to_string())
         .bind(fixture.actor.organization_id)
-        .bind(format!("/devrail/repairs/{}", fixture.task_id))
+        .bind(format!(
+            "/devrail/projects/{}/tasks/{}",
+            fixture.project_id, fixture.task_id
+        ))
         .fetch_one(&pool)
         .await
         .expect("rolled back repair facts");

@@ -20,8 +20,9 @@ function checkDockerfile(source, label) {
   }
   requireText(source, "USER ", `${label} 非 root 用户`);
   requireText(source, "HEALTHCHECK", `${label} 健康检查`);
-  if (/^FROM\s+\S+:latest\b/m.test(source)) {
-    throw new Error(`${label} 禁止使用 latest 基础镜像`);
+  const images = [...source.matchAll(/^FROM\s+(\S+)/gm)].map((match) => match[1]);
+  if (images.some((image) => !/@sha256:[a-f0-9]{64}$/i.test(image))) {
+    throw new Error(`${label} 的每个基础镜像必须固定 sha256 digest`);
   }
 }
 
@@ -38,7 +39,7 @@ function checkProductionDeployment() {
   checkDockerfile(frontendDockerfile, "前端 Dockerfile");
 
   for (const expected of [
-    "postgres:17.10-bookworm",
+    "postgres:17.10-bookworm@sha256:9b18b78397054fce88a9552e9d5a3ad5bb7fd258c5b3cc1c5028e46373d6ea8f",
     'AUTO_MIGRATE: "false"',
     "condition: service_completed_successfully",
     "read_only: true",
@@ -56,9 +57,16 @@ function checkProductionDeployment() {
   ]) {
     requireText(compose, expected, "生产 Compose");
   }
-  if (/image:\s*\S+:latest\b/.test(compose)) {
-    throw new Error("生产 Compose 禁止使用 latest 镜像标签");
-  }
+  requireText(
+    compose,
+    "DEVRAIL_GIT_WEBHOOK_SECRET: ${DEVRAIL_GIT_WEBHOOK_SECRET:?",
+    "生产 Compose",
+  );
+  requireText(
+    compose,
+    "DEVRAIL_REPAIR_CALLBACK_SECRET: ${DEVRAIL_REPAIR_CALLBACK_SECRET:?",
+    "生产 Compose",
+  );
 
   for (const expected of [
     "listen 8443 ssl",

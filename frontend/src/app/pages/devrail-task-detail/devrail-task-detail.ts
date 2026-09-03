@@ -15,6 +15,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { apiErrorMessage } from '../../core/api-error';
+import { API_BASE_URL } from '../../core/runtime-config';
 import { AuthService } from '../../core/auth.service';
 import { DevRailApiService } from '../../features/devrail/data-access/devrail-api.service';
 import { DEVRAIL_PERMISSIONS } from '../../features/devrail/devrail.permissions';
@@ -118,10 +119,13 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
   private readonly auth = inject(AuthService);
   private readonly api = inject(DevRailApiService);
   private readonly snack = inject(MatSnackBar);
+  private readonly apiBaseUrl = inject(API_BASE_URL);
   private readonly repairHeading = viewChild<ElementRef<HTMLElement>>('repairHeading');
   projectId = 0;
   private taskId = 0;
   private eventSource?: EventSource;
+  private reconnectTimer?: number;
+  private destroyed = false;
 
   ngOnInit(): void {
     this.projectId = Number(this.route.snapshot.paramMap.get('projectId'));
@@ -130,7 +134,13 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
+    if (this.reconnectTimer !== undefined) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
+    }
     this.eventSource?.close();
+    this.eventSource = undefined;
   }
 
   async save(form: HTMLFormElement): Promise<void> {
@@ -639,9 +649,15 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
   }
 
   private startEventStream(): void {
-    if (typeof EventSource === 'undefined') return;
+    if (this.destroyed || typeof EventSource === 'undefined') return;
+    if (this.reconnectTimer !== undefined) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
+    }
     this.eventSource?.close();
-    const source = new EventSource(`/api/v1/tasks/${this.taskId}/events/stream`);
+    const source = new EventSource(`${this.apiBaseUrl}/tasks/${this.taskId}/events/stream`, {
+      withCredentials: true,
+    });
     const refresh = () => {
       void this.api
         .getTask(this.projectId, this.taskId)
@@ -685,6 +701,12 @@ export class DevRailTaskDetailPage implements OnDestroy, OnInit {
     }
     source.onerror = () => {
       source.close();
+      if (!this.destroyed) {
+        this.reconnectTimer = window.setTimeout(() => {
+          this.reconnectTimer = undefined;
+          this.startEventStream();
+        }, 1500);
+      }
     };
     this.eventSource = source;
   }

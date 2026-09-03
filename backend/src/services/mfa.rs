@@ -189,12 +189,10 @@ pub async fn verify_totp_login(
         .await
         .map_err(db_error)?
         .ok_or_else(ApiError::unauthorized)?;
-    let valid = mfa
+    let totp = mfa
         .totp(&user.username, secret)
-        .map_err(ApiError::internal)?
-        .check_current(code.trim())
-        .is_some();
-    if !valid {
+        .map_err(ApiError::internal)?;
+    let Some(counter) = matching_totp_counter(&totp, code)? else {
         let locked = repositories::mfa::record_challenge_failure(&mut transaction, challenge.id)
             .await
             .map_err(db_error)?;
@@ -214,10 +212,20 @@ pub async fn verify_totp_login(
         } else {
             ApiError::unauthorized()
         });
+    };
+    let consumed =
+        repositories::mfa::consume_totp_challenge(&mut transaction, challenge.id, "login", counter)
+            .await
+            .map_err(|error| {
+                if is_unique_violation(&error) {
+                    ApiError::unauthorized()
+                } else {
+                    db_error(error)
+                }
+            })?;
+    if !consumed {
+        return Err(ApiError::unauthorized());
     }
-    repositories::mfa::consume_challenge(&mut transaction, challenge.id)
-        .await
-        .map_err(db_error)?;
     repositories::audit_logs::record(
         &mut transaction,
         Some(challenge.user_id),
@@ -288,12 +296,10 @@ async fn verify_totp_enrollment(
         .await
         .map_err(db_error)?
         .ok_or_else(ApiError::unauthorized)?;
-    let valid = mfa
+    let totp = mfa
         .totp(&user.username, secret)
-        .map_err(ApiError::internal)?
-        .check_current(code.trim())
-        .is_some();
-    if !valid {
+        .map_err(ApiError::internal)?;
+    let Some(counter) = matching_totp_counter(&totp, code)? else {
         let locked = repositories::mfa::record_challenge_failure(&mut transaction, challenge.id)
             .await
             .map_err(db_error)?;
@@ -313,11 +319,10 @@ async fn verify_totp_enrollment(
         } else {
             ApiError::unauthorized()
         });
-    }
+    };
     transaction.rollback().await.map_err(db_error)?;
     let recovery_codes = generate_recovery_codes();
     let hashes = hash_recovery_codes(&recovery_codes).await?;
-
     let mut transaction = pool.begin().await.map_err(db_error)?;
     let challenge = repositories::mfa::challenge_for_update(
         &mut transaction,
@@ -329,13 +334,34 @@ async fn verify_totp_enrollment(
     .ok_or_else(ApiError::unauthorized)?;
     let state: EnrollmentState =
         serde_json::from_value(challenge.state.0.clone()).map_err(ApiError::internal)?;
+    let encrypted = STANDARD
+        .decode(state.encrypted_secret)
+        .map_err(|_| ApiError::unauthorized())?;
+    let user = repositories::users::find_by_id_in_connection(&mut transaction, challenge.user_id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(ApiError::unauthorized)?;
+    let consumed = repositories::mfa::consume_totp_challenge(
+        &mut transaction,
+        challenge.id,
+        "totp_enrollment",
+        counter,
+    )
+    .await
+    .map_err(|error| {
+        if is_unique_violation(&error) {
+            ApiError::unauthorized()
+        } else {
+            db_error(error)
+        }
+    })?;
+    if !consumed {
+        return Err(ApiError::unauthorized());
+    }
     repositories::mfa::enable_totp(&mut transaction, challenge.user_id, &encrypted)
         .await
         .map_err(db_error)?;
     repositories::mfa::replace_recovery_codes(&mut transaction, challenge.user_id, &hashes)
-        .await
-        .map_err(db_error)?;
-    repositories::mfa::consume_challenge(&mut transaction, challenge.id)
         .await
         .map_err(db_error)?;
     repositories::audit_logs::record(
@@ -895,6 +921,12 @@ fn matching_totp_counter(totp: &Totp, code: &str) -> Result<Option<i64>, ApiErro
     totp.check_current(code.trim())
         .map(|counter| i64::try_from(counter).map_err(ApiError::internal))
         .transpose()
+}
+
+fn is_unique_violation(error: &sqlx::Error) -> bool {
+    error
+        .as_database_error()
+        .is_some_and(|database| database.is_unique_violation())
 }
 
 pub(crate) async fn verify_reauthentication(

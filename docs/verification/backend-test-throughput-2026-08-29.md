@@ -78,7 +78,9 @@
 ## 4.1 受控并发
 
 - `.arc-flow/flow.toml` 中 `backend.tests` 默认 `test_threads = 4`，可由 `ARC_FLOW_BACKEND_TEST_THREADS` 覆盖；arc-flow 在 `cargo test --` 后插入实际 `--test-threads` 参数。自定义步骤缺少 Cargo `--` 分隔符会在配置加载阶段拒绝。
-- 报告步骤标签、`DEVRAIL_TEST_THREADS` 和 `test_result.md` 都记录实际并发上限。2026-08-29 默认门禁以 4 线程通过，156 个结果、`TEST_SUMMARY: PASS`；2026-08-30 修复复核报告 157 个结果。
+- 报告步骤标签和 `DEVRAIL_TEST_THREADS` 记录实际并发上限。历史本地
+  `test_result.md` 未纳入版本控制，本文保留其时点结论但不将其作为独立可复核
+  证据；后续结果按[验证证据格式](evidence-format.md)归档。
 
 ## 4.2 跨进程执行器评估
 

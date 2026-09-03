@@ -81,6 +81,25 @@ pub async fn find_by_id_for_actor(
     actor: &ActorContext,
     id: i64,
 ) -> Result<Option<UserRow>, sqlx::Error> {
+    find_by_id_for_actor_executor(pool, actor, id).await
+}
+
+pub async fn find_by_id_for_actor_in_connection(
+    connection: &mut PgConnection,
+    actor: &ActorContext,
+    id: i64,
+) -> Result<Option<UserRow>, sqlx::Error> {
+    find_by_id_for_actor_executor(connection, actor, id).await
+}
+
+async fn find_by_id_for_actor_executor<'e, E>(
+    executor: E,
+    actor: &ActorContext,
+    id: i64,
+) -> Result<Option<UserRow>, sqlx::Error>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     sqlx::query_as::<_, UserRow>(AssertSqlSafe(format!(
         "WITH RECURSIVE visible_departments AS (
              SELECT d.id
@@ -111,7 +130,7 @@ pub async fn find_by_id_for_actor(
     .bind(actor.user_id)
     .bind(actor.department_id)
     .bind(actor.data_scope.as_str())
-    .fetch_optional(pool)
+    .fetch_optional(executor)
     .await
 }
 

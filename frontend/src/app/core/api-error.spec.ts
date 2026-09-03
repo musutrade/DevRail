@@ -13,7 +13,9 @@ describe('apiErrorMessage', () => {
       },
     });
 
-    expect(apiErrorMessage(error, '请求失败')).toBe('服务器内部错误（问题编号：trace-500）');
+    expect(apiErrorMessage(error, '请求失败')).toBe(
+      '服务器内部错误，请稍后重试（问题编号：trace-500）',
+    );
   });
 
   it('uses the response header when an upstream error body has no trace id', () => {
@@ -23,7 +25,9 @@ describe('apiErrorMessage', () => {
       headers: new HttpHeaders({ 'x-request-id': 'gateway-trace-1' }),
     });
 
-    expect(apiErrorMessage(error, '请求失败')).toBe('上游服务异常（问题编号：gateway-trace-1）');
+    expect(apiErrorMessage(error, '请求失败')).toBe(
+      '服务器内部错误，请稍后重试（问题编号：gateway-trace-1）',
+    );
   });
 
   it('does not expose malformed trace ids or add ids to client errors', () => {
@@ -36,7 +40,7 @@ describe('apiErrorMessage', () => {
       error: { error: { message: '参数错误', traceId: 'trace-422' } },
     });
 
-    expect(apiErrorMessage(serverError, '请求失败')).toBe('服务器内部错误');
+    expect(apiErrorMessage(serverError, '请求失败')).toBe('服务器内部错误，请稍后重试');
     expect(apiErrorMessage(validationError, '请求失败')).toBe('参数错误');
   });
 

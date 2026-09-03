@@ -43,6 +43,10 @@ required_steps = [
   "workflow.audit-retention-config",
   "workflow.api-generation",
   "workflow.supply-chain-config",
+  "workflow.supply-chain-tests",
+  "workflow.risk-acceptance-tests",
+  "workflow.documentation-evidence",
+  "workflow.documentation-evidence-tests",
   "workflow.audit-tool-production",
   "workflow.format",
   "workflow.clippy",
@@ -480,6 +484,50 @@ program = "node"
 args = ["{root}/scripts/check-supply-chain.mjs"]
 cwd = "{root}"
 log = "supply_chain_config.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.supply-chain-tests"
+label = "supply chain policy tests"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["--test", "{root}/scripts/check-supply-chain.test.mjs"]
+cwd = "{root}"
+log = "supply_chain_tests.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.risk-acceptance-tests"
+label = "risk acceptance expiry tests"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["--test", "{root}/scripts/check-risk-acceptances.test.mjs"]
+cwd = "{root}"
+log = "risk_acceptance_tests.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.documentation-evidence"
+label = "documentation evidence consistency gate"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["{root}/scripts/check-documentation-evidence.mjs"]
+cwd = "{root}"
+log = "documentation_evidence.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.documentation-evidence-tests"
+label = "documentation evidence policy tests"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["--test", "{root}/scripts/check-documentation-evidence.test.mjs"]
+cwd = "{root}"
+log = "documentation_evidence_tests.log"
 timeout_secs = 60
 
 [[steps]]

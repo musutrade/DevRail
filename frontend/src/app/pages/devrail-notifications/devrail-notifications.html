@@ -36,10 +36,10 @@
               <td>{{ notification.createdAt | date: 'yyyy-MM-dd HH:mm' }}</td>
               <td>{{ notification.readAt ? '已读' : '未读' }}</td>
               <td>
-                @if (notification.deepLink) {
+                @if (safeDeepLink(notification.deepLink); as deepLink) {
                   <a
                     class="row-btn"
-                    [routerLink]="notification.deepLink"
+                    [routerLink]="deepLink"
                     (click)="markRead(notification)"
                     aria-label="查看通知"
                     ><mat-icon>open_in_new</mat-icon></a

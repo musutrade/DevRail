@@ -759,6 +759,7 @@ struct DependencyPropagationCandidate {
     organization_id: i64,
     department_id: Option<i64>,
     owner_user_id: i64,
+    project_id: i64,
     task_id: i64,
     prerequisite_task_id: i64,
     source_status_history_id: i64,
@@ -782,6 +783,7 @@ pub(crate) async fn reconcile_task_dependencies(pool: &PgPool) -> Result<u64, sq
                    d.organization_id,
                    d.department_id,
                    d.owner_user_id,
+                   dependent.project_id,
                    d.task_id,
                    d.prerequisite_task_id,
                    history.id AS source_status_history_id,
@@ -794,6 +796,9 @@ pub(crate) async fn reconcile_task_dependencies(pool: &PgPool) -> Result<u64, sq
                        ELSE d.failure_action
                    END AS action
             FROM devrail_task_dependencies d
+            JOIN devrail_tasks dependent
+              ON dependent.id = d.task_id
+             AND dependent.organization_id = d.organization_id
             JOIN devrail_tasks prerequisite
               ON prerequisite.id = d.prerequisite_task_id
              AND prerequisite.organization_id = d.organization_id
@@ -817,7 +822,7 @@ pub(crate) async fn reconcile_task_dependencies(pool: &PgPool) -> Result<u64, sq
             ) failed_run ON prerequisite.status = 'failed'
             WHERE prerequisite.status IN ('failed', 'cancelled', 'skipped')
         )
-        SELECT dependency_id, organization_id, department_id, owner_user_id,
+        SELECT dependency_id, organization_id, department_id, owner_user_id, project_id,
                task_id, prerequisite_task_id, source_status_history_id,
                prerequisite_status, action
         FROM terminal_dependencies
@@ -915,7 +920,7 @@ pub(crate) async fn reconcile_task_dependencies(pool: &PgPool) -> Result<u64, sq
                     .execute(&mut *tx)
                     .await?;
                 let source_key = format!("task:{task_id}:{idempotency_key}");
-                let deep_link = format!("/devrail/tasks/{task_id}");
+                let deep_link = format!("/devrail/projects/{}/tasks/{task_id}", winner.project_id);
                 let notification_id = sqlx::query_scalar::<_, i64>("INSERT INTO devrail_notifications (organization_id,department_id,recipient_user_id,event_type,level,title,summary,resource_type,resource_id,deep_link,source_key) VALUES ($1,$2,$3,'task.dependency.propagated',$4,$5,$6,'devrail_task',$7,$8,$9) ON CONFLICT (recipient_user_id,source_key) DO NOTHING RETURNING id")
                     .bind(winner.organization_id)
                     .bind(winner.department_id)
@@ -1207,7 +1212,7 @@ pub(crate) async fn create_task(
     actor: &ActorContext,
     n: &NewTask<'_>,
 ) -> Result<DevRailTaskRow, sqlx::Error> {
-    let sql=format!("INSERT INTO devrail_tasks (organization_id,department_id,owner_user_id,project_id,repository_id,environment_id,assignee_user_id,title,goal,background,acceptance_criteria,constraints,priority,labels,due_at,creation_source,source_task_id,source_run_id,followup_depth) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING {TASK_COLUMNS}");
+    let sql=format!("WITH RECURSIVE visible_departments AS (SELECT id FROM departments WHERE id=$22 AND organization_id=$1 UNION SELECT child.id FROM departments child JOIN visible_departments parent ON child.parent_id=parent.id WHERE child.organization_id=$1) INSERT INTO devrail_tasks (organization_id,department_id,owner_user_id,project_id,repository_id,environment_id,assignee_user_id,title,goal,background,acceptance_criteria,constraints,priority,labels,due_at,creation_source,source_task_id,source_run_id,followup_depth) SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19 WHERE $7::bigint IS NULL OR EXISTS (SELECT 1 FROM users assignee WHERE assignee.id=$7 AND assignee.organization_id=$1 AND assignee.deleted_at IS NULL AND ($20 IN ('all','organization') OR $20='self' AND assignee.id=$21 OR $20='department' AND assignee.department_id=$22 OR $20='department_and_children' AND assignee.department_id IN (SELECT id FROM visible_departments))) RETURNING {TASK_COLUMNS}");
     sqlx::query_as::<_, DevRailTaskRow>(AssertSqlSafe(sql))
         .bind(actor.organization_id)
         .bind(n.department_id)
@@ -1228,6 +1233,9 @@ pub(crate) async fn create_task(
         .bind(n.source_task_id)
         .bind(n.source_run_id)
         .bind(n.followup_depth)
+        .bind(actor.data_scope.as_str())
+        .bind(actor.user_id)
+        .bind(actor.department_id)
         .fetch_one(c)
         .await
 }
@@ -1416,7 +1424,14 @@ pub(crate) async fn update_task(
         .await?;
     }
     let r = sqlx::query(
-        "UPDATE devrail_tasks
+        "WITH RECURSIVE visible_departments AS (
+             SELECT id FROM departments WHERE id=$25 AND organization_id=$3
+             UNION
+             SELECT child.id FROM departments child
+             JOIN visible_departments parent ON child.parent_id=parent.id
+             WHERE child.organization_id=$3
+         )
+         UPDATE devrail_tasks
          SET title=COALESCE($5,title), goal=COALESCE($6,goal),
              background=CASE WHEN $7 THEN $8 ELSE background END,
              acceptance_criteria=CASE WHEN $9 THEN $10 ELSE acceptance_criteria END,
@@ -1439,8 +1454,23 @@ pub(crate) async fn update_task(
              updated_at=now()
          WHERE id=$1 AND project_id=$2 AND organization_id=$3
            AND ($4='all' OR owner_user_id=$24 OR $4='organization'
-                OR ($4 IN ('department','department_and_children') AND department_id=$25))
+                OR ($4='department' AND department_id=$25)
+                OR ($4='department_and_children'
+                    AND department_id IN (SELECT id FROM visible_departments)))
            AND archived_at IS NULL
+           AND (NOT $15 OR $16::bigint IS NULL OR EXISTS (
+               SELECT 1 FROM users assignee
+               WHERE assignee.id=$16
+                 AND assignee.organization_id=$3
+                 AND assignee.deleted_at IS NULL
+                 AND (
+                     $4 IN ('all','organization')
+                     OR $4='self' AND assignee.id=$24
+                     OR $4='department' AND assignee.department_id=$25
+                     OR $4='department_and_children'
+                        AND assignee.department_id IN (SELECT id FROM visible_departments)
+                 )
+           ))
            AND ($14::text IS NULL OR status=$14 OR
                 (status='draft' AND $14 IN ('queued','cancelled','archived')) OR
                 (status='queued' AND $14 IN ('cancelled','failed')) OR

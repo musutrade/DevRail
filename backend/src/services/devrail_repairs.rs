@@ -13,9 +13,18 @@ use sqlx::PgPool;
 use std::process::Stdio;
 use std::time::{Duration as StdDuration, Instant};
 use tokio::process::Command;
+use tokio_util::sync::CancellationToken;
 
 const MAX_IDEMPOTENCY_KEY_BYTES: usize = 160;
 const MAX_CALLBACK_BODY_BYTES: usize = 128 * 1024;
+const GATE_COMMAND_TIMEOUT_SECONDS: u64 = 900;
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct GateRerunLeasePolicy {
+    pub lease_seconds: i64,
+    pub renew_interval: StdDuration,
+    pub grace_interval: StdDuration,
+}
 
 pub struct TrustedRepairEvidence<'a> {
     pub source: &'a str,
@@ -31,6 +40,9 @@ pub struct TrustedRepairEvidence<'a> {
 }
 
 fn verify_callback_signature(secret: &str, signature: &str, body: &[u8]) -> bool {
+    if secret.trim().is_empty() {
+        return false;
+    }
     use hmac::{Hmac, Mac};
     use sha2_legacy::Sha256;
     let Ok(mut mac) = Hmac::<Sha256>::new_from_slice(secret.as_bytes()) else {
@@ -80,6 +92,9 @@ pub async fn handle_repair_callback(
     validate_callback_body(body)?;
     let secret = std::env::var("DEVRAIL_REPAIR_CALLBACK_SECRET")
         .map_err(|_| ApiError::forbidden("repair 回调未配置"))?;
+    if secret.trim().is_empty() {
+        return Err(ApiError::forbidden("repair 回调未配置"));
+    }
     let signature = headers
         .get("x-devrail-repair-signature")
         .and_then(|value| value.to_str().ok())
@@ -937,6 +952,8 @@ pub(crate) async fn execute_gate_rerun(
     worker_id: &str,
     claim_token: uuid::Uuid,
     rerun: DevRailRepairGateRerunRow,
+    lease_policy: GateRerunLeasePolicy,
+    shutdown: CancellationToken,
 ) -> Result<(), ApiError> {
     let child_run_id = rerun
         .child_run_id
@@ -971,19 +988,53 @@ pub(crate) async fn execute_gate_rerun(
             .find(|(name, _)| name == &rerun.gate_id)
             .ok_or_else(|| ApiError::conflict("repair 门禁不在当前可信模板中"))?;
     let started = Instant::now();
-    let result = tokio::time::timeout(
-        StdDuration::from_secs(900),
-        Command::new(&command.1[0])
-            .args(&command.1[1..])
-            .current_dir(&run.cwd)
-            .env_clear()
-            .env("PATH", "/usr/local/bin:/usr/bin:/bin")
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status(),
-    )
-    .await;
+    let mut process = Command::new(&command.1[0]);
+    process
+        .args(&command.1[1..])
+        .current_dir(&run.cwd)
+        .env_clear()
+        .env("PATH", "/usr/local/bin:/usr/bin:/bin")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .kill_on_drop(true);
+    #[cfg(unix)]
+    process.process_group(0);
+    let mut child = process.spawn().map_err(ApiError::internal)?;
+    let mut renew_interval = tokio::time::interval_at(
+        tokio::time::Instant::now() + lease_policy.renew_interval,
+        lease_policy.renew_interval,
+    );
+    let timeout = tokio::time::sleep(StdDuration::from_secs(GATE_COMMAND_TIMEOUT_SECONDS));
+    tokio::pin!(timeout);
+    let result = loop {
+        tokio::select! {
+            status = child.wait() => break Ok(status),
+            _ = shutdown.cancelled() => {
+                terminate_gate_process(&mut child).await;
+                return Err(ApiError::conflict("repair 门禁调度器已停止，执行已终止"));
+            }
+            _ = &mut timeout => {
+                terminate_gate_process(&mut child).await;
+                break Err("timeout");
+            }
+            _ = renew_interval.tick() => {
+                let renewed = renew_gate_rerun_with_grace(
+                    pool,
+                    rerun.id,
+                    worker_id,
+                    claim_token,
+                    lease_policy,
+                ).await;
+                if !renewed {
+                    crate::app_metrics::record_repair_gate_lease("lost");
+                    terminate_gate_process(&mut child).await;
+                    return Err(ApiError::conflict("repair 门禁租约已失效，执行已终止"));
+                }
+                crate::app_metrics::record_repair_gate_lease("renewed");
+            }
+        }
+    };
     let (status, result_code, summary) = match result {
         Ok(Ok(exit_status)) if exit_status.success() => {
             ("passed", Some("passed"), "受影响门禁已通过")
@@ -1017,8 +1068,104 @@ pub(crate) async fn execute_gate_rerun(
         )
         .await
         .map_err(db_error)?;
+    } else {
+        crate::app_metrics::record_repair_gate_lease("stale_completion");
+        return Err(ApiError::conflict("repair 门禁结果已失去执行权"));
     }
     transaction.commit().await.map_err(db_error)
+}
+
+async fn terminate_gate_process(child: &mut tokio::process::Child) {
+    #[cfg(unix)]
+    if let Some(pid) = child.id().and_then(|pid| i32::try_from(pid).ok()) {
+        // The command starts in its own process group, so a negative pid targets
+        // the complete gate tree (for example npm plus its spawned test runner).
+        let _ = unsafe { libc::kill(-pid, libc::SIGKILL) };
+    }
+    let _ = child.start_kill();
+    let _ = child.wait().await;
+}
+
+#[cfg(all(test, unix))]
+mod gate_process_tests {
+    use super::terminate_gate_process;
+    use std::process::Stdio;
+    use std::time::Duration;
+    use tokio::process::Command;
+    use uuid::Uuid;
+
+    #[tokio::test]
+    async fn terminating_gate_process_kills_the_complete_process_group() {
+        let directory = std::env::temp_dir().join(format!("devrail-gate-kill-{}", Uuid::new_v4()));
+        tokio::fs::create_dir_all(&directory)
+            .await
+            .expect("create gate process test directory");
+        let marker = directory.join("escaped-child");
+
+        let mut command = Command::new("sh");
+        command
+            .args([
+                "-c",
+                "(sleep 1; touch \"$1\") & wait",
+                "devrail-gate-process-test",
+                marker.to_str().expect("UTF-8 marker path"),
+            ])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .kill_on_drop(true)
+            .process_group(0);
+        let mut child = command.spawn().expect("spawn gate process tree");
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        terminate_gate_process(&mut child).await;
+        tokio::time::sleep(Duration::from_millis(1_100)).await;
+
+        assert!(
+            !marker.exists(),
+            "a descendant process survived the gate process-group termination"
+        );
+        tokio::fs::remove_dir_all(directory)
+            .await
+            .expect("remove gate process test directory");
+    }
+}
+
+async fn renew_gate_rerun_with_grace(
+    pool: &PgPool,
+    rerun_id: i64,
+    worker_id: &str,
+    claim_token: uuid::Uuid,
+    policy: GateRerunLeasePolicy,
+) -> bool {
+    match devrail_repairs::renew_gate_rerun_claim(
+        pool,
+        rerun_id,
+        worker_id,
+        claim_token,
+        policy.lease_seconds,
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(error) => {
+            tracing::warn!(
+                error = %error,
+                rerun_id,
+                "repair gate lease renewal failed; retrying within grace interval"
+            );
+            tokio::time::sleep(policy.grace_interval).await;
+            devrail_repairs::renew_gate_rerun_claim(
+                pool,
+                rerun_id,
+                worker_id,
+                claim_token,
+                policy.lease_seconds,
+            )
+            .await
+            .unwrap_or(false)
+        }
+    }
 }
 
 /// Creates a repair request from a backend-verified CI or review event.
@@ -1265,6 +1412,8 @@ mod trusted_evidence_tests {
         mac.update(body);
         let signature = format!("sha256={}", hex::encode(mac.finalize().into_bytes()));
         assert!(verify_callback_signature(secret, &signature, body));
+        assert!(!verify_callback_signature("", &signature, body));
+        assert!(!verify_callback_signature("   ", &signature, body));
         assert!(!verify_callback_signature(secret, "", body));
         assert!(!verify_callback_signature(
             secret,

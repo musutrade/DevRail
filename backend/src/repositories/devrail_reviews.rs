@@ -26,13 +26,15 @@ pub async fn create(
     reviewer: i64,
     summary: Option<&str>,
 ) -> Result<DevRailReviewRow, sqlx::Error> {
-    let sql=format!("INSERT INTO devrail_reviews (organization_id,department_id,task_id,run_id,requested_by,reviewer_user_id,summary) SELECT r.organization_id,r.department_id,r.task_id,r.id,$1,$2,$3 FROM devrail_runs r WHERE r.id=$4 AND r.organization_id=$5 RETURNING {COLUMNS}");
+    let sql=format!("WITH RECURSIVE visible_departments AS (SELECT id FROM departments WHERE id=$7 AND organization_id=$5 UNION SELECT child.id FROM departments child JOIN visible_departments parent ON child.parent_id=parent.id WHERE child.organization_id=$5) INSERT INTO devrail_reviews (organization_id,department_id,task_id,run_id,requested_by,reviewer_user_id,summary) SELECT r.organization_id,r.department_id,r.task_id,r.id,$1,$2,$3 FROM devrail_runs r JOIN users reviewer ON reviewer.id=$2 AND reviewer.organization_id=$5 AND reviewer.deleted_at IS NULL AND ($6 IN ('all','organization') OR $6='self' AND reviewer.id=$1 OR $6='department' AND reviewer.department_id=$7 OR $6='department_and_children' AND reviewer.department_id IN (SELECT id FROM visible_departments)) WHERE r.id=$4 AND r.organization_id=$5 RETURNING {COLUMNS}");
     sqlx::query_as::<_, DevRailReviewRow>(AssertSqlSafe(sql))
         .bind(actor.user_id)
         .bind(reviewer)
         .bind(summary)
         .bind(run_id)
         .bind(actor.organization_id)
+        .bind(actor.data_scope.as_str())
+        .bind(actor.department_id)
         .fetch_one(&mut *c)
         .await
 }
