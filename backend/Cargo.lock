@@ -100,7 +100,7 @@ dependencies = [
  "futures-core",
  "getrandom 0.4.3",
  "hex",
- "hmac 0.12.1",
+ "hmac 0.13.0",
  "http-body-util",
  "ipnet",
  "libc",
